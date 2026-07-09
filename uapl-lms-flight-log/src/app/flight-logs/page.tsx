@@ -9,6 +9,7 @@ import {
   type FlightLogRow,
   type StudentDetails
 } from "@/lib/flight-log-storage";
+import { getMasterData, type MasterData } from "@/lib/master-data";
 import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -24,7 +25,7 @@ const fields: {
   type?: "text" | "date" | "time" | "number" | "select";
 }[] = [
   { key: "date", label: "Date", type: "date" },
-  { key: "location", label: "Location" },
+  { key: "location", label: "Location", type: "select" },
   { key: "startTime", label: "Start Time", type: "time" },
   { key: "duration", label: "Duration (Mins)", type: "number" },
   { key: "uaModel", label: "UA Model & S/N" },
@@ -42,8 +43,11 @@ export default function FlightLogsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [flightForm, setFlightForm] = useState<FlightLogRow>({ ...emptyRow });
+  const [masterData, setMasterData] = useState<MasterData | null>(null);
 
   useEffect(() => {
+    setMasterData(getMasterData());
+
     const savedDraft = localStorage.getItem(flightLogDraftKey);
 
     if (!savedDraft) return;
@@ -107,7 +111,9 @@ export default function FlightLogsPage() {
   }
 
   function deleteFlightEntry(index: number) {
-    setRows((currentRows) => currentRows.filter((_, rowIndex) => rowIndex !== index));
+    setRows((currentRows) =>
+      currentRows.filter((_, rowIndex) => rowIndex !== index)
+    );
     setStatusMessage("Flight entry deleted.");
   }
 
@@ -151,28 +157,71 @@ export default function FlightLogsPage() {
     const inputClass =
       "mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-blue";
 
-    if (field.type === "select") {
+    if (field.key === "location") {
+      const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
+
       return (
         <select
           className={inputClass}
-          value={flightForm[field.key]}
-          onChange={(event) => updateFlightForm(field.key, event.target.value)}
+          value={flightForm.location}
+          onChange={(event) => updateFlightForm("location", event.target.value)}
         >
-          <option value="M7">M7</option>
-          <option value="M25">M25</option>
-          <option value="H">H</option>
+          <option value="">Select location</option>
+          {locations.map((location) => (
+            <option key={location} value={location}>
+              {location}
+            </option>
+          ))}
         </select>
       );
     }
 
+    if (field.key === "uaCategory") {
+      const categories = masterData?.uaCategories ?? ["M7", "M25", "H"];
+
+      return (
+        <select
+          className={inputClass}
+          value={flightForm.uaCategory}
+          onChange={(event) => updateFlightForm("uaCategory", event.target.value)}
+        >
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
+      uaModel: masterData?.uaModels ?? [],
+      batterySn: masterData?.batterySerialNumbers ?? [],
+      instructorInCommand: masterData?.afeInstructors ?? []
+    };
+
+    const options = datalistOptions[field.key];
+    const listId = options ? `flight-${field.key}-options` : undefined;
+
     return (
-      <input
-        type={field.type ?? "text"}
-        min={field.type === "number" ? "0" : undefined}
-        className={inputClass}
-        value={flightForm[field.key]}
-        onChange={(event) => updateFlightForm(field.key, event.target.value)}
-      />
+      <>
+        <input
+          type={field.type ?? "text"}
+          min={field.type === "number" ? "0" : undefined}
+          list={listId}
+          className={inputClass}
+          value={flightForm[field.key]}
+          onChange={(event) => updateFlightForm(field.key, event.target.value)}
+        />
+
+        {options ? (
+          <datalist id={listId}>
+            {options.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        ) : null}
+      </>
     );
   }
 
@@ -260,10 +309,10 @@ export default function FlightLogsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-950">
-                          {row.date || "No date"} · {row.location || "No location"}
+                          {row.date || "No date"} - {row.location || "No location"}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {row.startTime || "--:--"} · {row.duration || "0"} mins · {row.uaCategory}
+                          {row.startTime || "--:--"} - {row.duration || "0"} mins - {row.uaCategory}
                         </p>
                       </div>
 
