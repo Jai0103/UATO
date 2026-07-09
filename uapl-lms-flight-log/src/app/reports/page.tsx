@@ -5,6 +5,7 @@ import { getFlightLogRecords, type FlightLogRecord } from "@/lib/flight-log-stor
 import { generateFlightLogPdf } from "@/lib/pdf";
 import { Download, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { fetchGoogleRecords } from "@/lib/google-api";
 
 export default function ReportsPage() {
   const [records, setRecords] = useState<FlightLogRecord[]>([]);
@@ -12,9 +13,18 @@ export default function ReportsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
 
-  useEffect(() => {
-    setRecords(getFlightLogRecords());
-  }, []);
+useEffect(() => {
+  async function loadRecords() {
+    try {
+      const googleRecords = await fetchGoogleRecords();
+      setRecords(googleRecords);
+    } catch {
+      setRecords(getFlightLogRecords());
+    }
+  }
+
+  loadRecords();
+}, []);
 
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
