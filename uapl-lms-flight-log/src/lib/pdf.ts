@@ -62,13 +62,7 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
   doc.text(`Company: ${data.student.company || "-"}`, 110, y);
   doc.text(`Last 4 Characters: ${data.student.lastFourCharacters || "-"}`, 210, y);
 
-  y += 7;
 
-  doc.text(
-    `Student Signature Name: ${data.student.studentSignatureName || "-"}`,
-    margin,
-    y
-  );
 
   y += 8;
 
