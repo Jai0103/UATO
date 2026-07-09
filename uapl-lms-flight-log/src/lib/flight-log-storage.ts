@@ -3,6 +3,7 @@ export type StudentDetails = {
   company: string;
   lastFourCharacters: string;
   studentSignatureName: string;
+  studentSignatureDataUrl: string;
 };
 
 export type FlightLogRow = {
@@ -33,7 +34,8 @@ export const emptyStudent: StudentDetails = {
   studentName: "",
   company: "",
   lastFourCharacters: "",
-  studentSignatureName: ""
+  studentSignatureName: "",
+  studentSignatureDataUrl: ""
 };
 
 export const emptyRow: FlightLogRow = {
@@ -50,15 +52,10 @@ export const emptyRow: FlightLogRow = {
 };
 
 export function getFlightLogRecords(): FlightLogRecord[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
+  if (typeof window === "undefined") return [];
 
   const rawRecords = localStorage.getItem(flightLogRecordsKey);
-
-  if (!rawRecords) {
-    return [];
-  }
+  if (!rawRecords) return [];
 
   try {
     return JSON.parse(rawRecords) as FlightLogRecord[];
