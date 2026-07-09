@@ -10,6 +10,7 @@ import {
   type StudentDetails
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
+import { sessionKey } from "@/lib/demo-auth";
 import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -44,9 +45,16 @@ export default function FlightLogsPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [flightForm, setFlightForm] = useState<FlightLogRow>({ ...emptyRow });
   const [masterData, setMasterData] = useState<MasterData | null>(null);
+  const [accountName, setAccountName] = useState("");
 
   useEffect(() => {
     setMasterData(getMasterData());
+    const rawSession = localStorage.getItem(sessionKey);
+
+if (rawSession) {
+  const parsedSession = JSON.parse(rawSession) as { name?: string };
+  setAccountName(parsedSession.name ?? "");
+}
 
     const savedDraft = localStorage.getItem(flightLogDraftKey);
 
@@ -83,21 +91,19 @@ export default function FlightLogsPage() {
     }
 
     setEditingIndex(null);
-    setFlightForm({
-      ...emptyRow,
-      pilotInCommand: student.studentName
-    });
-    setModalOpen(true);
-  }
+setFlightForm({
+  ...emptyRow,
+  pilotInCommand: student.studentName,
+  instructorInCommand: accountName
+});
 
   function openEditFlightModal(index: number) {
     setEditingIndex(index);
-    setFlightForm({
-      ...rows[index],
-      pilotInCommand: student.studentName
-    });
-    setModalOpen(true);
-  }
+setFlightForm({
+  ...rows[index],
+  pilotInCommand: student.studentName,
+  instructorInCommand: accountName
+});
 
   function closeFlightModal() {
     setModalOpen(false);
@@ -106,11 +112,11 @@ export default function FlightLogsPage() {
   }
 
   function saveFlightEntry() {
-    const entryToSave: FlightLogRow = {
-      ...flightForm,
-      pilotInCommand: student.studentName
-    };
-
+const entryToSave: FlightLogRow = {
+  ...flightForm,
+  pilotInCommand: student.studentName,
+  instructorInCommand: accountName
+};
     if (editingIndex === null) {
       setRows((currentRows) => [...currentRows, entryToSave]);
       setStatusMessage("Flight entry added.");
@@ -182,6 +188,16 @@ export default function FlightLogsPage() {
         />
       );
     }
+
+    if (field.key === "instructorInCommand") {
+  return (
+    <input
+      className={`${inputClass} bg-slate-100 text-slate-600`}
+      value={accountName}
+      readOnly
+    />
+  );
+}
 
     if (field.key === "location") {
       const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
