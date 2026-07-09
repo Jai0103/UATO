@@ -2,6 +2,7 @@
 
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { useAppMessage } from "@/components/message-provider";
 import {
   getFlightLogRecords,
   type FlightLogRecord
@@ -12,10 +13,11 @@ import { Download, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function ReportsPage() {
+  const { notify } = useAppMessage();
+
   const [records, setRecords] = useState<FlightLogRecord[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,13 +29,18 @@ export default function ReportsPage() {
         setRecords(googleRecords);
       } catch {
         setRecords(getFlightLogRecords());
+        notify({
+          type: "warning",
+          title: "Using local records",
+          message: "Google Sheets records could not be loaded."
+        });
       } finally {
         setLoading(false);
       }
     }
 
     loadRecords();
-  }, []);
+  }, [notify]);
 
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -73,7 +80,11 @@ export default function ReportsPage() {
     );
 
     if (!selectedRecords.length) {
-      setStatusMessage("Please tick at least one student flight log.");
+      notify({
+        type: "warning",
+        title: "No records selected",
+        message: "Tick at least one student flight log before generating reports."
+      });
       return;
     }
 
@@ -84,7 +95,11 @@ export default function ReportsPage() {
       });
     });
 
-    setStatusMessage(`${selectedRecords.length} PDF report(s) generated.`);
+    notify({
+      type: "success",
+      title: "Reports generated",
+      message: `${selectedRecords.length} PDF report(s) were downloaded.`
+    });
   }
 
   return (
@@ -108,12 +123,6 @@ export default function ReportsPage() {
             Generate Selected
           </button>
         </div>
-
-        {statusMessage ? (
-          <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
-            {statusMessage}
-          </div>
-        ) : null}
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <label>
