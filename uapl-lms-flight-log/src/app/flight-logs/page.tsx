@@ -1,6 +1,8 @@
+import { generateFlightLogPdf } from "@/lib/pdf";
+
 "use client";
 
-import { Plus, RotateCcw, Save, Trash2, Upload } from "lucide-react";
+import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useEffect, useState } from "react";
 
@@ -121,10 +123,21 @@ export default function FlightLogsPage() {
     setStatusMessage("Draft cleared.");
   }
 
-  function handleUpload() {
-    saveDraft();
-    setStatusMessage("Draft saved. PDF upload will be added in the next step.");
+function handleUpload() {
+  if (!student.studentName.trim()) {
+    setStatusMessage("Please enter the student name before generating the PDF.");
+    return;
   }
+
+  saveDraft();
+
+  generateFlightLogPdf({
+    student,
+    rows
+  });
+
+  setStatusMessage("PDF generated and downloaded.");
+}
 
   return (
     <AppShell>
@@ -158,8 +171,8 @@ export default function FlightLogsPage() {
               onClick={handleUpload}
               className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              <Upload size={16} />
-              Upload
+<Download size={16} />
+Generate PDF
             </button>
           </div>
         </div>
