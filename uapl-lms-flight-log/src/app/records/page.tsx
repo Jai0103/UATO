@@ -10,7 +10,7 @@ import {
   type FlightLogRecord
 } from "@/lib/flight-log-storage";
 import { fetchGoogleRecords } from "@/lib/google-api";
-import { Eye, FileText, Search, X } from "lucide-react";
+import { Eye, FilePenLine, FileText, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function RecordsPage() {
@@ -146,21 +146,27 @@ function continueRecord(record: FlightLogRecord) {
                         ? new Date(record.updatedAt).toLocaleString()
                         : "-"}
                     </td>
-                    <td className="px-4 py-4">
-                      <button
-                        onClick={() => setSelectedRecord(record)}
-                        className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        <Eye size={15} />
-                        View
-                      </button>
-                      <button
-  onClick={() => continueRecord(record)}
-  className="inline-flex h-9 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
->
-  Continue
-</button>
-                    </td>
+<td className="px-4 py-4">
+  <div className="flex gap-2">
+    <button
+      onClick={() => setSelectedRecord(record)}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+      aria-label="View record"
+      title="View record"
+    >
+      <Eye size={16} />
+    </button>
+
+    <button
+      onClick={() => continueRecord(record)}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white hover:bg-slate-800"
+      aria-label="Continue record"
+      title="Continue record"
+    >
+      <FilePenLine size={16} />
+    </button>
+  </div>
+</td>
                   </tr>
                 ))}
 
