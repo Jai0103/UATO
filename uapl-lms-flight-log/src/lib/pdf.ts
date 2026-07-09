@@ -150,11 +150,16 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text("Student Signature:", margin, y);
-  doc.line(45, y, 110, y);
+doc.text("Student Signature:", margin, y);
 
-  doc.text("AFE / Instructor Signature:", 150, y);
-  doc.line(190, y, 270, y);
+if (data.student.studentSignatureDataUrl) {
+  doc.addImage(data.student.studentSignatureDataUrl, "PNG", 45, y - 12, 55, 16);
+}
+
+doc.line(45, y, 110, y);
+
+doc.text("AFE / Instructor Signature:", 150, y);
+doc.line(190, y, 270, y);
 
   const studentName = safeFileName(data.student.studentName || "Student");
   doc.save(`${studentName} (FLIGHT LOG).pdf`);
