@@ -128,7 +128,7 @@ export default function FlightLogsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
+     <div className="min-w-0 space-y-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Flight Log</h1>
@@ -240,29 +240,23 @@ export default function FlightLogsPage() {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-[1280px] border-collapse text-left text-sm">
+          <div className="w-full overflow-x-auto rounded-md border border-slate-200">
+  <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-                  {[
-                    "Date",
-                    "Location",
-                    "Start Time",
-                    "Duration",
-                    "UA Model & S/N",
-                    "UA Category",
-                    "Battery S/N",
-                    "Pilot in Command",
-                    "AFE / Instructor",
-                    "Remarks",
-                    ""
-                  ].map((heading) => (
-                    <th key={heading} className="px-3 py-3 font-semibold">
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+  <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+    <th className="w-[120px] px-3 py-3 font-semibold">Date</th>
+    <th className="w-[130px] px-3 py-3 font-semibold">Location</th>
+    <th className="w-[110px] px-3 py-3 font-semibold">Start Time</th>
+    <th className="w-[110px] px-3 py-3 font-semibold">Duration</th>
+    <th className="w-[160px] px-3 py-3 font-semibold">UA Model & S/N</th>
+    <th className="w-[120px] px-3 py-3 font-semibold">UA Category</th>
+    <th className="w-[140px] px-3 py-3 font-semibold">Battery S/N</th>
+    <th className="w-[160px] px-3 py-3 font-semibold">Pilot in Command</th>
+    <th className="w-[170px] px-3 py-3 font-semibold">AFE / Instructor</th>
+    <th className="w-[180px] px-3 py-3 font-semibold">Remarks</th>
+    <th className="w-[60px] px-3 py-3 font-semibold"></th>
+  </tr>
+</thead>
 
               <tbody>
                 {rows.map((row, index) => (
