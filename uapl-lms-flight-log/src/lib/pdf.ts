@@ -1,24 +1,5 @@
 import jsPDF from "jspdf";
-
-export type StudentDetails = {
-  studentName: string;
-  company: string;
-  lastFourCharacters: string;
-  studentSignatureName: string;
-};
-
-export type FlightLogRow = {
-  date: string;
-  location: string;
-  startTime: string;
-  duration: string;
-  uaModel: string;
-  uaCategory: string;
-  batterySn: string;
-  pilotInCommand: string;
-  instructorInCommand: string;
-  remarks: string;
-};
+import type { FlightLogRow, StudentDetails } from "@/lib/flight-log-storage";
 
 export type FlightLogPdfData = {
   student: StudentDetails;
@@ -51,9 +32,8 @@ function drawCell(
 
   const lines = doc.splitTextToSize(text || "", width - 4);
   const textX = options?.align === "center" ? x + width / 2 : x + 2;
-  const textY = y + 5;
 
-  doc.text(lines.slice(0, 3), textX, textY, {
+  doc.text(lines.slice(0, 3), textX, y + 3, {
     align: options?.align ?? "left",
     baseline: "top"
   });
@@ -123,7 +103,7 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
 
   y += headerHeight;
 
-  const usablePageHeight = doc.internal.pageSize.getHeight() - 12;
+  const usablePageHeight = doc.internal.pageSize.getHeight() - 18;
 
   data.rows.forEach((row) => {
     if (y + rowHeight > usablePageHeight) {
