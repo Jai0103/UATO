@@ -105,6 +105,21 @@ export function saveFlightLogRecord(
   localStorage.setItem(
     flightLogRecordsKey,
     JSON.stringify([newRecord, ...currentRecords])
+
+    export function createFlightLogRecord(
+  student: StudentDetails,
+  rows: FlightLogRow[]
+): FlightLogRecord {
+  const now = new Date().toISOString();
+
+  return {
+    id: crypto.randomUUID(),
+    student,
+    rows,
+    createdAt: now,
+    updatedAt: now
+  };
+}
   );
 
   return newRecord;
