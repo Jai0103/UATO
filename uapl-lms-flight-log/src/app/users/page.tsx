@@ -1,7 +1,9 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
+import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
+import { fetchGoogleUsers, saveGoogleUsers } from "@/lib/google-api";
 import {
   createManagedUser,
   getManagedUsers,
@@ -44,10 +46,31 @@ export default function UsersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [visiblePasswordId, setVisiblePasswordId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setUsers(getManagedUsers());
-  }, []);
+    async function loadUsers() {
+      setLoading(true);
+
+      try {
+        const googleUsers = await fetchGoogleUsers();
+        setUsers(googleUsers);
+        saveManagedUsers(googleUsers);
+      } catch {
+        setUsers(getManagedUsers());
+        notify({
+          type: "warning",
+          title: "Using local users",
+          message: "Google Sheets users could not be loaded."
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadUsers();
+  }, [notify]);
 
   function openCreateModal() {
     setForm({
@@ -69,7 +92,29 @@ export default function UsersPage() {
     }));
   }
 
-  function saveUser() {
+  async function syncUsers(updatedUsers: ManagedUser[]) {
+    setSaving(true);
+
+    try {
+      const googleUsers = await saveGoogleUsers(updatedUsers);
+      setUsers(googleUsers);
+      saveManagedUsers(googleUsers);
+      return true;
+    } catch {
+      setUsers(updatedUsers);
+      saveManagedUsers(updatedUsers);
+      notify({
+        type: "error",
+        title: "Google Sheets sync failed",
+        message: "User changes were saved locally on this device."
+      });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveUser() {
     if (!form.name.trim()) {
       notify({
         type: "warning",
@@ -113,13 +158,12 @@ export default function UsersPage() {
     const newUser = createManagedUser(form);
     const updatedUsers = [newUser, ...users];
 
-    setUsers(updatedUsers);
-    saveManagedUsers(updatedUsers);
+    const synced = await syncUsers(updatedUsers);
     closeCreateModal();
 
     notify({
-      type: "success",
-      title: "User created",
+      type: synced ? "success" : "warning",
+      title: synced ? "User created" : "User created locally",
       message: `${newUser.name} was added as ${newUser.role}.`
     });
   }
@@ -135,18 +179,20 @@ export default function UsersPage() {
     if (!confirmed) return;
 
     const updatedUsers = users.filter((item) => item.id !== user.id);
-    setUsers(updatedUsers);
-    saveManagedUsers(updatedUsers);
+    const synced = await syncUsers(updatedUsers);
 
     notify({
-      type: "success",
-      title: "User deleted",
+      type: synced ? "success" : "warning",
+      title: synced ? "User deleted" : "User deleted locally",
       message: `${user.name} was removed.`
     });
   }
 
   return (
     <AppShell>
+      {loading ? <LoadingOverlay label="Loading users..." /> : null}
+      {saving ? <LoadingOverlay label="Saving users..." /> : null}
+
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -193,7 +239,7 @@ export default function UsersPage() {
                       <span className="inline-flex items-center gap-2">
                         {visiblePasswordId === user.id
                           ? user.temporaryPassword
-                          : "••••••••••"}
+                          : "**********"}
                         <button
                           onClick={() =>
                             setVisiblePasswordId((current) =>
@@ -208,7 +254,7 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-slate-700">
-                      {new Date(user.createdAt).toLocaleString()}
+                      {user.createdAt ? new Date(user.createdAt).toLocaleString() : "-"}
                     </td>
                     <td className="px-4 py-4">
                       <button
@@ -222,7 +268,7 @@ export default function UsersPage() {
                   </tr>
                 ))}
 
-                {!users.length ? (
+                {!users.length && !loading ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                       No users created yet.
