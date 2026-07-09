@@ -4,14 +4,24 @@ import { AppShell } from "@/components/app-shell";
 import { getFlightLogRecords, type FlightLogRecord } from "@/lib/flight-log-storage";
 import { FileText, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { fetchGoogleRecords } from "@/lib/google-api";
 
 export default function RecordsPage() {
   const [records, setRecords] = useState<FlightLogRecord[]>([]);
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    setRecords(getFlightLogRecords());
-  }, []);
+useEffect(() => {
+  async function loadRecords() {
+    try {
+      const googleRecords = await fetchGoogleRecords();
+      setRecords(googleRecords);
+    } catch {
+      setRecords(getFlightLogRecords());
+    }
+  }
+
+  loadRecords();
+}, []);
 
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
