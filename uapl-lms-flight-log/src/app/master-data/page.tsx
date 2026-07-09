@@ -1,5 +1,5 @@
 "use client";
-
+import { fetchGoogleMasterData, saveGoogleMasterData } from "@/lib/google-api";
 import { AppShell } from "@/components/app-shell";
 import {
   getMasterData,
@@ -30,9 +30,19 @@ export default function MasterDataPage() {
   });
   const [statusMessage, setStatusMessage] = useState("");
 
-  useEffect(() => {
-    setMasterData(getMasterData());
-  }, []);
+useEffect(() => {
+  async function loadMasterData() {
+    try {
+      const googleMasterData = await fetchGoogleMasterData();
+      setMasterData(googleMasterData);
+      saveMasterData(googleMasterData);
+    } catch {
+      setMasterData(getMasterData());
+    }
+  }
+
+  loadMasterData();
+}, []);
 
   function addItem(section: MasterDataKey) {
     if (!masterData) return;
@@ -57,11 +67,11 @@ export default function MasterDataPage() {
       )
     };
 
-    setMasterData(updatedData);
-    saveMasterData(updatedData);
-    setInputs((current) => ({ ...current, [section]: "" }));
-    setStatusMessage(`${value} added to ${masterDataLabels[section]}.`);
-  }
+setMasterData(updatedData);
+saveMasterData(updatedData);
+saveGoogleMasterData(updatedData).catch(() => {
+  setStatusMessage("Saved locally. Google Sheets sync failed.");
+});
 
   function deleteItem(section: MasterDataKey, value: string) {
     if (!masterData) return;
@@ -71,10 +81,11 @@ export default function MasterDataPage() {
       [section]: masterData[section].filter((item) => item !== value)
     };
 
-    setMasterData(updatedData);
-    saveMasterData(updatedData);
-    setStatusMessage(`${value} removed from ${masterDataLabels[section]}.`);
-  }
+setMasterData(updatedData);
+saveMasterData(updatedData);
+saveGoogleMasterData(updatedData).catch(() => {
+  setStatusMessage("Saved locally. Google Sheets sync failed.");
+});
 
   return (
     <AppShell>
