@@ -69,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:grid-cols-[240px_1fr]">
+      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-4 rounded-md bg-slate-50 p-3">
             <p className="text-sm font-semibold text-slate-950">{session.name}</p>
@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main>{children}</main>
+       <main className="min-w-0">{children}</main>
       </div>
     </div>
   );
