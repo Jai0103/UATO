@@ -1,30 +1,39 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
-import { getFlightLogRecords, type FlightLogRecord } from "@/lib/flight-log-storage";
+import { LoadingOverlay } from "@/components/loading-overlay";
+import {
+  getFlightLogRecords,
+  type FlightLogRecord
+} from "@/lib/flight-log-storage";
+import { fetchGoogleRecords } from "@/lib/google-api";
 import { generateFlightLogPdf } from "@/lib/pdf";
 import { Download, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { fetchGoogleRecords } from "@/lib/google-api";
 
 export default function ReportsPage() {
   const [records, setRecords] = useState<FlightLogRecord[]>([]);
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
+  const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  async function loadRecords() {
-    try {
-      const googleRecords = await fetchGoogleRecords();
-      setRecords(googleRecords);
-    } catch {
-      setRecords(getFlightLogRecords());
+  useEffect(() => {
+    async function loadRecords() {
+      setLoading(true);
+
+      try {
+        const googleRecords = await fetchGoogleRecords();
+        setRecords(googleRecords);
+      } catch {
+        setRecords(getFlightLogRecords());
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
-  loadRecords();
-}, []);
+    loadRecords();
+  }, []);
 
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -80,6 +89,8 @@ useEffect(() => {
 
   return (
     <AppShell>
+      {loading ? <LoadingOverlay label="Loading report records..." /> : null}
+
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
@@ -158,19 +169,27 @@ useEffect(() => {
                     <td className="px-4 py-4 font-semibold text-slate-950">
                       {record.student.studentName || "-"}
                     </td>
-                    <td className="px-4 py-4 text-slate-700">{record.student.company || "-"}</td>
-                    <td className="px-4 py-4 text-slate-700">{record.student.lastFourCharacters || "-"}</td>
-                    <td className="px-4 py-4 text-slate-700">{record.rows.length}</td>
+                    <td className="px-4 py-4 text-slate-700">
+                      {record.student.company || "-"}
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      {record.student.lastFourCharacters || "-"}
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      {record.rows.length}
+                    </td>
                     <td className="px-4 py-4 text-slate-700">
                       {record.student.studentSignatureDataUrl ? "Captured" : "Missing"}
                     </td>
                     <td className="px-4 py-4 text-slate-700">
-                      {new Date(record.updatedAt).toLocaleString()}
+                      {record.updatedAt
+                        ? new Date(record.updatedAt).toLocaleString()
+                        : "-"}
                     </td>
                   </tr>
                 ))}
 
-                {!filteredRecords.length ? (
+                {!filteredRecords.length && !loading ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                       No saved records found.
