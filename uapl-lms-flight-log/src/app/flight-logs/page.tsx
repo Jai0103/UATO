@@ -1,8 +1,8 @@
 "use client";
 
 import { generateFlightLogPdf } from "@/lib/pdf";
-import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type StudentDetails = {
@@ -53,6 +53,24 @@ const emptyRow: FlightLogRow = {
   remarks: ""
 };
 
+const fields: {
+  key: keyof FlightLogRow;
+  label: string;
+  type?: "text" | "date" | "time" | "number" | "select";
+  width: string;
+}[] = [
+  { key: "date", label: "Date", type: "date", width: "w-[110px]" },
+  { key: "location", label: "Location", width: "w-[130px]" },
+  { key: "startTime", label: "Start Time", type: "time", width: "w-[110px]" },
+  { key: "duration", label: "Duration", type: "number", width: "w-[110px]" },
+  { key: "uaModel", label: "UA Model & S/N", width: "w-[160px]" },
+  { key: "uaCategory", label: "UA Category", type: "select", width: "w-[120px]" },
+  { key: "batterySn", label: "Battery S/N", width: "w-[140px]" },
+  { key: "pilotInCommand", label: "Pilot in Command", width: "w-[160px]" },
+  { key: "instructorInCommand", label: "AFE / Instructor", width: "w-[170px]" },
+  { key: "remarks", label: "Remarks", width: "w-[180px]" }
+];
+
 export default function FlightLogsPage() {
   const [student, setStudent] = useState<StudentDetails>(emptyStudent);
   const [rows, setRows] = useState<FlightLogRow[]>([{ ...emptyRow }]);
@@ -61,9 +79,7 @@ export default function FlightLogsPage() {
   useEffect(() => {
     const savedDraft = localStorage.getItem(draftKey);
 
-    if (!savedDraft) {
-      return;
-    }
+    if (!savedDraft) return;
 
     try {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
@@ -95,23 +111,23 @@ export default function FlightLogsPage() {
   }
 
   function removeRow(index: number) {
-    setRows((currentRows) => {
-      if (currentRows.length === 1) {
-        return [{ ...emptyRow }];
-      }
-
-      return currentRows.filter((_, rowIndex) => rowIndex !== index);
-    });
+    setRows((currentRows) =>
+      currentRows.length === 1
+        ? [{ ...emptyRow }]
+        : currentRows.filter((_, rowIndex) => rowIndex !== index)
+    );
   }
 
   function saveDraft() {
-    const draft: FlightLogDraft = {
-      student,
-      rows,
-      updatedAt: new Date().toISOString()
-    };
+    localStorage.setItem(
+      draftKey,
+      JSON.stringify({
+        student,
+        rows,
+        updatedAt: new Date().toISOString()
+      })
+    );
 
-    localStorage.setItem(draftKey, JSON.stringify(draft));
     setStatusMessage("Draft saved.");
   }
 
@@ -122,25 +138,49 @@ export default function FlightLogsPage() {
     setStatusMessage("Draft cleared.");
   }
 
-function handleUpload() {
-  if (!student.studentName.trim()) {
-    setStatusMessage("Please enter the student name before generating the PDF.");
-    return;
+  function handleGeneratePdf() {
+    if (!student.studentName.trim()) {
+      setStatusMessage("Please enter the student name before generating the PDF.");
+      return;
+    }
+
+    saveDraft();
+    generateFlightLogPdf({ student, rows });
+    setStatusMessage("PDF generated and downloaded.");
   }
 
-  saveDraft();
+  function renderField(row: FlightLogRow, rowIndex: number, field: (typeof fields)[number]) {
+    const inputClass =
+      "h-10 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-blue";
 
-  generateFlightLogPdf({
-    student,
-    rows
-  });
+    if (field.type === "select") {
+      return (
+        <select
+          className={inputClass}
+          value={row[field.key]}
+          onChange={(event) => updateRow(rowIndex, field.key, event.target.value)}
+        >
+          <option value="M7">M7</option>
+          <option value="M25">M25</option>
+          <option value="H">H</option>
+        </select>
+      );
+    }
 
-  setStatusMessage("PDF generated and downloaded.");
-}
+    return (
+      <input
+        type={field.type ?? "text"}
+        min={field.type === "number" ? "0" : undefined}
+        className={inputClass}
+        value={row[field.key]}
+        onChange={(event) => updateRow(rowIndex, field.key, event.target.value)}
+      />
+    );
+  }
 
   return (
     <AppShell>
-     <div className="min-w-0 space-y-6">
+      <div className="mx-auto w-full max-w-6xl min-w-0 space-y-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Flight Log</h1>
@@ -150,28 +190,19 @@ function handleUpload() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={clearDraft}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
+            <button onClick={clearDraft} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               <RotateCcw size={16} />
               Clear
             </button>
 
-            <button
-              onClick={saveDraft}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
+            <button onClick={saveDraft} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               <Save size={16} />
               Save Draft
             </button>
 
-            <button
-              onClick={handleUpload}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
-            >
-<Download size={16} />
-Generate PDF
+            <button onClick={handleGeneratePdf} className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800">
+              <Download size={16} />
+              Generate PDF
             </button>
           </div>
         </div>
@@ -186,55 +217,24 @@ Generate PDF
           <h2 className="text-lg font-semibold text-slate-950">Student Details</h2>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="block">
+            <label>
               <span className="text-sm font-medium text-slate-700">Student Name</span>
-              <input
-                value={student.studentName}
-                onChange={(event) =>
-                  updateStudent("studentName", event.target.value)
-                }
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
-                placeholder="Enter student name"
-              />
+              <input value={student.studentName} onChange={(event) => updateStudent("studentName", event.target.value)} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue" placeholder="Enter student name" />
             </label>
 
-            <label className="block">
+            <label>
               <span className="text-sm font-medium text-slate-700">Company</span>
-              <input
-                value={student.company}
-                onChange={(event) => updateStudent("company", event.target.value)}
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
-                placeholder="Enter company"
-              />
+              <input value={student.company} onChange={(event) => updateStudent("company", event.target.value)} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue" placeholder="Enter company" />
             </label>
 
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">
-                Last 4 Characters
-              </span>
-              <input
-                value={student.lastFourCharacters}
-                onChange={(event) =>
-                  updateStudent("lastFourCharacters", event.target.value.slice(0, 4))
-                }
-                maxLength={4}
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm uppercase outline-none focus:border-brand-blue"
-                placeholder="A123"
-              />
+            <label>
+              <span className="text-sm font-medium text-slate-700">Last 4 Characters</span>
+              <input value={student.lastFourCharacters} onChange={(event) => updateStudent("lastFourCharacters", event.target.value.slice(0, 4))} maxLength={4} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm uppercase outline-none focus:border-brand-blue" placeholder="A123" />
             </label>
 
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">
-                Student Signature Name
-              </span>
-              <input
-                value={student.studentSignatureName}
-                onChange={(event) =>
-                  updateStudent("studentSignatureName", event.target.value)
-                }
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
-                placeholder="Printed signature name"
-              />
+            <label>
+              <span className="text-sm font-medium text-slate-700">Student Signature Name</span>
+              <input value={student.studentSignatureName} onChange={(event) => updateStudent("studentSignatureName", event.target.value)} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue" placeholder="Printed signature name" />
             </label>
           </div>
         </section>
@@ -243,150 +243,57 @@ Generate PDF
           <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <h2 className="text-lg font-semibold text-slate-950">Flight Entries</h2>
 
-            <button
-              onClick={addRow}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
+            <button onClick={addRow} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               <Plus size={16} />
               Add Row
             </button>
           </div>
 
-          <div className="w-full overflow-x-auto rounded-md border border-slate-200">
-  <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
+          <div className="space-y-4 lg:hidden">
+            {rows.map((row, rowIndex) => (
+              <article key={rowIndex} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-950">Entry {rowIndex + 1}</p>
+                  <button onClick={() => removeRow(rowIndex)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600" aria-label="Remove row">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {fields.map((field) => (
+                    <label key={field.key} className={field.key === "remarks" ? "sm:col-span-2" : ""}>
+                      <span className="text-xs font-semibold uppercase text-slate-500">{field.label}</span>
+                      <div className="mt-2">{renderField(row, rowIndex, field)}</div>
+                    </label>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden w-full overflow-x-auto rounded-md border border-slate-200 lg:block">
+            <table className="w-full min-w-[1310px] table-fixed border-collapse text-left text-sm">
               <thead>
-  <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-    <th className="w-[120px] px-3 py-3 font-semibold">Date</th>
-    <th className="w-[130px] px-3 py-3 font-semibold">Location</th>
-    <th className="w-[110px] px-3 py-3 font-semibold">Start Time</th>
-    <th className="w-[110px] px-3 py-3 font-semibold">Duration</th>
-    <th className="w-[160px] px-3 py-3 font-semibold">UA Model & S/N</th>
-    <th className="w-[120px] px-3 py-3 font-semibold">UA Category</th>
-    <th className="w-[140px] px-3 py-3 font-semibold">Battery S/N</th>
-    <th className="w-[160px] px-3 py-3 font-semibold">Pilot in Command</th>
-    <th className="w-[170px] px-3 py-3 font-semibold">AFE / Instructor</th>
-    <th className="w-[180px] px-3 py-3 font-semibold">Remarks</th>
-    <th className="w-[60px] px-3 py-3 font-semibold"></th>
-  </tr>
-</thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                  {fields.map((field) => (
+                    <th key={field.key} className={`${field.width} px-3 py-3 font-semibold`}>
+                      {field.label}
+                    </th>
+                  ))}
+                  <th className="w-[60px] px-3 py-3 font-semibold"></th>
+                </tr>
+              </thead>
 
               <tbody>
-                {rows.map((row, index) => (
-                  <tr key={index} className="border-b border-slate-100">
+                {rows.map((row, rowIndex) => (
+                  <tr key={rowIndex} className="border-b border-slate-100">
+                    {fields.map((field) => (
+                      <td key={field.key} className="p-2">
+                        {renderField(row, rowIndex, field)}
+                      </td>
+                    ))}
                     <td className="p-2">
-                      <input
-                        type="date"
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.date}
-                        onChange={(event) =>
-                          updateRow(index, "date", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.location}
-                        onChange={(event) =>
-                          updateRow(index, "location", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        type="time"
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.startTime}
-                        onChange={(event) =>
-                          updateRow(index, "startTime", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        type="number"
-                        min="0"
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.duration}
-                        onChange={(event) =>
-                          updateRow(index, "duration", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.uaModel}
-                        onChange={(event) =>
-                          updateRow(index, "uaModel", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <select
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.uaCategory}
-                        onChange={(event) =>
-                          updateRow(index, "uaCategory", event.target.value)
-                        }
-                      >
-                        <option value="M7">M7</option>
-                        <option value="M25">M25</option>
-                        <option value="H">H</option>
-                      </select>
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.batterySn}
-                        onChange={(event) =>
-                          updateRow(index, "batterySn", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.pilotInCommand}
-                        onChange={(event) =>
-                          updateRow(index, "pilotInCommand", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.instructorInCommand}
-                        onChange={(event) =>
-                          updateRow(index, "instructorInCommand", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <input
-                        className="h-10 w-full rounded-md border border-slate-300 px-2"
-                        value={row.remarks}
-                        onChange={(event) =>
-                          updateRow(index, "remarks", event.target.value)
-                        }
-                      />
-                    </td>
-
-                    <td className="p-2">
-                      <button
-                        onClick={() => removeRow(index)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Remove row"
-                      >
+                      <button onClick={() => removeRow(rowIndex)} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600" aria-label="Remove row">
                         <Trash2 size={16} />
                       </button>
                     </td>
