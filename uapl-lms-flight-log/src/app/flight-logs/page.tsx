@@ -1,56 +1,21 @@
 "use client";
 
-import { generateFlightLogPdf } from "@/lib/pdf";
 import { AppShell } from "@/components/app-shell";
-import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import {
+  emptyRow,
+  emptyStudent,
+  flightLogDraftKey,
+  saveFlightLogRecord,
+  type FlightLogRow,
+  type StudentDetails
+} from "@/lib/flight-log-storage";
+import { Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-
-type StudentDetails = {
-  studentName: string;
-  company: string;
-  lastFourCharacters: string;
-  studentSignatureName: string;
-};
-
-type FlightLogRow = {
-  date: string;
-  location: string;
-  startTime: string;
-  duration: string;
-  uaModel: string;
-  uaCategory: string;
-  batterySn: string;
-  pilotInCommand: string;
-  instructorInCommand: string;
-  remarks: string;
-};
 
 type FlightLogDraft = {
   student: StudentDetails;
   rows: FlightLogRow[];
   updatedAt: string;
-};
-
-const draftKey = "uapl_flight_log_draft";
-
-const emptyStudent: StudentDetails = {
-  studentName: "",
-  company: "",
-  lastFourCharacters: "",
-  studentSignatureName: ""
-};
-
-const emptyRow: FlightLogRow = {
-  date: "",
-  location: "",
-  startTime: "",
-  duration: "",
-  uaModel: "",
-  uaCategory: "M7",
-  batterySn: "",
-  pilotInCommand: "",
-  instructorInCommand: "",
-  remarks: ""
 };
 
 const fields: {
@@ -77,7 +42,7 @@ export default function FlightLogsPage() {
   const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
-    const savedDraft = localStorage.getItem(draftKey);
+    const savedDraft = localStorage.getItem(flightLogDraftKey);
 
     if (!savedDraft) return;
 
@@ -87,7 +52,7 @@ export default function FlightLogsPage() {
       setRows(parsedDraft.rows.length ? parsedDraft.rows : [{ ...emptyRow }]);
       setStatusMessage("Draft loaded.");
     } catch {
-      localStorage.removeItem(draftKey);
+      localStorage.removeItem(flightLogDraftKey);
     }
   }, []);
 
@@ -120,7 +85,7 @@ export default function FlightLogsPage() {
 
   function saveDraft() {
     localStorage.setItem(
-      draftKey,
+      flightLogDraftKey,
       JSON.stringify({
         student,
         rows,
@@ -132,21 +97,21 @@ export default function FlightLogsPage() {
   }
 
   function clearDraft() {
-    localStorage.removeItem(draftKey);
+    localStorage.removeItem(flightLogDraftKey);
     setStudent(emptyStudent);
     setRows([{ ...emptyRow }]);
     setStatusMessage("Draft cleared.");
   }
 
-  function handleGeneratePdf() {
+  function saveRecord() {
     if (!student.studentName.trim()) {
-      setStatusMessage("Please enter the student name before generating the PDF.");
+      setStatusMessage("Please enter the student name before saving.");
       return;
     }
 
+    saveFlightLogRecord(student, rows);
     saveDraft();
-    generateFlightLogPdf({ student, rows });
-    setStatusMessage("PDF generated and downloaded.");
+    setStatusMessage("Flight log record saved. Generate the PDF from Reports.");
   }
 
   function renderField(row: FlightLogRow, rowIndex: number, field: (typeof fields)[number]) {
@@ -185,7 +150,7 @@ export default function FlightLogsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Flight Log</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Create and prepare student flight log reports.
+              Capture student flight details and save them as report records.
             </p>
           </div>
 
@@ -200,9 +165,9 @@ export default function FlightLogsPage() {
               Save Draft
             </button>
 
-            <button onClick={handleGeneratePdf} className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800">
-              <Download size={16} />
-              Generate PDF
+            <button onClick={saveRecord} className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800">
+              <Save size={16} />
+              Save Record
             </button>
           </div>
         </div>
