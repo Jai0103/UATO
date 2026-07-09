@@ -2,7 +2,6 @@ export type StudentDetails = {
   studentName: string;
   company: string;
   lastFourCharacters: string;
-  studentSignatureName: string;
   studentSignatureDataUrl: string;
 };
 
@@ -34,7 +33,7 @@ export const emptyStudent: StudentDetails = {
   studentName: "",
   company: "",
   lastFourCharacters: "",
-  studentSignatureName: "",
+
   studentSignatureDataUrl: ""
 };
 
