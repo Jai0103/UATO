@@ -76,36 +76,28 @@ export default function FlightLogsPage() {
     }));
   }
 
-function openAddFlightModal() {
-  if (!student.studentName.trim()) {
-    setStatusMessage("Please enter the student name before adding a flight.");
-    return;
+  function openAddFlightModal() {
+    if (!student.studentName.trim()) {
+      setStatusMessage("Please enter the student name before adding a flight.");
+      return;
+    }
+
+    setEditingIndex(null);
+    setFlightForm({
+      ...emptyRow,
+      pilotInCommand: student.studentName
+    });
+    setModalOpen(true);
   }
 
-  setEditingIndex(null);
-  setFlightForm({
-    ...emptyRow,
-    pilotInCommand: student.studentName
-  });
-  setModalOpen(true);
-}
-
-  setEditingIndex(null);
-  setFlightForm({
-    ...emptyRow,
-    pilotInCommand: student.studentName
-  });
-  setModalOpen(true);
-}
-
-function openEditFlightModal(index: number) {
-  setEditingIndex(index);
-  setFlightForm({
-    ...rows[index],
-    pilotInCommand: student.studentName
-  });
-  setModalOpen(true);
-}
+  function openEditFlightModal(index: number) {
+    setEditingIndex(index);
+    setFlightForm({
+      ...rows[index],
+      pilotInCommand: student.studentName
+    });
+    setModalOpen(true);
+  }
 
   function closeFlightModal() {
     setModalOpen(false);
@@ -113,26 +105,26 @@ function openEditFlightModal(index: number) {
     setFlightForm({ ...emptyRow });
   }
 
-function saveFlightEntry() {
-  const entryToSave: FlightLogRow = {
-    ...flightForm,
-    pilotInCommand: student.studentName
-  };
+  function saveFlightEntry() {
+    const entryToSave: FlightLogRow = {
+      ...flightForm,
+      pilotInCommand: student.studentName
+    };
 
-  if (editingIndex === null) {
-    setRows((currentRows) => [...currentRows, entryToSave]);
-    setStatusMessage("Flight entry added.");
-  } else {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === editingIndex ? entryToSave : row
-      )
-    );
-    setStatusMessage("Flight entry updated.");
+    if (editingIndex === null) {
+      setRows((currentRows) => [...currentRows, entryToSave]);
+      setStatusMessage("Flight entry added.");
+    } else {
+      setRows((currentRows) =>
+        currentRows.map((row, index) =>
+          index === editingIndex ? entryToSave : row
+        )
+      );
+      setStatusMessage("Flight entry updated.");
+    }
+
+    closeFlightModal();
   }
-
-  closeFlightModal();
-}
 
   function deleteFlightEntry(index: number) {
     setRows((currentRows) =>
@@ -177,87 +169,87 @@ function saveFlightEntry() {
     setStatusMessage("Flight log record saved. Generate the PDF from Reports.");
   }
 
-function renderModalField(field: (typeof fields)[number]) {
-  const inputClass =
-    "mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-blue";
+  function renderModalField(field: (typeof fields)[number]) {
+    const inputClass =
+      "mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-blue";
 
-  if (field.key === "pilotInCommand") {
-    return (
-      <input
-        className={`${inputClass} bg-slate-100 text-slate-600`}
-        value={student.studentName}
-        readOnly
-      />
-    );
-  }
+    if (field.key === "pilotInCommand") {
+      return (
+        <input
+          className={`${inputClass} bg-slate-100 text-slate-600`}
+          value={student.studentName}
+          readOnly
+        />
+      );
+    }
 
-  if (field.key === "location") {
-    const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
+    if (field.key === "location") {
+      const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
 
-    return (
-      <select
-        className={inputClass}
-        value={flightForm.location}
-        onChange={(event) => updateFlightForm("location", event.target.value)}
-      >
-        <option value="">Select location</option>
-        {locations.map((location) => (
-          <option key={location} value={location}>
-            {location}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  if (field.key === "uaCategory") {
-    const categories = masterData?.uaCategories ?? ["M7", "M25", "H"];
-
-    return (
-      <select
-        className={inputClass}
-        value={flightForm.uaCategory}
-        onChange={(event) => updateFlightForm("uaCategory", event.target.value)}
-      >
-        {categories.map((category) => (
-          <option key={category} value={category}>
-            {category}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
-    uaModel: masterData?.uaModels ?? [],
-    batterySn: masterData?.batterySerialNumbers ?? [],
-    instructorInCommand: masterData?.afeInstructors ?? []
-  };
-
-  const options = datalistOptions[field.key];
-  const listId = options ? `flight-${field.key}-options` : undefined;
-
-  return (
-    <>
-      <input
-        type={field.type ?? "text"}
-        min={field.type === "number" ? "0" : undefined}
-        list={listId}
-        className={inputClass}
-        value={flightForm[field.key]}
-        onChange={(event) => updateFlightForm(field.key, event.target.value)}
-      />
-
-      {options ? (
-        <datalist id={listId}>
-          {options.map((option) => (
-            <option key={option} value={option} />
+      return (
+        <select
+          className={inputClass}
+          value={flightForm.location}
+          onChange={(event) => updateFlightForm("location", event.target.value)}
+        >
+          <option value="">Select location</option>
+          {locations.map((location) => (
+            <option key={location} value={location}>
+              {location}
+            </option>
           ))}
-        </datalist>
-      ) : null}
-    </>
-  );
-}
+        </select>
+      );
+    }
+
+    if (field.key === "uaCategory") {
+      const categories = masterData?.uaCategories ?? ["M7", "M25", "H"];
+
+      return (
+        <select
+          className={inputClass}
+          value={flightForm.uaCategory}
+          onChange={(event) => updateFlightForm("uaCategory", event.target.value)}
+        >
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
+      uaModel: masterData?.uaModels ?? [],
+      batterySn: masterData?.batterySerialNumbers ?? [],
+      instructorInCommand: masterData?.afeInstructors ?? []
+    };
+
+    const options = datalistOptions[field.key];
+    const listId = options ? `flight-${field.key}-options` : undefined;
+
+    return (
+      <>
+        <input
+          type={field.type ?? "text"}
+          min={field.type === "number" ? "0" : undefined}
+          list={listId}
+          className={inputClass}
+          value={flightForm[field.key]}
+          onChange={(event) => updateFlightForm(field.key, event.target.value)}
+        />
+
+        {options ? (
+          <datalist id={listId}>
+            {options.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <AppShell>
