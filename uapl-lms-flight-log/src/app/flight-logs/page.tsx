@@ -76,11 +76,19 @@ export default function FlightLogsPage() {
     }));
   }
 
-  function openAddFlightModal() {
-    setEditingIndex(null);
-    setFlightForm({ ...emptyRow });
-    setModalOpen(true);
+function openAddFlightModal() {
+  if (!student.studentName.trim()) {
+    setStatusMessage("Please enter the student name before adding a flight.");
+    return;
   }
+
+  setEditingIndex(null);
+  setFlightForm({
+    ...emptyRow,
+    pilotInCommand: student.studentName
+  });
+  setModalOpen(true);
+}
 
   function openEditFlightModal(index: number) {
     setEditingIndex(index);
