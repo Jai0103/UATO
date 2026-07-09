@@ -2,6 +2,7 @@
 
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
+import { useAppMessage } from "@/components/message-provider";
 import { fetchGoogleMasterData, saveGoogleMasterData } from "@/lib/google-api";
 import {
   getMasterData,
@@ -22,6 +23,8 @@ const masterDataSections: MasterDataKey[] = [
 ];
 
 export default function MasterDataPage() {
+  const { notify, confirm } = useAppMessage();
+
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [inputs, setInputs] = useState<Record<MasterDataKey, string>>({
     locations: "",
@@ -30,7 +33,6 @@ export default function MasterDataPage() {
     uaModels: "",
     uaCategories: ""
   });
-  const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,26 +45,43 @@ export default function MasterDataPage() {
         saveMasterData(googleMasterData);
       } catch {
         setMasterData(getMasterData());
+        notify({
+          type: "warning",
+          title: "Using local master data",
+          message: "Google Sheets master data could not be loaded."
+        });
       } finally {
         setLoading(false);
       }
     }
 
     loadMasterData();
-  }, []);
+  }, [notify]);
 
   function addItem(section: MasterDataKey) {
     if (!masterData) return;
 
     const value = inputs[section].trim();
-    if (!value) return;
+
+    if (!value) {
+      notify({
+        type: "warning",
+        title: "Value required",
+        message: `Enter a value before adding to ${masterDataLabels[section]}.`
+      });
+      return;
+    }
 
     const exists = masterData[section].some(
       (item) => item.toLowerCase() === value.toLowerCase()
     );
 
     if (exists) {
-      setStatusMessage(`${value} already exists in ${masterDataLabels[section]}.`);
+      notify({
+        type: "warning",
+        title: "Duplicate value",
+        message: `${value} already exists in ${masterDataLabels[section]}.`
+      });
       return;
     }
 
@@ -76,15 +95,35 @@ export default function MasterDataPage() {
     setMasterData(updatedData);
     saveMasterData(updatedData);
     setInputs((current) => ({ ...current, [section]: "" }));
-    setStatusMessage(`${value} added to ${masterDataLabels[section]}.`);
 
-    saveGoogleMasterData(updatedData).catch(() => {
-      setStatusMessage("Saved locally. Google Sheets sync failed.");
-    });
+    saveGoogleMasterData(updatedData)
+      .then(() => {
+        notify({
+          type: "success",
+          title: "Master data updated",
+          message: `${value} was added to ${masterDataLabels[section]}.`
+        });
+      })
+      .catch(() => {
+        notify({
+          type: "error",
+          title: "Google Sheets sync failed",
+          message: `${value} was saved locally, but not synced to Google Sheets.`
+        });
+      });
   }
 
-  function deleteItem(section: MasterDataKey, value: string) {
+  async function deleteItem(section: MasterDataKey, value: string) {
     if (!masterData) return;
+
+    const confirmed = await confirm({
+      title: "Delete master data item?",
+      message: `Remove "${value}" from ${masterDataLabels[section]}?`,
+      confirmLabel: "Delete",
+      variant: "danger"
+    });
+
+    if (!confirmed) return;
 
     const updatedData: MasterData = {
       ...masterData,
@@ -93,11 +132,22 @@ export default function MasterDataPage() {
 
     setMasterData(updatedData);
     saveMasterData(updatedData);
-    setStatusMessage(`${value} removed from ${masterDataLabels[section]}.`);
 
-    saveGoogleMasterData(updatedData).catch(() => {
-      setStatusMessage("Saved locally. Google Sheets sync failed.");
-    });
+    saveGoogleMasterData(updatedData)
+      .then(() => {
+        notify({
+          type: "success",
+          title: "Master data deleted",
+          message: `${value} was removed from ${masterDataLabels[section]}.`
+        });
+      })
+      .catch(() => {
+        notify({
+          type: "error",
+          title: "Google Sheets sync failed",
+          message: `${value} was removed locally, but not synced to Google Sheets.`
+        });
+      });
   }
 
   return (
@@ -111,12 +161,6 @@ export default function MasterDataPage() {
             Manage dropdown and search values used by flight log records.
           </p>
         </div>
-
-        {statusMessage ? (
-          <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
-            {statusMessage}
-          </div>
-        ) : null}
 
         <section className="grid gap-5 lg:grid-cols-2">
           {masterData &&
