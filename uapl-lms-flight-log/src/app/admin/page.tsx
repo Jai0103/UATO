@@ -1,17 +1,100 @@
-import { ClipboardCheck, Clock, GraduationCap, Settings, Users } from "lucide-react";
-import Link from "next/link";
-import { AppShell } from "@/components/app-shell";
+"use client";
 
-const stats = [
-  { label: "Students", value: "24", icon: GraduationCap },
-  { label: "Pending Uploads", value: "7", icon: Clock },
-  { label: "Trainers", value: "5", icon: Users },
-  { label: "Completed Logs", value: "38", icon: ClipboardCheck }
-];
+import { AppShell } from "@/components/app-shell";
+import { LoadingOverlay } from "@/components/loading-overlay";
+import { useAppMessage } from "@/components/message-provider";
+import {
+  getFlightLogRecords,
+  type FlightLogRecord
+} from "@/lib/flight-log-storage";
+import { fetchGoogleRecords } from "@/lib/google-api";
+import {
+  ClipboardCheck,
+  Clock,
+  GraduationCap,
+  Settings,
+  Users
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 export default function AdminPage() {
+  const { notify } = useAppMessage();
+
+  const [records, setRecords] = useState<FlightLogRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboardData() {
+      setLoading(true);
+
+      try {
+        const googleRecords = await fetchGoogleRecords();
+        setRecords(googleRecords);
+      } catch {
+        setRecords(getFlightLogRecords());
+        notify({
+          type: "warning",
+          title: "Using local dashboard data",
+          message: "Google Sheets records could not be loaded."
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDashboardData();
+  }, [notify]);
+
+  const dashboardStats = useMemo(() => {
+    const uniqueStudents = new Set(
+      records
+        .map((record) =>
+          `${record.student.studentName}-${record.student.lastFourCharacters}`
+            .trim()
+            .toLowerCase()
+        )
+        .filter(Boolean)
+    );
+
+    const pendingUploads = records.filter(
+      (record) =>
+        !record.student.studentSignatureDataUrl || record.rows.length === 0
+    ).length;
+
+    const completedLogs = records.filter(
+      (record) =>
+        record.student.studentSignatureDataUrl && record.rows.length > 0
+    ).length;
+
+    return [
+      {
+        label: "Students",
+        value: String(uniqueStudents.size),
+        icon: GraduationCap
+      },
+      {
+        label: "Pending Uploads",
+        value: String(pendingUploads),
+        icon: Clock
+      },
+      {
+        label: "Trainers",
+        value: "1",
+        icon: Users
+      },
+      {
+        label: "Completed Logs",
+        value: String(completedLogs),
+        icon: ClipboardCheck
+      }
+    ];
+  }, [records]);
+
   return (
     <AppShell>
+      {loading ? <LoadingOverlay label="Loading dashboard data..." /> : null}
+
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Admin Dashboard</h1>
@@ -21,7 +104,7 @@ export default function AdminPage() {
         </div>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map((stat) => {
+          {dashboardStats.map((stat) => {
             const Icon = stat.icon;
 
             return (
