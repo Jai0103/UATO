@@ -12,7 +12,7 @@ import {
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
 import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 
 type FlightLogDraft = {
   student: StudentDetails;
@@ -46,6 +46,8 @@ export default function FlightLogsPage() {
   const [flightForm, setFlightForm] = useState<FlightLogRow>({ ...emptyRow });
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [accountName, setAccountName] = useState("");
+  const [isSigning, setIsSigning] = useState(false);
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     setMasterData(getMasterData());
@@ -87,6 +89,73 @@ export default function FlightLogsPage() {
       ...currentForm,
       [field]: value
     }));
+  }
+
+  function getCanvasPoint(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height
+    };
+  }
+
+  function startSignature(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const point = getCanvasPoint(event);
+
+    context.strokeStyle = "#111827";
+    context.lineWidth = 4;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+
+    setIsSigning(true);
+  }
+
+  function drawSignature(event: PointerEvent<HTMLCanvasElement>) {
+    if (!isSigning) return;
+
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const point = getCanvasPoint(event);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+
+    updateStudent("studentSignatureDataUrl", canvas.toDataURL("image/png"));
+  }
+
+  function endSignature() {
+    setIsSigning(false);
+
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+
+    updateStudent("studentSignatureDataUrl", canvas.toDataURL("image/png"));
+  }
+
+  function clearSignature() {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    updateStudent("studentSignatureDataUrl", "");
   }
 
   function openAddFlightModal() {
@@ -166,12 +235,18 @@ export default function FlightLogsPage() {
     localStorage.removeItem(flightLogDraftKey);
     setStudent(emptyStudent);
     setRows([]);
+    clearSignature();
     setStatusMessage("Draft cleared.");
   }
 
   function saveRecord() {
     if (!student.studentName.trim()) {
       setStatusMessage("Please enter the student name before saving.");
+      return;
+    }
+
+    if (!student.studentSignatureDataUrl) {
+      setStatusMessage("Please capture the student signature before saving.");
       return;
     }
 
@@ -283,7 +358,7 @@ export default function FlightLogsPage() {
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Flight Log</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Save student details, add flight entries, and prepare report records.
+              Save student details, capture signature, add flight entries, and prepare report records.
             </p>
           </div>
 
@@ -370,6 +445,51 @@ export default function FlightLogsPage() {
                 placeholder="Printed signature name"
               />
             </label>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">
+                    Student Signature
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Sign using phone, tablet, or mouse.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={clearSignature}
+                  className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Clear Signature
+                </button>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-slate-300 bg-white p-2">
+                <canvas
+                  ref={signatureCanvasRef}
+                  width={900}
+                  height={220}
+                  onPointerDown={startSignature}
+                  onPointerMove={drawSignature}
+                  onPointerUp={endSignature}
+                  onPointerCancel={endSignature}
+                  onPointerLeave={endSignature}
+                  className="h-44 w-full touch-none rounded-md bg-white"
+                />
+              </div>
+
+              {student.studentSignatureDataUrl ? (
+                <p className="mt-2 text-xs font-medium text-green-700">
+                  Signature captured.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">
+                  No signature captured yet.
+                </p>
+              )}
+            </div>
           </div>
         </section>
 
