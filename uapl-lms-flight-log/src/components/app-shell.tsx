@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   ClipboardList,
+  Database,
   FileText,
   LogOut,
   Menu,
@@ -37,8 +38,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const parsedSession = JSON.parse(rawSession) as Session;
+    const adminOnlyPages = ["/admin", "/master-data"];
 
-    if (parsedSession.role === "trainer" && pathname === "/admin") {
+    if (parsedSession.role === "trainer" && adminOnlyPages.includes(pathname)) {
       router.replace("/flight-logs");
       return;
     }
@@ -53,17 +55,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!session) return null;
 
-const links =
-  session.role === "admin"
-    ? [
-        { href: "/admin", label: "Dashboard", icon: BarChart3 },
-        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
-        { href: "/reports", label: "Reports", icon: FileText }
-      ]
-    : [
-        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
-        { href: "/reports", label: "Reports", icon: FileText }
-      ];
+  const links =
+    session.role === "admin"
+      ? [
+          { href: "/admin", label: "Dashboard", icon: BarChart3 },
+          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+          { href: "/reports", label: "Reports", icon: FileText },
+          { href: "/master-data", label: "Master Data", icon: Database }
+        ]
+      : [
+          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+          { href: "/reports", label: "Reports", icon: FileText }
+        ];
 
   const navigation = (
     <>
