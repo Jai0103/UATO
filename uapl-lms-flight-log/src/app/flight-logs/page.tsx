@@ -1,6 +1,8 @@
 "use client";
-import { LoadingOverlay } from "@/components/loading-overlay";
+
 import { AppShell } from "@/components/app-shell";
+import { LoadingOverlay } from "@/components/loading-overlay";
+import { useAppMessage } from "@/components/message-provider";
 import { sessionKey } from "@/lib/demo-auth";
 import { saveGoogleRecord } from "@/lib/google-api";
 import {
@@ -40,17 +42,19 @@ const fields: {
 ];
 
 export default function FlightLogsPage() {
+  const { notify, confirm, clearMessage } = useAppMessage();
+
   const [student, setStudent] = useState<StudentDetails>(emptyStudent);
   const [rows, setRows] = useState<FlightLogRow[]>([]);
-  const [statusMessage, setStatusMessage] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [flightForm, setFlightForm] = useState<FlightLogRow>({ ...emptyRow });
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [accountName, setAccountName] = useState("");
   const [isSigning, setIsSigning] = useState(false);
-  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [saving, setSaving] = useState(false);
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   useEffect(() => {
     setMasterData(getMasterData());
 
@@ -73,11 +77,16 @@ export default function FlightLogsPage() {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
       setStudent(parsedDraft.student);
       setRows(parsedDraft.rows);
-      setStatusMessage("Draft loaded.");
+
+      notify({
+        type: "info",
+        title: "Draft loaded",
+        message: "Your previous flight log draft has been restored."
+      });
     } catch {
       localStorage.removeItem(flightLogDraftKey);
     }
-  }, []);
+  }, [notify]);
 
   function updateStudent(field: keyof StudentDetails, value: string) {
     setStudent((currentStudent) => ({
@@ -158,11 +167,21 @@ export default function FlightLogsPage() {
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     updateStudent("studentSignatureDataUrl", "");
+
+    notify({
+      type: "info",
+      title: "Signature cleared",
+      message: "The student signature has been removed."
+    });
   }
 
   function openAddFlightModal() {
     if (!student.studentName.trim()) {
-      setStatusMessage("Please enter the student name before adding a flight.");
+      notify({
+        type: "warning",
+        title: "Student name required",
+        message: "Enter the student name before adding a flight."
+      });
       return;
     }
 
@@ -200,24 +219,46 @@ export default function FlightLogsPage() {
 
     if (editingIndex === null) {
       setRows((currentRows) => [...currentRows, entryToSave]);
-      setStatusMessage("Flight entry added.");
+      notify({
+        type: "success",
+        title: "Flight added",
+        message: "The flight entry has been added to the table."
+      });
     } else {
       setRows((currentRows) =>
         currentRows.map((row, index) =>
           index === editingIndex ? entryToSave : row
         )
       );
-      setStatusMessage("Flight entry updated.");
+      notify({
+        type: "success",
+        title: "Flight updated",
+        message: "The flight entry has been updated."
+      });
     }
 
     closeFlightModal();
   }
 
-  function deleteFlightEntry(index: number) {
+  async function deleteFlightEntry(index: number) {
+    const confirmed = await confirm({
+      title: "Delete flight entry?",
+      message: "This will remove the selected flight from the current record.",
+      confirmLabel: "Delete",
+      variant: "danger"
+    });
+
+    if (!confirmed) return;
+
     setRows((currentRows) =>
       currentRows.filter((_, rowIndex) => rowIndex !== index)
     );
-    setStatusMessage("Flight entry deleted.");
+
+    notify({
+      type: "success",
+      title: "Flight deleted",
+      message: "The flight entry has been removed."
+    });
   }
 
   function saveDraft() {
@@ -230,50 +271,101 @@ export default function FlightLogsPage() {
       })
     );
 
-    setStatusMessage("Draft saved.");
+    notify({
+      type: "success",
+      title: "Draft saved",
+      message: "Your flight log draft was saved on this device."
+    });
   }
 
-  function clearDraft() {
+  async function clearDraft() {
+    const confirmed = await confirm({
+      title: "Clear current draft?",
+      message: "This will remove the current student details, signature, and flight entries from this device.",
+      confirmLabel: "Clear draft",
+      variant: "danger"
+    });
+
+    if (!confirmed) return;
+
     localStorage.removeItem(flightLogDraftKey);
     setStudent(emptyStudent);
     setRows([]);
-    clearSignature();
-    setStatusMessage("Draft cleared.");
+
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (canvas && context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    notify({
+      type: "success",
+      title: "Draft cleared",
+      message: "The current flight log draft has been cleared."
+    });
   }
 
- async function saveRecord() {
-  if (!student.studentName.trim()) {
-    setStatusMessage("Please enter the student name before saving.");
-    return;
-  }
+  async function saveRecord() {
+    if (!student.studentName.trim()) {
+      notify({
+        type: "warning",
+        title: "Student name required",
+        message: "Enter the student name before saving the record."
+      });
+      return;
+    }
 
-  if (!student.studentSignatureDataUrl) {
-    setStatusMessage("Please capture the student signature before saving.");
-    return;
-  }
+    if (!student.studentSignatureDataUrl) {
+      notify({
+        type: "warning",
+        title: "Signature required",
+        message: "Capture the student signature before saving the record."
+      });
+      return;
+    }
 
-  if (!rows.length) {
-    setStatusMessage("Please add at least one flight entry before saving.");
-    return;
-  }
+    if (!rows.length) {
+      notify({
+        type: "warning",
+        title: "Flight entry required",
+        message: "Add at least one flight entry before saving the record."
+      });
+      return;
+    }
 
-  const record = createFlightLogRecord(student, rows);
-  setSaving(true);
+    const record = createFlightLogRecord(student, rows);
+    setSaving(true);
 
-  try {
-    setStatusMessage("Saving record to Google Sheets...");
-    const savedRecord = await saveGoogleRecord(record);
-    saveFlightLogRecord(savedRecord.student, savedRecord.rows);
-    saveDraft();
-    setStatusMessage("Flight log record saved to Google Sheets.");
-  } catch {
-    saveFlightLogRecord(student, rows);
-    saveDraft();
-    setStatusMessage("Google Sheets save failed. Record saved locally for now.");
-  } finally {
-    setSaving(false);
+    notify({
+      type: "loading",
+      title: "Saving flight log...",
+      message: "Please wait while the record syncs with Google Sheets."
+    });
+
+    try {
+      const savedRecord = await saveGoogleRecord(record);
+      saveFlightLogRecord(savedRecord.student, savedRecord.rows);
+      saveDraft();
+
+      notify({
+        type: "success",
+        title: "Record saved",
+        message: "Flight log record saved to Google Sheets."
+      });
+    } catch {
+      saveFlightLogRecord(student, rows);
+      saveDraft();
+
+      notify({
+        type: "error",
+        title: "Google Sheets save failed",
+        message: "The record was saved locally on this device."
+      });
+    } finally {
+      setSaving(false);
+      clearMessage();
+    }
   }
-}
 
   function renderModalField(field: (typeof fields)[number]) {
     const inputClass =
@@ -369,6 +461,7 @@ export default function FlightLogsPage() {
   return (
     <AppShell>
       {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
+
       <div className="mx-auto w-full max-w-6xl min-w-0 space-y-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
@@ -404,12 +497,6 @@ export default function FlightLogsPage() {
             </button>
           </div>
         </div>
-
-        {statusMessage ? (
-          <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
-            {statusMessage}
-          </div>
-        ) : null}
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-950">Student Details</h2>
