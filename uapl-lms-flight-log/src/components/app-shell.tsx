@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   ClipboardList,
+  FileText,
   LogOut,
   Menu,
   Plane,
@@ -52,13 +53,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!session) return null;
 
-  const links =
-    session.role === "admin"
-      ? [
-          { href: "/admin", label: "Dashboard", icon: BarChart3 },
-          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList }
-        ]
-      : [{ href: "/flight-logs", label: "Flight Logs", icon: ClipboardList }];
+const links =
+  session.role === "admin"
+    ? [
+        { href: "/admin", label: "Dashboard", icon: BarChart3 },
+        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+        { href: "/reports", label: "Reports", icon: FileText }
+      ]
+    : [
+        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+        { href: "/reports", label: "Reports", icon: FileText }
+      ];
 
   const navigation = (
     <>
