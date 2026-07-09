@@ -1,7 +1,6 @@
-import { generateFlightLogPdf } from "@/lib/pdf";
-
 "use client";
 
+import { generateFlightLogPdf } from "@/lib/pdf";
 import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useEffect, useState } from "react";
