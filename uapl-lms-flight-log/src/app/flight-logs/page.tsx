@@ -1,5 +1,5 @@
 "use client";
-
+import { LoadingOverlay } from "@/components/loading-overlay";
 import { AppShell } from "@/components/app-shell";
 import { sessionKey } from "@/lib/demo-auth";
 import { saveGoogleRecord } from "@/lib/google-api";
@@ -50,7 +50,7 @@ export default function FlightLogsPage() {
   const [accountName, setAccountName] = useState("");
   const [isSigning, setIsSigning] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     setMasterData(getMasterData());
 
@@ -241,36 +241,39 @@ export default function FlightLogsPage() {
     setStatusMessage("Draft cleared.");
   }
 
-  async function saveRecord() {
-    if (!student.studentName.trim()) {
-      setStatusMessage("Please enter the student name before saving.");
-      return;
-    }
-
-    if (!student.studentSignatureDataUrl) {
-      setStatusMessage("Please capture the student signature before saving.");
-      return;
-    }
-
-    if (!rows.length) {
-      setStatusMessage("Please add at least one flight entry before saving.");
-      return;
-    }
-
-    const record = createFlightLogRecord(student, rows);
-
-    try {
-      setStatusMessage("Saving record to Google Sheets...");
-      const savedRecord = await saveGoogleRecord(record);
-      saveFlightLogRecord(savedRecord.student, savedRecord.rows);
-      saveDraft();
-      setStatusMessage("Flight log record saved to Google Sheets.");
-    } catch {
-      saveFlightLogRecord(student, rows);
-      saveDraft();
-      setStatusMessage("Google Sheets save failed. Record saved locally for now.");
-    }
+ async function saveRecord() {
+  if (!student.studentName.trim()) {
+    setStatusMessage("Please enter the student name before saving.");
+    return;
   }
+
+  if (!student.studentSignatureDataUrl) {
+    setStatusMessage("Please capture the student signature before saving.");
+    return;
+  }
+
+  if (!rows.length) {
+    setStatusMessage("Please add at least one flight entry before saving.");
+    return;
+  }
+
+  const record = createFlightLogRecord(student, rows);
+  setSaving(true);
+
+  try {
+    setStatusMessage("Saving record to Google Sheets...");
+    const savedRecord = await saveGoogleRecord(record);
+    saveFlightLogRecord(savedRecord.student, savedRecord.rows);
+    saveDraft();
+    setStatusMessage("Flight log record saved to Google Sheets.");
+  } catch {
+    saveFlightLogRecord(student, rows);
+    saveDraft();
+    setStatusMessage("Google Sheets save failed. Record saved locally for now.");
+  } finally {
+    setSaving(false);
+  }
+}
 
   function renderModalField(field: (typeof fields)[number]) {
     const inputClass =
@@ -688,5 +691,6 @@ export default function FlightLogsPage() {
         </div>
       ) : null}
     </AppShell>
+    {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
   );
 }
