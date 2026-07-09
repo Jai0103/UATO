@@ -13,6 +13,7 @@ import {
   Shield,
   UserCircle,
   Archive,
+  UserCog,
   X
 } from "lucide-react";
 import { sessionKey, type UserRole } from "@/lib/demo-auth";
@@ -39,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const parsedSession = JSON.parse(rawSession) as Session;
-    const adminOnlyPages = ["/admin", "/master-data"];
+    const adminOnlyPages = ["/admin", "/master-data", "/users"];
 
     if (parsedSession.role === "trainer" && adminOnlyPages.includes(pathname)) {
       router.replace("/flight-logs");
@@ -57,13 +58,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!session) return null;
 
   const links =
-     session.role === "admin"
+  session.role === "admin"
     ? [
         { href: "/admin", label: "Dashboard", icon: BarChart3 },
         { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
         { href: "/records", label: "Records", icon: Archive },
         { href: "/reports", label: "Reports", icon: FileText },
-        { href: "/master-data", label: "Master Data", icon: Database }
+        { href: "/master-data", label: "Master Data", icon: Database },
+        { href: "/users", label: "Users", icon: UserCog }
       ]
     : [
         { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
