@@ -1,4 +1,4 @@
-name: Deploy UAPL LMS to GitHub Pages
+name: Deploy UATO to GitHub Pages
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "github-pages"
+  group: github-pages
   cancel-in-progress: false
 
 jobs:
@@ -24,10 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-- name: Setup Node
-  uses: actions/setup-node@v4
-  with:
-    node-version: 22
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Install dependencies
         run: npm install
