@@ -19,6 +19,8 @@ import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
 type FlightLogDraft = {
+  recordId?: string;
+  createdAt?: string;
   student: StudentDetails;
   rows: FlightLogRow[];
   updatedAt: string;
@@ -54,6 +56,8 @@ export default function FlightLogsPage() {
   const [isSigning, setIsSigning] = useState(false);
   const [saving, setSaving] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [activeRecordId, setActiveRecordId] = useState("");
+  const [activeCreatedAt, setActiveCreatedAt] = useState("");
 
   useEffect(() => {
     setMasterData(getMasterData());
@@ -77,6 +81,9 @@ export default function FlightLogsPage() {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
       setStudent(parsedDraft.student);
       setRows(parsedDraft.rows);
+
+      setActiveRecordId(parsedDraft.recordId ?? "");
+      setActiveCreatedAt(parsedDraft.createdAt ?? "");
 
       notify({
         type: "info",
@@ -194,51 +201,55 @@ export default function FlightLogsPage() {
     setModalOpen(true);
   }
 
-  function openEditFlightModal(index: number) {
-    setEditingIndex(index);
-    setFlightForm({
-      ...rows[index],
-      pilotInCommand: student.studentName,
-      instructorInCommand: accountName
-    });
-    setModalOpen(true);
-  }
-
+function openEditFlightModal(index: number) {
+  setEditingIndex(index);
+  setFlightForm({
+    ...rows[index],
+    pilotInCommand: student.studentName
+  });
+  setModalOpen(true);
+}
   function closeFlightModal() {
     setModalOpen(false);
     setEditingIndex(null);
     setFlightForm({ ...emptyRow });
   }
 
-  function saveFlightEntry() {
-    const entryToSave: FlightLogRow = {
-      ...flightForm,
-      pilotInCommand: student.studentName,
-      instructorInCommand: accountName
-    };
+function saveFlightEntry() {
+  const entryToSave: FlightLogRow =
+    editingIndex === null
+      ? {
+          ...flightForm,
+          pilotInCommand: student.studentName,
+          instructorInCommand: accountName
+        }
+      : {
+          ...flightForm,
+          pilotInCommand: student.studentName
+        };
 
-    if (editingIndex === null) {
-      setRows((currentRows) => [...currentRows, entryToSave]);
-      notify({
-        type: "success",
-        title: "Flight added",
-        message: "The flight entry has been added to the table."
-      });
-    } else {
-      setRows((currentRows) =>
-        currentRows.map((row, index) =>
-          index === editingIndex ? entryToSave : row
-        )
-      );
-      notify({
-        type: "success",
-        title: "Flight updated",
-        message: "The flight entry has been updated."
-      });
-    }
-
-    closeFlightModal();
+  if (editingIndex === null) {
+    setRows((currentRows) => [...currentRows, entryToSave]);
+    notify({
+      type: "success",
+      title: "Flight added",
+      message: "The flight entry has been added to the table."
+    });
+  } else {
+    setRows((currentRows) =>
+      currentRows.map((row, index) =>
+        index === editingIndex ? entryToSave : row
+      )
+    );
+    notify({
+      type: "success",
+      title: "Flight updated",
+      message: "The flight entry has been updated."
+    });
   }
+
+  closeFlightModal();
+}
 
   async function deleteFlightEntry(index: number) {
     const confirmed = await confirm({
@@ -262,14 +273,16 @@ export default function FlightLogsPage() {
   }
 
   function saveDraft() {
-    localStorage.setItem(
-      flightLogDraftKey,
-      JSON.stringify({
-        student,
-        rows,
-        updatedAt: new Date().toISOString()
-      })
-    );
+localStorage.setItem(
+  flightLogDraftKey,
+  JSON.stringify({
+    recordId: activeRecordId,
+    createdAt: activeCreatedAt,
+    student,
+    rows,
+    updatedAt: new Date().toISOString()
+  })
+);
 
     notify({
       type: "success",
@@ -333,8 +346,10 @@ export default function FlightLogsPage() {
       return;
     }
 
-    const record = createFlightLogRecord(student, rows);
-    setSaving(true);
+const record = createFlightLogRecord(student, rows, {
+  id: activeRecordId || undefined,
+  createdAt: activeCreatedAt || undefined
+});
 
     notify({
       type: "loading",
@@ -345,6 +360,8 @@ export default function FlightLogsPage() {
     try {
       const savedRecord = await saveGoogleRecord(record);
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
+      setActiveRecordId(savedRecord.id);
+      setActiveCreatedAt(savedRecord.createdAt);
       saveDraft();
 
       notify({
@@ -381,15 +398,15 @@ export default function FlightLogsPage() {
       );
     }
 
-    if (field.key === "instructorInCommand") {
-      return (
-        <input
-          className={`${inputClass} bg-slate-100 text-slate-600`}
-          value={accountName}
-          readOnly
-        />
-      );
-    }
+if (field.key === "instructorInCommand") {
+  return (
+    <input
+      className={`${inputClass} bg-slate-100 text-slate-600`}
+      value={flightForm.instructorInCommand || accountName}
+      readOnly
+    />
+  );
+}
 
     if (field.key === "location") {
       const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
