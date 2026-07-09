@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MessageProvider } from "@/components/message-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <MessageProvider>{children}</MessageProvider>
+      </body>
     </html>
   );
 }
