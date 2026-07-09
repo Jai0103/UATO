@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
+import { sessionKey } from "@/lib/demo-auth";
 import {
   emptyRow,
   emptyStudent,
@@ -10,7 +11,6 @@ import {
   type StudentDetails
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
-import { sessionKey } from "@/lib/demo-auth";
 import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -49,12 +49,17 @@ export default function FlightLogsPage() {
 
   useEffect(() => {
     setMasterData(getMasterData());
+
     const rawSession = localStorage.getItem(sessionKey);
 
-if (rawSession) {
-  const parsedSession = JSON.parse(rawSession) as { name?: string };
-  setAccountName(parsedSession.name ?? "");
-}
+    if (rawSession) {
+      try {
+        const parsedSession = JSON.parse(rawSession) as { name?: string };
+        setAccountName(parsedSession.name ?? "");
+      } catch {
+        setAccountName("");
+      }
+    }
 
     const savedDraft = localStorage.getItem(flightLogDraftKey);
 
@@ -91,19 +96,23 @@ if (rawSession) {
     }
 
     setEditingIndex(null);
-setFlightForm({
-  ...emptyRow,
-  pilotInCommand: student.studentName,
-  instructorInCommand: accountName
-});
+    setFlightForm({
+      ...emptyRow,
+      pilotInCommand: student.studentName,
+      instructorInCommand: accountName
+    });
+    setModalOpen(true);
+  }
 
   function openEditFlightModal(index: number) {
     setEditingIndex(index);
-setFlightForm({
-  ...rows[index],
-  pilotInCommand: student.studentName,
-  instructorInCommand: accountName
-});
+    setFlightForm({
+      ...rows[index],
+      pilotInCommand: student.studentName,
+      instructorInCommand: accountName
+    });
+    setModalOpen(true);
+  }
 
   function closeFlightModal() {
     setModalOpen(false);
@@ -112,11 +121,12 @@ setFlightForm({
   }
 
   function saveFlightEntry() {
-const entryToSave: FlightLogRow = {
-  ...flightForm,
-  pilotInCommand: student.studentName,
-  instructorInCommand: accountName
-};
+    const entryToSave: FlightLogRow = {
+      ...flightForm,
+      pilotInCommand: student.studentName,
+      instructorInCommand: accountName
+    };
+
     if (editingIndex === null) {
       setRows((currentRows) => [...currentRows, entryToSave]);
       setStatusMessage("Flight entry added.");
@@ -190,14 +200,14 @@ const entryToSave: FlightLogRow = {
     }
 
     if (field.key === "instructorInCommand") {
-  return (
-    <input
-      className={`${inputClass} bg-slate-100 text-slate-600`}
-      value={accountName}
-      readOnly
-    />
-  );
-}
+      return (
+        <input
+          className={`${inputClass} bg-slate-100 text-slate-600`}
+          value={accountName}
+          readOnly
+        />
+      );
+    }
 
     if (field.key === "location") {
       const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
@@ -238,8 +248,7 @@ const entryToSave: FlightLogRow = {
 
     const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
       uaModel: masterData?.uaModels ?? [],
-      batterySn: masterData?.batterySerialNumbers ?? [],
-      instructorInCommand: masterData?.afeInstructors ?? []
+      batterySn: masterData?.batterySerialNumbers ?? []
     };
 
     const options = datalistOptions[field.key];
@@ -279,17 +288,26 @@ const entryToSave: FlightLogRow = {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button onClick={clearDraft} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button
+              onClick={clearDraft}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
               <RotateCcw size={16} />
               Clear
             </button>
 
-            <button onClick={saveDraft} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button
+              onClick={saveDraft}
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
               <Save size={16} />
               Save Draft
             </button>
 
-            <button onClick={saveRecord} className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800">
+            <button
+              onClick={saveRecord}
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
+            >
               <Save size={16} />
               Save Record
             </button>
@@ -308,22 +326,49 @@ const entryToSave: FlightLogRow = {
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <label>
               <span className="text-sm font-medium text-slate-700">Student Name</span>
-              <input value={student.studentName} onChange={(event) => updateStudent("studentName", event.target.value)} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue" placeholder="Enter student name" />
+              <input
+                value={student.studentName}
+                onChange={(event) => updateStudent("studentName", event.target.value)}
+                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                placeholder="Enter student name"
+              />
             </label>
 
             <label>
               <span className="text-sm font-medium text-slate-700">Company</span>
-              <input value={student.company} onChange={(event) => updateStudent("company", event.target.value)} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue" placeholder="Enter company" />
+              <input
+                value={student.company}
+                onChange={(event) => updateStudent("company", event.target.value)}
+                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                placeholder="Enter company"
+              />
             </label>
 
             <label>
               <span className="text-sm font-medium text-slate-700">Last 4 Characters</span>
-              <input value={student.lastFourCharacters} onChange={(event) => updateStudent("lastFourCharacters", event.target.value.slice(0, 4))} maxLength={4} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm uppercase outline-none focus:border-brand-blue" placeholder="A123" />
+              <input
+                value={student.lastFourCharacters}
+                onChange={(event) =>
+                  updateStudent("lastFourCharacters", event.target.value.slice(0, 4))
+                }
+                maxLength={4}
+                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm uppercase outline-none focus:border-brand-blue"
+                placeholder="A123"
+              />
             </label>
 
             <label>
-              <span className="text-sm font-medium text-slate-700">Student Signature Name</span>
-              <input value={student.studentSignatureName} onChange={(event) => updateStudent("studentSignatureName", event.target.value)} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue" placeholder="Printed signature name" />
+              <span className="text-sm font-medium text-slate-700">
+                Student Signature Name
+              </span>
+              <input
+                value={student.studentSignatureName}
+                onChange={(event) =>
+                  updateStudent("studentSignatureName", event.target.value)
+                }
+                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                placeholder="Printed signature name"
+              />
             </label>
           </div>
         </section>
@@ -337,7 +382,10 @@ const entryToSave: FlightLogRow = {
               </p>
             </div>
 
-            <button onClick={openAddFlightModal} className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800">
+            <button
+              onClick={openAddFlightModal}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
+            >
               <Plus size={16} />
               Add Flight
             </button>
@@ -347,22 +395,34 @@ const entryToSave: FlightLogRow = {
             <>
               <div className="space-y-3 lg:hidden">
                 {rows.map((row, index) => (
-                  <article key={index} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <article
+                    key={index}
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-950">
                           {row.date || "No date"} - {row.location || "No location"}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {row.startTime || "--:--"} - {row.duration || "0"} mins - {row.uaCategory}
+                          {row.startTime || "--:--"} - {row.duration || "0"} mins -{" "}
+                          {row.uaCategory}
                         </p>
                       </div>
 
                       <div className="flex gap-2">
-                        <button onClick={() => openEditFlightModal(index)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100" aria-label="Edit row">
+                        <button
+                          onClick={() => openEditFlightModal(index)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                          aria-label="Edit row"
+                        >
                           <Pencil size={15} />
                         </button>
-                        <button onClick={() => deleteFlightEntry(index)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600" aria-label="Delete row">
+                        <button
+                          onClick={() => deleteFlightEntry(index)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Delete row"
+                        >
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -409,10 +469,18 @@ const entryToSave: FlightLogRow = {
                         <td className="px-3 py-3 text-slate-700">{row.instructorInCommand || "-"}</td>
                         <td className="px-3 py-3">
                           <div className="flex gap-2">
-                            <button onClick={() => openEditFlightModal(index)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Edit row">
+                            <button
+                              onClick={() => openEditFlightModal(index)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                              aria-label="Edit row"
+                            >
                               <Pencil size={15} />
                             </button>
-                            <button onClick={() => deleteFlightEntry(index)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600" aria-label="Delete row">
+                            <button
+                              onClick={() => deleteFlightEntry(index)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                              aria-label="Delete row"
+                            >
                               <Trash2 size={15} />
                             </button>
                           </div>
@@ -447,26 +515,41 @@ const entryToSave: FlightLogRow = {
                 </p>
               </div>
 
-              <button onClick={closeFlightModal} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Close modal">
+              <button
+                onClick={closeFlightModal}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                aria-label="Close modal"
+              >
                 <X size={18} />
               </button>
             </div>
 
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               {fields.map((field) => (
-                <label key={field.key} className={field.key === "remarks" ? "sm:col-span-2" : ""}>
-                  <span className="text-sm font-medium text-slate-700">{field.label}</span>
+                <label
+                  key={field.key}
+                  className={field.key === "remarks" ? "sm:col-span-2" : ""}
+                >
+                  <span className="text-sm font-medium text-slate-700">
+                    {field.label}
+                  </span>
                   {renderModalField(field)}
                 </label>
               ))}
             </div>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 p-5 sm:flex-row sm:justify-end">
-              <button onClick={closeFlightModal} className="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <button
+                onClick={closeFlightModal}
+                className="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
                 Cancel
               </button>
 
-              <button onClick={saveFlightEntry} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800">
+              <button
+                onClick={saveFlightEntry}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
+              >
                 <Save size={16} />
                 {editingIndex === null ? "Add Flight" : "Save Changes"}
               </button>
