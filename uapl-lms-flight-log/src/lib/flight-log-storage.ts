@@ -65,15 +65,19 @@ export function getFlightLogRecords(): FlightLogRecord[] {
 
 export function createFlightLogRecord(
   student: StudentDetails,
-  rows: FlightLogRow[]
+  rows: FlightLogRow[],
+  existing?: {
+    id?: string;
+    createdAt?: string;
+  }
 ): FlightLogRecord {
   const now = new Date().toISOString();
 
   return {
-    id: crypto.randomUUID(),
+    id: existing?.id || crypto.randomUUID(),
     student,
     rows,
-    createdAt: now,
+    createdAt: existing?.createdAt || now,
     updatedAt: now
   };
 }
