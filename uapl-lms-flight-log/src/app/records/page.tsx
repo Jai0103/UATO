@@ -1,27 +1,36 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
-import { getFlightLogRecords, type FlightLogRecord } from "@/lib/flight-log-storage";
+import { LoadingOverlay } from "@/components/loading-overlay";
+import {
+  getFlightLogRecords,
+  type FlightLogRecord
+} from "@/lib/flight-log-storage";
+import { fetchGoogleRecords } from "@/lib/google-api";
 import { FileText, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { fetchGoogleRecords } from "@/lib/google-api";
 
 export default function RecordsPage() {
   const [records, setRecords] = useState<FlightLogRecord[]>([]);
   const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  async function loadRecords() {
-    try {
-      const googleRecords = await fetchGoogleRecords();
-      setRecords(googleRecords);
-    } catch {
-      setRecords(getFlightLogRecords());
+  useEffect(() => {
+    async function loadRecords() {
+      setLoading(true);
+
+      try {
+        const googleRecords = await fetchGoogleRecords();
+        setRecords(googleRecords);
+      } catch {
+        setRecords(getFlightLogRecords());
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
-  loadRecords();
-}, []);
+    loadRecords();
+  }, []);
 
   const filteredRecords = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -42,6 +51,8 @@ useEffect(() => {
 
   return (
     <AppShell>
+      {loading ? <LoadingOverlay label="Loading saved records..." /> : null}
+
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Records</h1>
@@ -87,16 +98,24 @@ useEffect(() => {
                         {record.student.studentName || "-"}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-slate-700">{record.student.company || "-"}</td>
-                    <td className="px-4 py-4 text-slate-700">{record.student.lastFourCharacters || "-"}</td>
-                    <td className="px-4 py-4 text-slate-700">{record.rows.length}</td>
                     <td className="px-4 py-4 text-slate-700">
-                      {new Date(record.updatedAt).toLocaleString()}
+                      {record.student.company || "-"}
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      {record.student.lastFourCharacters || "-"}
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      {record.rows.length}
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      {record.updatedAt
+                        ? new Date(record.updatedAt).toLocaleString()
+                        : "-"}
                     </td>
                   </tr>
                 ))}
 
-                {!filteredRecords.length ? (
+                {!filteredRecords.length && !loading ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                       No saved records found.
