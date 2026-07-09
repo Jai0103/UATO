@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
+import { LoadingOverlay } from "@/components/loading-overlay";
 import { fetchGoogleMasterData, saveGoogleMasterData } from "@/lib/google-api";
 import {
   getMasterData,
@@ -30,15 +31,20 @@ export default function MasterDataPage() {
     uaCategories: ""
   });
   const [statusMessage, setStatusMessage] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadMasterData() {
+      setLoading(true);
+
       try {
         const googleMasterData = await fetchGoogleMasterData();
         setMasterData(googleMasterData);
         saveMasterData(googleMasterData);
       } catch {
         setMasterData(getMasterData());
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -96,6 +102,8 @@ export default function MasterDataPage() {
 
   return (
     <AppShell>
+      {loading ? <LoadingOverlay label="Loading master data..." /> : null}
+
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Master Data</h1>
