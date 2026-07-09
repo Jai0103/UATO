@@ -12,6 +12,7 @@ import {
   Plane,
   Shield,
   UserCircle,
+  Archive,
   X
 } from "lucide-react";
 import { sessionKey, type UserRole } from "@/lib/demo-auth";
@@ -56,17 +57,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!session) return null;
 
   const links =
-    session.role === "admin"
-      ? [
-          { href: "/admin", label: "Dashboard", icon: BarChart3 },
-          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
-          { href: "/reports", label: "Reports", icon: FileText },
-          { href: "/master-data", label: "Master Data", icon: Database }
-        ]
-      : [
-          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
-          { href: "/reports", label: "Reports", icon: FileText }
-        ];
+     session.role === "admin"
+    ? [
+        { href: "/admin", label: "Dashboard", icon: BarChart3 },
+        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+        { href: "/records", label: "Records", icon: Archive },
+        { href: "/reports", label: "Reports", icon: FileText },
+        { href: "/master-data", label: "Master Data", icon: Database }
+      ]
+    : [
+        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+        { href: "/records", label: "Records", icon: Archive },
+        { href: "/reports", label: "Reports", icon: FileText }
+      ];
 
   const navigation = (
     <>
