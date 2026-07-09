@@ -432,20 +432,6 @@ export default function FlightLogsPage() {
               />
             </label>
 
-            <label>
-              <span className="text-sm font-medium text-slate-700">
-                Student Signature Name
-              </span>
-              <input
-                value={student.studentSignatureName}
-                onChange={(event) =>
-                  updateStudent("studentSignatureName", event.target.value)
-                }
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
-                placeholder="Printed signature name"
-              />
-            </label>
-
             <div className="md:col-span-2">
               <div className="flex items-center justify-between gap-3">
                 <div>
