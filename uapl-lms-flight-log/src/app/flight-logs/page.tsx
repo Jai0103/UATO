@@ -368,6 +368,7 @@ export default function FlightLogsPage() {
 
   return (
     <AppShell>
+      {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
       <div className="mx-auto w-full max-w-6xl min-w-0 space-y-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
@@ -691,6 +692,5 @@ export default function FlightLogsPage() {
         </div>
       ) : null}
     </AppShell>
-    {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
   );
 }
