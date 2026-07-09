@@ -2,19 +2,19 @@
 
 import { AppShell } from "@/components/app-shell";
 import { sessionKey } from "@/lib/demo-auth";
+import { saveGoogleRecord } from "@/lib/google-api";
 import {
+  createFlightLogRecord,
   emptyRow,
   emptyStudent,
   flightLogDraftKey,
-  createFlightLogRecord,
-saveFlightLogRecord,
+  saveFlightLogRecord,
   type FlightLogRow,
   type StudentDetails
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
 import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { saveGoogleRecord } from "@/lib/google-api";
 
 type FlightLogDraft = {
   student: StudentDetails;
@@ -241,38 +241,11 @@ export default function FlightLogsPage() {
     setStatusMessage("Draft cleared.");
   }
 
-async function saveRecord() {
-  if (!student.studentName.trim()) {
-    setStatusMessage("Please enter the student name before saving.");
-    return;
-  }
-
-  if (!student.studentSignatureDataUrl) {
-    setStatusMessage("Please capture the student signature before saving.");
-    return;
-  }
-
-  if (!rows.length) {
-    setStatusMessage("Please add at least one flight entry before saving.");
-    return;
-  }
-
-  const record = createFlightLogRecord(student, rows);
-
-  try {
-    setStatusMessage("Saving record to Google Sheets...");
-    const savedRecord = await saveGoogleRecord(record);
-    saveFlightLogRecord(savedRecord.student, savedRecord.rows);
-    saveDraft();
-    setStatusMessage("Flight log record saved to Google Sheets.");
-  } catch {
-    saveFlightLogRecord(student, rows);
-    saveDraft();
-    setStatusMessage(
-      "Google Sheets save failed. Record saved locally for now."
-    );
-  }
-}
+  async function saveRecord() {
+    if (!student.studentName.trim()) {
+      setStatusMessage("Please enter the student name before saving.");
+      return;
+    }
 
     if (!student.studentSignatureDataUrl) {
       setStatusMessage("Please capture the student signature before saving.");
@@ -284,9 +257,19 @@ async function saveRecord() {
       return;
     }
 
-    saveFlightLogRecord(student, rows);
-    saveDraft();
-    setStatusMessage("Flight log record saved. Generate the PDF from Reports.");
+    const record = createFlightLogRecord(student, rows);
+
+    try {
+      setStatusMessage("Saving record to Google Sheets...");
+      const savedRecord = await saveGoogleRecord(record);
+      saveFlightLogRecord(savedRecord.student, savedRecord.rows);
+      saveDraft();
+      setStatusMessage("Flight log record saved to Google Sheets.");
+    } catch {
+      saveFlightLogRecord(student, rows);
+      saveDraft();
+      setStatusMessage("Google Sheets save failed. Record saved locally for now.");
+    }
   }
 
   function renderModalField(field: (typeof fields)[number]) {
@@ -564,10 +547,22 @@ async function saveRecord() {
                     </div>
 
                     <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                      <p><span className="font-semibold text-slate-800">UA:</span> {row.uaModel || "-"}</p>
-                      <p><span className="font-semibold text-slate-800">Battery:</span> {row.batterySn || "-"}</p>
-                      <p><span className="font-semibold text-slate-800">PIC:</span> {row.pilotInCommand || "-"}</p>
-                      <p><span className="font-semibold text-slate-800">AFE:</span> {row.instructorInCommand || "-"}</p>
+                      <p>
+                        <span className="font-semibold text-slate-800">UA:</span>{" "}
+                        {row.uaModel || "-"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">Battery:</span>{" "}
+                        {row.batterySn || "-"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">PIC:</span>{" "}
+                        {row.pilotInCommand || "-"}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">AFE:</span>{" "}
+                        {row.instructorInCommand || "-"}
+                      </p>
                     </div>
                   </article>
                 ))}
