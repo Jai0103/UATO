@@ -1,5 +1,6 @@
 import type { FlightLogRecord } from "@/lib/flight-log-storage";
 import type { MasterData } from "@/lib/master-data";
+import type { ManagedUser } from "@/lib/user-storage";
 
 export const googleAppsScriptUrl =
   "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
@@ -60,4 +61,22 @@ export async function saveGoogleMasterData(masterData: MasterData) {
   });
 
   return data.masterData;
+}
+
+
+export async function fetchGoogleUsers() {
+  const data = await postToGoogle<{ users: ManagedUser[] }>({
+    action: "getUsers"
+  });
+
+  return data.users;
+}
+
+export async function saveGoogleUsers(users: ManagedUser[]) {
+  const data = await postToGoogle<{ users: ManagedUser[] }>({
+    action: "saveUsers",
+    users
+  });
+
+  return data.users;
 }
