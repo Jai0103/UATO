@@ -90,11 +90,22 @@ function openAddFlightModal() {
   setModalOpen(true);
 }
 
-  function openEditFlightModal(index: number) {
-    setEditingIndex(index);
-    setFlightForm({ ...rows[index] });
-    setModalOpen(true);
-  }
+  setEditingIndex(null);
+  setFlightForm({
+    ...emptyRow,
+    pilotInCommand: student.studentName
+  });
+  setModalOpen(true);
+}
+
+function openEditFlightModal(index: number) {
+  setEditingIndex(index);
+  setFlightForm({
+    ...rows[index],
+    pilotInCommand: student.studentName
+  });
+  setModalOpen(true);
+}
 
   function closeFlightModal() {
     setModalOpen(false);
@@ -102,21 +113,26 @@ function openAddFlightModal() {
     setFlightForm({ ...emptyRow });
   }
 
-  function saveFlightEntry() {
-    if (editingIndex === null) {
-      setRows((currentRows) => [...currentRows, flightForm]);
-      setStatusMessage("Flight entry added.");
-    } else {
-      setRows((currentRows) =>
-        currentRows.map((row, index) =>
-          index === editingIndex ? flightForm : row
-        )
-      );
-      setStatusMessage("Flight entry updated.");
-    }
+function saveFlightEntry() {
+  const entryToSave: FlightLogRow = {
+    ...flightForm,
+    pilotInCommand: student.studentName
+  };
 
-    closeFlightModal();
+  if (editingIndex === null) {
+    setRows((currentRows) => [...currentRows, entryToSave]);
+    setStatusMessage("Flight entry added.");
+  } else {
+    setRows((currentRows) =>
+      currentRows.map((row, index) =>
+        index === editingIndex ? entryToSave : row
+      )
+    );
+    setStatusMessage("Flight entry updated.");
   }
+
+  closeFlightModal();
+}
 
   function deleteFlightEntry(index: number) {
     setRows((currentRows) =>
@@ -183,7 +199,16 @@ function openAddFlightModal() {
         </select>
       );
     }
-
+if (field.key === "pilotInCommand") {
+  return (
+    <input
+      className={`${inputClass} bg-slate-100 text-slate-600`}
+      value={student.studentName}
+      readOnly
+    />
+  );
+}
+    
     if (field.key === "uaCategory") {
       const categories = masterData?.uaCategories ?? ["M7", "M25", "H"];
 
