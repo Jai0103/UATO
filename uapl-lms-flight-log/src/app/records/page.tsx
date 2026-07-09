@@ -3,6 +3,8 @@
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
+import { useRouter } from "next/navigation";
+import { flightLogDraftKey } from "@/lib/flight-log-storage";
 import {
   getFlightLogRecords,
   type FlightLogRecord
@@ -12,6 +14,7 @@ import { Eye, FileText, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function RecordsPage() {
+  const router = useRouter();
   const { notify } = useAppMessage();
 
   const [records, setRecords] = useState<FlightLogRecord[]>([]);
@@ -20,7 +23,26 @@ export default function RecordsPage() {
   const [selectedRecord, setSelectedRecord] = useState<FlightLogRecord | null>(
     null
   );
+function continueRecord(record: FlightLogRecord) {
+  localStorage.setItem(
+    flightLogDraftKey,
+    JSON.stringify({
+      recordId: record.id,
+      createdAt: record.createdAt,
+      student: record.student,
+      rows: record.rows,
+      updatedAt: new Date().toISOString()
+    })
+  );
 
+  notify({
+    type: "success",
+    title: "Record loaded",
+    message: `${record.student.studentName} is ready to continue in Flight Logs.`
+  });
+
+  router.push("/flight-logs");
+}
   useEffect(() => {
     async function loadRecords() {
       setLoading(true);
@@ -132,6 +154,12 @@ export default function RecordsPage() {
                         <Eye size={15} />
                         View
                       </button>
+                      <button
+  onClick={() => continueRecord(record)}
+  className="inline-flex h-9 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
+>
+  Continue
+</button>
                     </td>
                   </tr>
                 ))}
