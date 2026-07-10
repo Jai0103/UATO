@@ -193,7 +193,7 @@ export default function UsersPage() {
       {loading ? <LoadingOverlay label="Loading users..." /> : null}
       {saving ? <LoadingOverlay label="Saving users..." /> : null}
 
-      <div className="mx-auto w-full max-w-6xl space-y-6">
+      <div className="w-full max-w-none space-y-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Users</h1>
