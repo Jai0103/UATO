@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Archive,
   BarChart3,
   ClipboardList,
   Database,
@@ -12,7 +13,6 @@ import {
   Plane,
   Shield,
   UserCircle,
-  Archive,
   UserCog,
   X
 } from "lucide-react";
@@ -24,6 +24,8 @@ type Session = {
   email: string;
   role: UserRole;
 };
+
+const sidebarWidth = "md:w-[280px]";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -58,20 +60,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!session) return null;
 
   const links =
-  session.role === "admin"
-    ? [
-        { href: "/admin", label: "Dashboard", icon: BarChart3 },
-        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
-        { href: "/records", label: "Records", icon: Archive },
-        { href: "/reports", label: "Reports", icon: FileText },
-        { href: "/master-data", label: "Master Data", icon: Database },
-        { href: "/users", label: "Users", icon: UserCog }
-      ]
-    : [
-        { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
-        { href: "/records", label: "Records", icon: Archive },
-        { href: "/reports", label: "Reports", icon: FileText }
-      ];
+    session.role === "admin"
+      ? [
+          { href: "/admin", label: "Dashboard", icon: BarChart3 },
+          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+          { href: "/records", label: "Records", icon: Archive },
+          { href: "/reports", label: "Reports", icon: FileText },
+          { href: "/master-data", label: "Master Data", icon: Database },
+          { href: "/users", label: "Users", icon: UserCog }
+        ]
+      : [
+          { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList },
+          { href: "/records", label: "Records", icon: Archive },
+          { href: "/reports", label: "Reports", icon: FileText }
+        ];
 
   const navigation = (
     <>
@@ -89,7 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-white text-brand-navy shadow-sm">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-brand-navy shadow-sm">
             {session.role === "admin" ? <Shield size={18} /> : <UserCircle size={19} />}
           </div>
           <div className="min-w-0">
@@ -120,7 +122,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }`}
             >
               <Icon size={18} />
-              {item.label}
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
@@ -139,22 +141,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-brand-light">
+    <div className="min-h-screen w-full overflow-x-hidden bg-brand-light">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
         <div className="flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-navy text-white">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
               <Plane size={20} />
             </div>
-            <div>
-              <p className="text-sm font-bold text-slate-950">UAPL LMS</p>
-              <p className="text-xs text-slate-500">Flight Log System</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-950">UAPL LMS</p>
+              <p className="truncate text-xs text-slate-500">Flight Log System</p>
             </div>
           </div>
 
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
             aria-label="Open menu"
           >
             <Menu size={20} />
@@ -170,7 +172,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             aria-label="Close menu overlay"
           />
 
-          <aside className="absolute left-0 top-0 flex h-full w-[82vw] max-w-sm flex-col bg-white p-4 shadow-2xl">
+          <aside className="absolute left-0 top-0 flex h-full w-[86vw] max-w-sm flex-col bg-white p-4 shadow-2xl">
             <div className="mb-4 flex justify-end">
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -186,13 +188,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <div className="mx-auto grid w-full max-w-[1440px] gap-0 md:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="sticky top-0 hidden h-screen flex-col border-r border-slate-200 bg-white p-5 md:flex">
-          {navigation}
-        </aside>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden ${sidebarWidth} flex-col border-r border-slate-200 bg-white p-5 md:flex`}
+      >
+        {navigation}
+      </aside>
 
-        <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
-      </div>
+      <main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:pl-[312px]">
+        <div className="w-full min-w-0">{children}</div>
+      </main>
     </div>
   );
 }
