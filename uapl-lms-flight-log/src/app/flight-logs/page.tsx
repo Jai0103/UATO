@@ -12,10 +12,25 @@ import {
   flightLogDraftKey,
   saveFlightLogRecord,
   type FlightLogRow,
+  type FlightLogRecord,
   type StudentDetails
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
-import { Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Clock,
+  FileCheck2,
+  MapPin,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Signature,
+  Trash2,
+  UserRound,
+  X
+} from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
 type FlightLogDraft = {
@@ -43,6 +58,14 @@ const fields: {
   { key: "remarks", label: "Remarks" }
 ];
 
+function hasStudentDetails(student: StudentDetails) {
+  return Boolean(
+    student.studentName.trim() &&
+      student.company.trim() &&
+      student.lastFourCharacters.trim()
+  );
+}
+
 export default function FlightLogsPage() {
   const { notify, confirm, clearMessage } = useAppMessage();
 
@@ -55,9 +78,10 @@ export default function FlightLogsPage() {
   const [accountName, setAccountName] = useState("");
   const [isSigning, setIsSigning] = useState(false);
   const [saving, setSaving] = useState(false);
-  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
+
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     setMasterData(getMasterData());
@@ -81,14 +105,15 @@ export default function FlightLogsPage() {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
       setStudent(parsedDraft.student);
       setRows(parsedDraft.rows);
-
       setActiveRecordId(parsedDraft.recordId ?? "");
       setActiveCreatedAt(parsedDraft.createdAt ?? "");
 
       notify({
         type: "info",
-        title: "Draft loaded",
-        message: "Your previous flight log draft has been restored."
+        title: parsedDraft.recordId ? "Record loaded" : "Draft loaded",
+        message: parsedDraft.recordId
+          ? "This student record is ready to continue."
+          : "Your previous flight log draft has been restored."
       });
     } catch {
       localStorage.removeItem(flightLogDraftKey);
@@ -201,55 +226,56 @@ export default function FlightLogsPage() {
     setModalOpen(true);
   }
 
-function openEditFlightModal(index: number) {
-  setEditingIndex(index);
-  setFlightForm({
-    ...rows[index],
-    pilotInCommand: student.studentName
-  });
-  setModalOpen(true);
-}
+  function openEditFlightModal(index: number) {
+    setEditingIndex(index);
+    setFlightForm({
+      ...rows[index],
+      pilotInCommand: student.studentName
+    });
+    setModalOpen(true);
+  }
+
   function closeFlightModal() {
     setModalOpen(false);
     setEditingIndex(null);
     setFlightForm({ ...emptyRow });
   }
 
-function saveFlightEntry() {
-  const entryToSave: FlightLogRow =
-    editingIndex === null
-      ? {
-          ...flightForm,
-          pilotInCommand: student.studentName,
-          instructorInCommand: accountName
-        }
-      : {
-          ...flightForm,
-          pilotInCommand: student.studentName
-        };
+  function saveFlightEntry() {
+    const entryToSave: FlightLogRow =
+      editingIndex === null
+        ? {
+            ...flightForm,
+            pilotInCommand: student.studentName,
+            instructorInCommand: accountName
+          }
+        : {
+            ...flightForm,
+            pilotInCommand: student.studentName
+          };
 
-  if (editingIndex === null) {
-    setRows((currentRows) => [...currentRows, entryToSave]);
-    notify({
-      type: "success",
-      title: "Flight added",
-      message: "The flight entry has been added to the table."
-    });
-  } else {
-    setRows((currentRows) =>
-      currentRows.map((row, index) =>
-        index === editingIndex ? entryToSave : row
-      )
-    );
-    notify({
-      type: "success",
-      title: "Flight updated",
-      message: "The flight entry has been updated."
-    });
+    if (editingIndex === null) {
+      setRows((currentRows) => [...currentRows, entryToSave]);
+      notify({
+        type: "success",
+        title: "Flight added",
+        message: "The flight entry has been added."
+      });
+    } else {
+      setRows((currentRows) =>
+        currentRows.map((row, index) =>
+          index === editingIndex ? entryToSave : row
+        )
+      );
+      notify({
+        type: "success",
+        title: "Flight updated",
+        message: "The flight entry has been updated."
+      });
+    }
+
+    closeFlightModal();
   }
-
-  closeFlightModal();
-}
 
   async function deleteFlightEntry(index: number) {
     const confirmed = await confirm({
@@ -273,16 +299,16 @@ function saveFlightEntry() {
   }
 
   function saveDraft() {
-localStorage.setItem(
-  flightLogDraftKey,
-  JSON.stringify({
-    recordId: activeRecordId,
-    createdAt: activeCreatedAt,
-    student,
-    rows,
-    updatedAt: new Date().toISOString()
-  })
-);
+    localStorage.setItem(
+      flightLogDraftKey,
+      JSON.stringify({
+        recordId: activeRecordId,
+        createdAt: activeCreatedAt,
+        student,
+        rows,
+        updatedAt: new Date().toISOString()
+      })
+    );
 
     notify({
       type: "success",
@@ -294,7 +320,8 @@ localStorage.setItem(
   async function clearDraft() {
     const confirmed = await confirm({
       title: "Clear current draft?",
-      message: "This will remove the current student details, signature, and flight entries from this device.",
+      message:
+        "This will remove the current student details, signature, and flight entries from this device.",
       confirmLabel: "Clear draft",
       variant: "danger"
     });
@@ -304,6 +331,8 @@ localStorage.setItem(
     localStorage.removeItem(flightLogDraftKey);
     setStudent(emptyStudent);
     setRows([]);
+    setActiveRecordId("");
+    setActiveCreatedAt("");
 
     const canvas = signatureCanvasRef.current;
     const context = canvas?.getContext("2d");
@@ -346,10 +375,16 @@ localStorage.setItem(
       return;
     }
 
-const record = createFlightLogRecord(student, rows, {
-  id: activeRecordId || undefined,
-  createdAt: activeCreatedAt || undefined
-});
+    const newRecord = createFlightLogRecord(student, rows);
+    const record: FlightLogRecord = activeRecordId
+      ? {
+          ...newRecord,
+          id: activeRecordId,
+          createdAt: activeCreatedAt || newRecord.createdAt
+        }
+      : newRecord;
+
+    setSaving(true);
 
     notify({
       type: "loading",
@@ -362,7 +397,17 @@ const record = createFlightLogRecord(student, rows, {
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
       setActiveCreatedAt(savedRecord.createdAt);
-      saveDraft();
+
+      localStorage.setItem(
+        flightLogDraftKey,
+        JSON.stringify({
+          recordId: savedRecord.id,
+          createdAt: savedRecord.createdAt,
+          student: savedRecord.student,
+          rows: savedRecord.rows,
+          updatedAt: new Date().toISOString()
+        })
+      );
 
       notify({
         type: "success",
@@ -398,15 +443,15 @@ const record = createFlightLogRecord(student, rows, {
       );
     }
 
-if (field.key === "instructorInCommand") {
-  return (
-    <input
-      className={`${inputClass} bg-slate-100 text-slate-600`}
-      value={flightForm.instructorInCommand || accountName}
-      readOnly
-    />
-  );
-}
+    if (field.key === "instructorInCommand") {
+      return (
+        <input
+          className={`${inputClass} bg-slate-100 text-slate-600`}
+          value={flightForm.instructorInCommand || accountName}
+          readOnly
+        />
+      );
+    }
 
     if (field.key === "location") {
       const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
@@ -475,20 +520,61 @@ if (field.key === "instructorInCommand") {
     );
   }
 
+  const completedItems = [
+    hasStudentDetails(student),
+    Boolean(student.studentSignatureDataUrl),
+    rows.length > 0
+  ].filter(Boolean).length;
+
   return (
     <AppShell>
       {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
 
-      <div className="mx-auto w-full max-w-6xl min-w-0 space-y-6">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-950">Flight Log</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Save student details, capture signature, add flight entries, and prepare report records.
-            </p>
+      <div className="mx-auto w-full max-w-6xl min-w-0 space-y-5 pb-24 md:pb-0">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <FileCheck2 size={14} />
+                {activeRecordId ? "Continuing Record" : "New Flight Log"}
+              </div>
+              <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+                Flight Log
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Capture student details, signature, and flight entries in a mobile-friendly workflow.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-2 text-center">
+              <div className="rounded-md bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {completedItems}/3
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Ready
+                </p>
+              </div>
+              <div className="rounded-md bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {rows.length}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Flights
+                </p>
+              </div>
+              <div className="rounded-md bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {student.studentSignatureDataUrl ? "Yes" : "No"}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Sign
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-5 hidden flex-wrap gap-2 md:flex">
             <button
               onClick={clearDraft}
               className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
@@ -509,22 +595,36 @@ if (field.key === "instructorInCommand") {
               onClick={saveRecord}
               className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              <Save size={16} />
+              <ShieldCheck size={16} />
               Save Record
             </button>
           </div>
         </div>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-950">Student Details</h2>
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+              <UserRound size={18} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                Student Details
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Enter the student identity used for the report header.
+              </p>
+            </div>
+          </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
             <label>
-              <span className="text-sm font-medium text-slate-700">Student Name</span>
+              <span className="text-sm font-medium text-slate-700">
+                Student Name
+              </span>
               <input
                 value={student.studentName}
                 onChange={(event) => updateStudent("studentName", event.target.value)}
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                className="mt-2 h-12 w-full rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
                 placeholder="Enter student name"
               />
             </label>
@@ -534,109 +634,130 @@ if (field.key === "instructorInCommand") {
               <input
                 value={student.company}
                 onChange={(event) => updateStudent("company", event.target.value)}
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                className="mt-2 h-12 w-full rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
                 placeholder="Enter company"
               />
             </label>
 
             <label>
-              <span className="text-sm font-medium text-slate-700">Last 4 Characters</span>
+              <span className="text-sm font-medium text-slate-700">
+                Last 4 Characters
+              </span>
               <input
                 value={student.lastFourCharacters}
                 onChange={(event) =>
                   updateStudent("lastFourCharacters", event.target.value.slice(0, 4))
                 }
                 maxLength={4}
-                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm uppercase outline-none focus:border-brand-blue"
+                className="mt-2 h-12 w-full rounded-lg border border-slate-300 px-3 text-base uppercase outline-none focus:border-brand-blue md:h-11 md:text-sm"
                 placeholder="A123"
               />
             </label>
-
-            <div className="md:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-700">
-                    Student Signature
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Sign using phone, tablet, or mouse.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={clearSignature}
-                  className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Clear Signature
-                </button>
-              </div>
-
-              <div className="mt-3 rounded-lg border border-slate-300 bg-white p-2">
-                <canvas
-                  ref={signatureCanvasRef}
-                  width={900}
-                  height={220}
-                  onPointerDown={startSignature}
-                  onPointerMove={drawSignature}
-                  onPointerUp={endSignature}
-                  onPointerCancel={endSignature}
-                  onPointerLeave={endSignature}
-                  className="h-44 w-full touch-none rounded-md bg-white"
-                />
-              </div>
-
-              {student.studentSignatureDataUrl ? (
-                <p className="mt-2 text-xs font-medium text-green-700">
-                  Signature captured.
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-slate-500">
-                  No signature captured yet.
-                </p>
-              )}
-            </div>
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+                <Signature size={18} />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950">
+                  Student Signature
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Sign directly on phone, tablet, or mouse.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={clearSignature}
+              className="inline-flex h-9 shrink-0 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-2">
+            <canvas
+              ref={signatureCanvasRef}
+              width={900}
+              height={240}
+              onPointerDown={startSignature}
+              onPointerMove={drawSignature}
+              onPointerUp={endSignature}
+              onPointerCancel={endSignature}
+              onPointerLeave={endSignature}
+              className="h-48 w-full touch-none rounded-lg bg-white"
+            />
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p
+              className={`text-sm font-medium ${
+                student.studentSignatureDataUrl ? "text-green-700" : "text-slate-500"
+              }`}
+            >
+              {student.studentSignatureDataUrl
+                ? "Signature captured."
+                : "No signature captured yet."}
+            </p>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">Flight Entries</h2>
+              <h2 className="text-lg font-semibold text-slate-950">
+                Flight Entries
+              </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Entries are added using the flight details form.
+                Add each flight through a simple form. The table stays read-only.
               </p>
             </div>
 
             <button
               onClick={openAddFlightModal}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              <Plus size={16} />
+              <Plus size={17} />
               Add Flight
             </button>
           </div>
 
           {rows.length ? (
             <>
-              <div className="space-y-3 lg:hidden">
+              <div className="mt-5 space-y-3 lg:hidden">
                 {rows.map((row, index) => (
                   <article
                     key={index}
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-950">
                           {row.date || "No date"} - {row.location || "No location"}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {row.startTime || "--:--"} - {row.duration || "0"} mins -{" "}
-                          {row.uaCategory}
-                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                            <Clock size={13} />
+                            {row.startTime || "--:--"}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                            <CalendarDays size={13} />
+                            {row.duration || "0"} mins
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                            <MapPin size={13} />
+                            {row.uaCategory || "-"}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex shrink-0 gap-2">
                         <button
                           onClick={() => openEditFlightModal(index)}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
@@ -654,13 +775,15 @@ if (field.key === "instructorInCommand") {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2 text-sm text-slate-600">
                       <p>
                         <span className="font-semibold text-slate-800">UA:</span>{" "}
                         {row.uaModel || "-"}
                       </p>
                       <p>
-                        <span className="font-semibold text-slate-800">Battery:</span>{" "}
+                        <span className="font-semibold text-slate-800">
+                          Battery:
+                        </span>{" "}
                         {row.batterySn || "-"}
                       </p>
                       <p>
@@ -676,35 +799,71 @@ if (field.key === "instructorInCommand") {
                 ))}
               </div>
 
-              <div className="hidden w-full overflow-x-auto rounded-md border border-slate-200 lg:block">
+              <div className="mt-5 hidden w-full overflow-x-auto rounded-lg border border-slate-200 lg:block">
                 <table className="w-full min-w-[1120px] table-fixed border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
                       <th className="w-[110px] px-3 py-3 font-semibold">Date</th>
-                      <th className="w-[130px] px-3 py-3 font-semibold">Location</th>
-                      <th className="w-[110px] px-3 py-3 font-semibold">Start Time</th>
-                      <th className="w-[110px] px-3 py-3 font-semibold">Duration</th>
-                      <th className="w-[160px] px-3 py-3 font-semibold">UA Model & S/N</th>
-                      <th className="w-[120px] px-3 py-3 font-semibold">UA Category</th>
-                      <th className="w-[140px] px-3 py-3 font-semibold">Battery S/N</th>
-                      <th className="w-[160px] px-3 py-3 font-semibold">Pilot in Command</th>
-                      <th className="w-[170px] px-3 py-3 font-semibold">AFE / Instructor</th>
-                      <th className="w-[150px] px-3 py-3 font-semibold">Actions</th>
+                      <th className="w-[130px] px-3 py-3 font-semibold">
+                        Location
+                      </th>
+                      <th className="w-[110px] px-3 py-3 font-semibold">
+                        Start Time
+                      </th>
+                      <th className="w-[110px] px-3 py-3 font-semibold">
+                        Duration
+                      </th>
+                      <th className="w-[160px] px-3 py-3 font-semibold">
+                        UA Model & S/N
+                      </th>
+                      <th className="w-[120px] px-3 py-3 font-semibold">
+                        UA Category
+                      </th>
+                      <th className="w-[140px] px-3 py-3 font-semibold">
+                        Battery S/N
+                      </th>
+                      <th className="w-[160px] px-3 py-3 font-semibold">
+                        Pilot in Command
+                      </th>
+                      <th className="w-[170px] px-3 py-3 font-semibold">
+                        AFE / Instructor
+                      </th>
+                      <th className="w-[110px] px-3 py-3 font-semibold">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {rows.map((row, index) => (
                       <tr key={index} className="border-b border-slate-100">
-                        <td className="px-3 py-3 text-slate-700">{row.date || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.location || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.startTime || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.duration || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.uaModel || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.uaCategory || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.batterySn || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.pilotInCommand || "-"}</td>
-                        <td className="px-3 py-3 text-slate-700">{row.instructorInCommand || "-"}</td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.date || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.location || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.startTime || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.duration || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.uaModel || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.uaCategory || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.batterySn || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.pilotInCommand || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {row.instructorInCommand || "-"}
+                        </td>
                         <td className="px-3 py-3">
                           <div className="flex gap-2">
                             <button
@@ -730,19 +889,49 @@ if (field.key === "instructorInCommand") {
               </div>
             </>
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-              <p className="text-sm font-semibold text-slate-800">No flight entries yet.</p>
+            <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <p className="text-sm font-semibold text-slate-800">
+                No flight entries yet.
+              </p>
               <p className="mt-1 text-sm text-slate-500">
-                Click Add Flight to enter the first flight details.
+                Tap Add Flight to enter the first flight details.
               </p>
             </div>
           )}
         </section>
       </div>
 
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={clearDraft}
+            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
+          >
+            <RotateCcw size={15} />
+            Clear
+          </button>
+
+          <button
+            onClick={saveDraft}
+            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
+          >
+            <Save size={15} />
+            Draft
+          </button>
+
+          <button
+            onClick={saveRecord}
+            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+          >
+            <ShieldCheck size={15} />
+            Save
+          </button>
+        </div>
+      </div>
+
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-xl">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
@@ -755,7 +944,7 @@ if (field.key === "instructorInCommand") {
 
               <button
                 onClick={closeFlightModal}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
                 aria-label="Close modal"
               >
                 <X size={18} />
@@ -776,17 +965,17 @@ if (field.key === "instructorInCommand") {
               ))}
             </div>
 
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 p-5 sm:flex-row sm:justify-end">
+            <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white p-5 sm:flex-row sm:justify-end">
               <button
                 onClick={closeFlightModal}
-                className="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
 
               <button
                 onClick={saveFlightEntry}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
               >
                 <Save size={16} />
                 {editingIndex === null ? "Add Flight" : "Save Changes"}
