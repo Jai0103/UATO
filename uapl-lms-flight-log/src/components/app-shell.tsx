@@ -190,8 +190,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   {navigation}
 </aside>
 
-<main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:ml-[280px]">
-  <div className="w-full min-w-0">{children}</div>
+<main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:ml-[280px] md:w-[calc(100%-280px)]">
+  <div className="w-full min-w-0 overflow-hidden">{children}</div>
 </main>
     </div>
   );
