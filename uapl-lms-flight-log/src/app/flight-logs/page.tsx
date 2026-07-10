@@ -11,13 +11,14 @@ import {
   emptyStudent,
   flightLogDraftKey,
   saveFlightLogRecord,
-  type FlightLogRow,
   type FlightLogRecord,
+  type FlightLogRow,
   type StudentDetails
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
 import {
   CalendarDays,
+  CheckCircle2,
   Clock,
   FileCheck2,
   MapPin,
@@ -409,6 +410,8 @@ export default function FlightLogsPage() {
         })
       );
 
+      clearMessage();
+
       notify({
         type: "success",
         title: "Record saved",
@@ -418,6 +421,8 @@ export default function FlightLogsPage() {
       saveFlightLogRecord(student, rows);
       saveDraft();
 
+      clearMessage();
+
       notify({
         type: "error",
         title: "Google Sheets save failed",
@@ -425,13 +430,12 @@ export default function FlightLogsPage() {
       });
     } finally {
       setSaving(false);
-      clearMessage();
     }
   }
 
   function renderModalField(field: (typeof fields)[number]) {
     const inputClass =
-      "mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-blue";
+      "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm";
 
     if (field.key === "pilotInCommand") {
       return (
@@ -530,24 +534,26 @@ export default function FlightLogsPage() {
     <AppShell>
       {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
 
-      <div className="w-full max-w-none min-w-0 space-y-5 pb-24 md:pb-0">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="app-page pb-24 md:pb-0">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                 <FileCheck2 size={14} />
                 {activeRecordId ? "Continuing Record" : "New Flight Log"}
               </div>
+
               <h1 className="mt-3 text-2xl font-semibold text-slate-950">
                 Flight Log
               </h1>
+
               <p className="mt-1 text-sm text-slate-500">
                 Capture student details, signature, and flight entries in a mobile-friendly workflow.
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-2 text-center">
-              <div className="rounded-md bg-white px-3 py-2">
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2 text-center">
+              <div className="rounded-lg bg-white px-3 py-2">
                 <p className="text-lg font-semibold text-slate-950">
                   {completedItems}/3
                 </p>
@@ -555,7 +561,8 @@ export default function FlightLogsPage() {
                   Ready
                 </p>
               </div>
-              <div className="rounded-md bg-white px-3 py-2">
+
+              <div className="rounded-lg bg-white px-3 py-2">
                 <p className="text-lg font-semibold text-slate-950">
                   {rows.length}
                 </p>
@@ -563,7 +570,8 @@ export default function FlightLogsPage() {
                   Flights
                 </p>
               </div>
-              <div className="rounded-md bg-white px-3 py-2">
+
+              <div className="rounded-lg bg-white px-3 py-2">
                 <p className="text-lg font-semibold text-slate-950">
                   {student.studentSignatureDataUrl ? "Yes" : "No"}
                 </p>
@@ -575,43 +583,35 @@ export default function FlightLogsPage() {
           </div>
 
           <div className="mt-5 hidden flex-wrap gap-2 md:flex">
-            <button
-              onClick={clearDraft}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
+            <button onClick={clearDraft} className="app-button-secondary">
               <RotateCcw size={16} />
               Clear
             </button>
 
-            <button
-              onClick={saveDraft}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
+            <button onClick={saveDraft} className="app-button-secondary">
               <Save size={16} />
               Save Draft
             </button>
 
-            <button
-              onClick={saveRecord}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand-navy px-3 text-sm font-semibold text-white hover:bg-slate-800"
-            >
+            <button onClick={saveRecord} className="app-button-primary">
               <ShieldCheck size={16} />
               Save Record
             </button>
           </div>
-        </div>
+        </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className="app-card">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
               <UserRound size={18} />
             </div>
+
             <div>
               <h2 className="text-lg font-semibold text-slate-950">
                 Student Details
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Enter the student identity used for the report header.
+                Enter the identity used for the report header.
               </p>
             </div>
           </div>
@@ -624,7 +624,7 @@ export default function FlightLogsPage() {
               <input
                 value={student.studentName}
                 onChange={(event) => updateStudent("studentName", event.target.value)}
-                className="mt-2 h-12 w-full rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
+                className="app-input"
                 placeholder="Enter student name"
               />
             </label>
@@ -634,7 +634,7 @@ export default function FlightLogsPage() {
               <input
                 value={student.company}
                 onChange={(event) => updateStudent("company", event.target.value)}
-                className="mt-2 h-12 w-full rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
+                className="app-input"
                 placeholder="Enter company"
               />
             </label>
@@ -649,19 +649,20 @@ export default function FlightLogsPage() {
                   updateStudent("lastFourCharacters", event.target.value.slice(0, 4))
                 }
                 maxLength={4}
-                className="mt-2 h-12 w-full rounded-lg border border-slate-300 px-3 text-base uppercase outline-none focus:border-brand-blue md:h-11 md:text-sm"
+                className="app-input uppercase"
                 placeholder="A123"
               />
             </label>
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className="app-card">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
                 <Signature size={18} />
               </div>
+
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
                   Student Signature
@@ -695,20 +696,18 @@ export default function FlightLogsPage() {
             />
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <p
-              className={`text-sm font-medium ${
-                student.studentSignatureDataUrl ? "text-green-700" : "text-slate-500"
-              }`}
-            >
-              {student.studentSignatureDataUrl
-                ? "Signature captured."
-                : "No signature captured yet."}
-            </p>
-          </div>
+          <p
+            className={`mt-3 text-sm font-medium ${
+              student.studentSignatureDataUrl ? "text-green-700" : "text-slate-500"
+            }`}
+          >
+            {student.studentSignatureDataUrl
+              ? "Signature captured."
+              : "No signature captured yet."}
+          </p>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className="app-card">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-950">
@@ -719,10 +718,7 @@ export default function FlightLogsPage() {
               </p>
             </div>
 
-            <button
-              onClick={openAddFlightModal}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
-            >
+            <button onClick={openAddFlightModal} className="app-button-primary">
               <Plus size={17} />
               Add Flight
             </button>
@@ -741,15 +737,18 @@ export default function FlightLogsPage() {
                         <p className="truncate text-sm font-semibold text-slate-950">
                           {row.date || "No date"} - {row.location || "No location"}
                         </p>
+
                         <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
                           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
                             <Clock size={13} />
                             {row.startTime || "--:--"}
                           </span>
+
                           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
                             <CalendarDays size={13} />
                             {row.duration || "0"} mins
                           </span>
+
                           <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
                             <MapPin size={13} />
                             {row.uaCategory || "-"}
@@ -760,14 +759,15 @@ export default function FlightLogsPage() {
                       <div className="flex shrink-0 gap-2">
                         <button
                           onClick={() => openEditFlightModal(index)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                          className="app-icon-button"
                           aria-label="Edit row"
                         >
                           <Pencil size={15} />
                         </button>
+
                         <button
                           onClick={() => deleteFlightEntry(index)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:bg-red-50 hover:text-red-600"
+                          className="app-danger-icon-button"
                           aria-label="Delete row"
                         >
                           <Trash2 size={15} />
@@ -868,14 +868,15 @@ export default function FlightLogsPage() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => openEditFlightModal(index)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                              className="app-icon-button"
                               aria-label="Edit row"
                             >
                               <Pencil size={15} />
                             </button>
+
                             <button
                               onClick={() => deleteFlightEntry(index)}
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                              className="app-danger-icon-button"
                               aria-label="Delete row"
                             >
                               <Trash2 size={15} />
@@ -890,7 +891,8 @@ export default function FlightLogsPage() {
             </>
           ) : (
             <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-              <p className="text-sm font-semibold text-slate-800">
+              <CheckCircle2 size={28} className="mx-auto text-slate-400" />
+              <p className="mt-3 text-sm font-semibold text-slate-800">
                 No flight entries yet.
               </p>
               <p className="mt-1 text-sm text-slate-500">
@@ -944,7 +946,7 @@ export default function FlightLogsPage() {
 
               <button
                 onClick={closeFlightModal}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                className="app-icon-button"
                 aria-label="Close modal"
               >
                 <X size={18} />
@@ -966,17 +968,11 @@ export default function FlightLogsPage() {
             </div>
 
             <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white p-5 sm:flex-row sm:justify-end">
-              <button
-                onClick={closeFlightModal}
-                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
+              <button onClick={closeFlightModal} className="app-button-secondary">
                 Cancel
               </button>
 
-              <button
-                onClick={saveFlightEntry}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
-              >
+              <button onClick={saveFlightEntry} className="app-button-primary">
                 <Save size={16} />
                 {editingIndex === null ? "Add Flight" : "Save Changes"}
               </button>
