@@ -95,7 +95,7 @@ export default function AdminPage() {
     <AppShell>
       {loading ? <LoadingOverlay label="Loading dashboard data..." /> : null}
 
-      <div className="mx-auto w-full max-w-6xl space-y-6">
+      <div className="w-full max-w-none space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-950">Admin Dashboard</h1>
           <p className="mt-1 text-sm text-slate-500">
