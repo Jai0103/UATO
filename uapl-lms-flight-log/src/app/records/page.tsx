@@ -3,14 +3,23 @@
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
-import { useRouter } from "next/navigation";
-import { flightLogDraftKey } from "@/lib/flight-log-storage";
 import {
+  flightLogDraftKey,
   getFlightLogRecords,
   type FlightLogRecord
 } from "@/lib/flight-log-storage";
 import { fetchGoogleRecords } from "@/lib/google-api";
-import { Eye, FilePenLine, FileText, Search, X } from "lucide-react";
+import {
+  CalendarDays,
+  ClipboardList,
+  Eye,
+  FilePenLine,
+  FileText,
+  Search,
+  Signature,
+  X
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function RecordsPage() {
@@ -23,26 +32,7 @@ export default function RecordsPage() {
   const [selectedRecord, setSelectedRecord] = useState<FlightLogRecord | null>(
     null
   );
-function continueRecord(record: FlightLogRecord) {
-  localStorage.setItem(
-    flightLogDraftKey,
-    JSON.stringify({
-      recordId: record.id,
-      createdAt: record.createdAt,
-      student: record.student,
-      rows: record.rows,
-      updatedAt: new Date().toISOString()
-    })
-  );
 
-  notify({
-    type: "success",
-    title: "Record loaded",
-    message: `${record.student.studentName} is ready to continue in Flight Logs.`
-  });
-
-  router.push("/flight-logs");
-}
   useEffect(() => {
     async function loadRecords() {
       setLoading(true);
@@ -82,34 +72,172 @@ function continueRecord(record: FlightLogRecord) {
     );
   }, [query, records]);
 
+  function continueRecord(record: FlightLogRecord) {
+    localStorage.setItem(
+      flightLogDraftKey,
+      JSON.stringify({
+        recordId: record.id,
+        createdAt: record.createdAt,
+        student: record.student,
+        rows: record.rows,
+        updatedAt: new Date().toISOString()
+      })
+    );
+
+    notify({
+      type: "success",
+      title: "Record loaded",
+      message: `${record.student.studentName} is ready to continue in Flight Logs.`
+    });
+
+    router.push("/flight-logs");
+  }
+
   return (
     <AppShell>
       {loading ? <LoadingOverlay label="Loading saved records..." /> : null}
 
-      <div className="w-full max-w-none space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-950">Records</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            View all saved student flight log records.
-          </p>
-        </div>
+      <div className="app-page">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h1 className="app-title">Records</h1>
+              <p className="app-subtitle">
+                View, inspect, and continue saved student flight log records.
+              </p>
+            </div>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2 text-center">
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {records.length}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Total
+                </p>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {filteredRecords.length}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Shown
+                </p>
+              </div>
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {
+                    records.filter(
+                      (record) => record.student.studentSignatureDataUrl
+                    ).length
+                  }
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Signed
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="app-card">
           <label>
-            <span className="text-sm font-medium text-slate-700">Search Records</span>
-            <div className="mt-2 flex h-11 items-center gap-2 rounded-md border border-slate-300 px-3 focus-within:border-brand-blue">
+            <span className="text-sm font-medium text-slate-700">
+              Search Records
+            </span>
+            <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue md:h-11">
               <Search size={17} className="text-slate-400" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
                 placeholder="Search student, company, or last 4 characters"
               />
             </div>
           </label>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <section className="lg:hidden">
+          {filteredRecords.length ? (
+            <div className="space-y-3">
+              {filteredRecords.map((record) => (
+                <article key={record.id} className="app-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-slate-950">
+                        {record.student.studentName || "-"}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {record.student.company || "No company"} - Last 4:{" "}
+                        {record.student.lastFourCharacters || "-"}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => setSelectedRecord(record)}
+                        className="app-icon-button"
+                        aria-label="View record"
+                        title="View record"
+                      >
+                        <Eye size={16} />
+                      </button>
+
+                      <button
+                        onClick={() => continueRecord(record)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white hover:bg-slate-800"
+                        aria-label="Continue record"
+                        title="Continue record"
+                      >
+                        <FilePenLine size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-slate-50 px-2 py-2">
+                      <ClipboardList size={15} className="mx-auto text-slate-500" />
+                      <p className="mt-1 text-sm font-semibold text-slate-950">
+                        {record.rows.length}
+                      </p>
+                      <p className="text-[11px] uppercase text-slate-500">
+                        Flights
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-50 px-2 py-2">
+                      <Signature size={15} className="mx-auto text-slate-500" />
+                      <p className="mt-1 text-sm font-semibold text-slate-950">
+                        {record.student.studentSignatureDataUrl ? "Yes" : "No"}
+                      </p>
+                      <p className="text-[11px] uppercase text-slate-500">
+                        Sign
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-50 px-2 py-2">
+                      <CalendarDays size={15} className="mx-auto text-slate-500" />
+                      <p className="mt-1 truncate text-xs font-semibold text-slate-950">
+                        {record.updatedAt
+                          ? new Date(record.updatedAt).toLocaleDateString()
+                          : "-"}
+                      </p>
+                      <p className="text-[11px] uppercase text-slate-500">
+                        Updated
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : !loading ? (
+            <div className="app-card text-center text-sm text-slate-500">
+              No saved records found.
+            </div>
+          ) : null}
+        </section>
+
+        <section className="hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:block">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
               <thead>
@@ -146,27 +274,27 @@ function continueRecord(record: FlightLogRecord) {
                         ? new Date(record.updatedAt).toLocaleString()
                         : "-"}
                     </td>
-<td className="px-4 py-4">
-  <div className="flex gap-2">
-    <button
-      onClick={() => setSelectedRecord(record)}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-      aria-label="View record"
-      title="View record"
-    >
-      <Eye size={16} />
-    </button>
+                    <td className="px-4 py-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSelectedRecord(record)}
+                          className="app-icon-button"
+                          aria-label="View record"
+                          title="View record"
+                        >
+                          <Eye size={16} />
+                        </button>
 
-    <button
-      onClick={() => continueRecord(record)}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white hover:bg-slate-800"
-      aria-label="Continue record"
-      title="Continue record"
-    >
-      <FilePenLine size={16} />
-    </button>
-  </div>
-</td>
+                        <button
+                          onClick={() => continueRecord(record)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white hover:bg-slate-800"
+                          aria-label="Continue record"
+                          title="Continue record"
+                        >
+                          <FilePenLine size={16} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
 
@@ -185,7 +313,7 @@ function continueRecord(record: FlightLogRecord) {
 
       {selectedRecord ? (
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-xl bg-white shadow-2xl sm:max-w-5xl sm:rounded-xl">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:max-w-5xl sm:rounded-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
@@ -198,7 +326,7 @@ function continueRecord(record: FlightLogRecord) {
 
               <button
                 onClick={() => setSelectedRecord(null)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                className="app-icon-button"
                 aria-label="Close record details"
               >
                 <X size={18} />
@@ -207,7 +335,7 @@ function continueRecord(record: FlightLogRecord) {
 
             <div className="space-y-5 p-5">
               <section className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-md bg-slate-50 p-4">
+                <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase text-slate-500">
                     Company
                   </p>
@@ -216,7 +344,7 @@ function continueRecord(record: FlightLogRecord) {
                   </p>
                 </div>
 
-                <div className="rounded-md bg-slate-50 p-4">
+                <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase text-slate-500">
                     Last 4
                   </p>
@@ -225,7 +353,7 @@ function continueRecord(record: FlightLogRecord) {
                   </p>
                 </div>
 
-                <div className="rounded-md bg-slate-50 p-4">
+                <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase text-slate-500">
                     Signature
                   </p>
@@ -238,7 +366,7 @@ function continueRecord(record: FlightLogRecord) {
               </section>
 
               {selectedRecord.student.studentSignatureDataUrl ? (
-                <section className="rounded-lg border border-slate-200 p-4">
+                <section className="rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-semibold text-slate-950">
                     Student Signature
                   </p>
@@ -250,7 +378,7 @@ function continueRecord(record: FlightLogRecord) {
                 </section>
               ) : null}
 
-              <section className="rounded-lg border border-slate-200">
+              <section className="rounded-xl border border-slate-200">
                 <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                   <p className="text-sm font-semibold text-slate-950">
                     Flight Entries
@@ -284,7 +412,9 @@ function continueRecord(record: FlightLogRecord) {
                           <td className="px-4 py-3">{row.uaCategory || "-"}</td>
                           <td className="px-4 py-3">{row.batterySn || "-"}</td>
                           <td className="px-4 py-3">{row.pilotInCommand || "-"}</td>
-                          <td className="px-4 py-3">{row.instructorInCommand || "-"}</td>
+                          <td className="px-4 py-3">
+                            {row.instructorInCommand || "-"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
