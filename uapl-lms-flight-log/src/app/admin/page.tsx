@@ -10,9 +10,13 @@ import {
 import { fetchGoogleRecords } from "@/lib/google-api";
 import {
   ClipboardCheck,
+  ClipboardList,
   Clock,
+  Database,
+  FileText,
   GraduationCap,
   Settings,
+  UserCog,
   Users
 } from "lucide-react";
 import Link from "next/link";
@@ -71,91 +75,195 @@ export default function AdminPage() {
       {
         label: "Students",
         value: String(uniqueStudents.size),
-        icon: GraduationCap
+        icon: GraduationCap,
+        description: "Unique student records"
       },
       {
-        label: "Pending Uploads",
+        label: "Pending",
         value: String(pendingUploads),
-        icon: Clock
+        icon: Clock,
+        description: "Missing signature or entries"
       },
       {
         label: "Trainers",
         value: "1",
-        icon: Users
+        icon: Users,
+        description: "Active trainer accounts"
       },
       {
-        label: "Completed Logs",
+        label: "Completed",
         value: String(completedLogs),
-        icon: ClipboardCheck
+        icon: ClipboardCheck,
+        description: "Ready flight log reports"
       }
     ];
   }, [records]);
+
+  const recentRecords = records.slice(0, 5);
+
+  const quickActions = [
+    {
+      title: "Flight Logs",
+      description: "Create or continue student flight logs.",
+      href: "/flight-logs",
+      icon: ClipboardList
+    },
+    {
+      title: "Records",
+      description: "View saved student records.",
+      href: "/records",
+      icon: FileText
+    },
+    {
+      title: "Master Data",
+      description: "Manage dropdowns and reference values.",
+      href: "/master-data",
+      icon: Settings
+    },
+    {
+      title: "Users",
+      description: "Create admin and trainer accounts.",
+      href: "/users",
+      icon: UserCog
+    }
+  ];
 
   return (
     <AppShell>
       {loading ? <LoadingOverlay label="Loading dashboard data..." /> : null}
 
-      <div className="w-full max-w-none space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-950">Admin Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Monitor students, trainers, and flight log submissions.
-          </p>
-        </div>
+      <div className="app-page">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <Database size={14} />
+                Admin Overview
+              </div>
+
+              <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+                Dashboard
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Monitor students, submissions, reports, and system setup.
+              </p>
+            </div>
+
+            <Link href="/flight-logs" className="app-button-primary">
+              <ClipboardList size={17} />
+              New Flight Log
+            </Link>
+          </div>
+        </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {dashboardStats.map((stat) => {
             const Icon = stat.icon;
 
             return (
-              <article
-                key={stat.label}
-                className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                  <Icon size={20} className="text-brand-gold" />
+              <article key={stat.label} className="app-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">
+                      {stat.label}
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-slate-950">
+                      {stat.value}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {stat.description}
+                    </p>
+                  </div>
+
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-brand-gold">
+                    <Icon size={20} />
+                  </div>
                 </div>
-                <p className="mt-4 text-3xl font-semibold text-slate-950">
-                  {stat.value}
-                </p>
               </article>
             );
           })}
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-navy text-white">
-                <Settings size={18} />
-              </div>
-
+        <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+          <article className="app-card">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
-                  Master Data
+                  Quick Actions
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Manage locations, batteries, instructors, UA models, and categories.
+                  Common admin and trainer workflows.
                 </p>
-
-                <Link
-                  href="/master-data"
-                  className="mt-4 inline-flex h-10 items-center rounded-md bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  Open Master Data
-                </Link>
               </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {quickActions.map((action) => {
+                const Icon = action.icon;
+
+                return (
+                  <Link
+                    key={action.href}
+                    href={action.href}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-brand-navy hover:bg-white"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+                        <Icon size={18} />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">
+                          {action.title}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">
+                          {action.description}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </article>
 
-          <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <article className="app-card">
             <h2 className="text-lg font-semibold text-slate-950">
-              User Management
+              Recent Records
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              User creation and email invitations will be connected in a later step.
+              Latest saved flight log records.
             </p>
+
+            <div className="mt-5 space-y-3">
+              {recentRecords.length ? (
+                recentRecords.map((record) => (
+                  <div
+                    key={record.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <p className="truncate text-sm font-semibold text-slate-950">
+                      {record.student.studentName || "-"}
+                    </p>
+                    <p className="mt-1 truncate text-sm text-slate-500">
+                      {record.student.company || "No company"} - {record.rows.length} flights
+                    </p>
+                    <p className="mt-2 text-xs text-slate-400">
+                      {record.updatedAt
+                        ? new Date(record.updatedAt).toLocaleString()
+                        : "-"}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                  <p className="text-sm text-slate-500">
+                    No recent records available.
+                  </p>
+                </div>
+              )}
+            </div>
           </article>
         </section>
       </div>
