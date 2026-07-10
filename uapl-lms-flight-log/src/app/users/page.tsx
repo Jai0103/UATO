@@ -10,8 +10,18 @@ import {
   saveManagedUsers,
   type ManagedUser
 } from "@/lib/user-storage";
-import { Eye, Plus, Trash2, UserPlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Eye,
+  EyeOff,
+  Plus,
+  Shield,
+  Trash2,
+  UserCheck,
+  UserPlus,
+  Users,
+  X
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 type UserForm = {
   name: string;
@@ -71,6 +81,13 @@ export default function UsersPage() {
 
     loadUsers();
   }, [notify]);
+
+  const userStats = useMemo(() => {
+    const admins = users.filter((user) => user.role === "admin").length;
+    const trainers = users.filter((user) => user.role === "trainer").length;
+
+    return { admins, trainers };
+  }, [users]);
 
   function openCreateModal() {
     setForm({
@@ -188,30 +205,140 @@ export default function UsersPage() {
     });
   }
 
+  function togglePassword(id: string) {
+    setVisiblePasswordId((current) => (current === id ? "" : id));
+  }
+
   return (
     <AppShell>
       {loading ? <LoadingOverlay label="Loading users..." /> : null}
       {saving ? <LoadingOverlay label="Saving users..." /> : null}
 
-      <div className="w-full max-w-none space-y-6">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-950">Users</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Create and manage admin and trainer access.
-            </p>
+      <div className="app-page">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h1 className="app-title">Users</h1>
+              <p className="app-subtitle">
+                Create and manage admin and trainer access.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2 text-center">
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {users.length}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Total
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {userStats.admins}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Admin
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-white px-3 py-2">
+                <p className="text-lg font-semibold text-slate-950">
+                  {userStats.trainers}
+                </p>
+                <p className="text-[11px] font-medium uppercase text-slate-500">
+                  Trainer
+                </p>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={openCreateModal}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            <UserPlus size={17} />
-            Create User
-          </button>
-        </div>
+          <div className="mt-5">
+            <button onClick={openCreateModal} className="app-button-primary">
+              <UserPlus size={17} />
+              Create User
+            </button>
+          </div>
+        </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <section className="lg:hidden">
+          {users.length ? (
+            <div className="space-y-3">
+              {users.map((user) => (
+                <article key={user.id} className="app-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-slate-950">
+                        {user.name}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {user.email}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold capitalize ${
+                        user.role === "admin"
+                          ? "bg-brand-navy text-white"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {user.role}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 rounded-lg bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase text-slate-500">
+                      Temporary Password
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-semibold text-slate-950">
+                        {visiblePasswordId === user.id
+                          ? user.temporaryPassword
+                          : "**********"}
+                      </p>
+
+                      <button
+                        onClick={() => togglePassword(user.id)}
+                        className="app-icon-button shrink-0"
+                        aria-label="Toggle password visibility"
+                      >
+                        {visiblePasswordId === user.id ? (
+                          <EyeOff size={15} />
+                        ) : (
+                          <Eye size={15} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-500">
+                      {user.createdAt
+                        ? new Date(user.createdAt).toLocaleDateString()
+                        : "-"}
+                    </p>
+
+                    <button
+                      onClick={() => deleteUser(user)}
+                      className="app-danger-icon-button"
+                      aria-label="Delete user"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : !loading ? (
+            <div className="app-card text-center text-sm text-slate-500">
+              No users created yet.
+            </div>
+          ) : null}
+        </section>
+
+        <section className="hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:block">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-sm">
               <thead>
@@ -229,37 +356,49 @@ export default function UsersPage() {
                 {users.map((user) => (
                   <tr key={user.id} className="border-b border-slate-100">
                     <td className="px-4 py-4 font-semibold text-slate-950">
-                      {user.name}
+                      <span className="inline-flex items-center gap-2">
+                        {user.role === "admin" ? (
+                          <Shield size={16} className="text-brand-navy" />
+                        ) : (
+                          <UserCheck size={16} className="text-brand-navy" />
+                        )}
+                        {user.name}
+                      </span>
                     </td>
+
                     <td className="px-4 py-4 text-slate-700">{user.email}</td>
+
                     <td className="px-4 py-4 capitalize text-slate-700">
                       {user.role}
                     </td>
+
                     <td className="px-4 py-4 text-slate-700">
                       <span className="inline-flex items-center gap-2">
                         {visiblePasswordId === user.id
                           ? user.temporaryPassword
                           : "**********"}
                         <button
-                          onClick={() =>
-                            setVisiblePasswordId((current) =>
-                              current === user.id ? "" : user.id
-                            )
-                          }
+                          onClick={() => togglePassword(user.id)}
                           className="text-slate-400 hover:text-slate-700"
                           aria-label="Toggle password visibility"
                         >
-                          <Eye size={15} />
+                          {visiblePasswordId === user.id ? (
+                            <EyeOff size={15} />
+                          ) : (
+                            <Eye size={15} />
+                          )}
                         </button>
                       </span>
                     </td>
+
                     <td className="px-4 py-4 text-slate-700">
                       {user.createdAt ? new Date(user.createdAt).toLocaleString() : "-"}
                     </td>
+
                     <td className="px-4 py-4">
                       <button
                         onClick={() => deleteUser(user)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                        className="app-danger-icon-button"
                         aria-label="Delete user"
                       >
                         <Trash2 size={15} />
@@ -283,20 +422,20 @@ export default function UsersPage() {
 
       {modalOpen ? (
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full rounded-t-xl bg-white shadow-2xl sm:max-w-xl sm:rounded-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:max-w-xl sm:rounded-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
                   Create User
                 </h2>
                 <p className="text-sm text-slate-500">
-                  Set the account details and temporary password.
+                  Set account details and a temporary password.
                 </p>
               </div>
 
               <button
                 onClick={closeCreateModal}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                className="app-icon-button"
                 aria-label="Close create user modal"
               >
                 <X size={18} />
@@ -309,7 +448,7 @@ export default function UsersPage() {
                 <input
                   value={form.name}
                   onChange={(event) => updateForm("name", event.target.value)}
-                  className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                  className="app-input"
                   placeholder="Trainer name"
                 />
               </label>
@@ -319,7 +458,7 @@ export default function UsersPage() {
                 <input
                   value={form.email}
                   onChange={(event) => updateForm("email", event.target.value)}
-                  className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                  className="app-input"
                   placeholder="trainer@example.com"
                 />
               </label>
@@ -331,7 +470,7 @@ export default function UsersPage() {
                   onChange={(event) =>
                     updateForm("role", event.target.value as "admin" | "trainer")
                   }
-                  className="mt-2 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-blue"
+                  className="app-input bg-white"
                 >
                   <option value="trainer">Trainer</option>
                   <option value="admin">Admin</option>
@@ -348,13 +487,14 @@ export default function UsersPage() {
                     onChange={(event) =>
                       updateForm("temporaryPassword", event.target.value)
                     }
-                    className="h-11 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-brand-blue"
+                    className="h-12 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
                   />
+
                   <button
                     onClick={() =>
                       updateForm("temporaryPassword", generateTemporaryPassword())
                     }
-                    className="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    className="app-button-secondary shrink-0"
                     type="button"
                   >
                     Generate
@@ -363,18 +503,12 @@ export default function UsersPage() {
               </label>
             </div>
 
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 p-5 sm:flex-row sm:justify-end">
-              <button
-                onClick={closeCreateModal}
-                className="inline-flex h-11 items-center justify-center rounded-md border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
+            <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white p-5 sm:flex-row sm:justify-end">
+              <button onClick={closeCreateModal} className="app-button-secondary">
                 Cancel
               </button>
 
-              <button
-                onClick={saveUser}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-slate-800"
-              >
+              <button onClick={saveUser} className="app-button-primary">
                 <Plus size={16} />
                 Create User
               </button>
