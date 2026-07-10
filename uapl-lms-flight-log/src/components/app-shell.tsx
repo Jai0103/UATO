@@ -25,8 +25,6 @@ type Session = {
   role: UserRole;
 };
 
-
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -188,14 +186,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 hidden ${sidebarWidth} flex-col border-r border-slate-200 bg-white p-5 md:flex`}
-      >
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col border-r border-slate-200 bg-white p-5 md:flex">
         {navigation}
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col border-r border-slate-200 bg-white p-5 md:flex">
-  {navigation}
-</aside>
+      </aside>
 
-<main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:ml-[280px]">
-  <div className="w-full min-w-0">{children}</div>
-</main>
+      <main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:ml-[280px]">
+        <div className="w-full min-w-0">{children}</div>
+      </main>
+    </div>
+  );
+}
