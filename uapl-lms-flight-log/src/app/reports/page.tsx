@@ -106,7 +106,7 @@ export default function ReportsPage() {
     <AppShell>
       {loading ? <LoadingOverlay label="Loading report records..." /> : null}
 
-      <div className="mx-auto w-full max-w-6xl space-y-6">
+      <div className="w-full max-w-none space-y-6">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
             <h1 className="text-2xl font-semibold text-slate-950">Reports</h1>
