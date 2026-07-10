@@ -25,6 +25,8 @@ type Session = {
   role: UserRole;
 };
 
+const adminOnlyPages = ["/admin", "/master-data", "/users"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,7 +42,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const parsedSession = JSON.parse(rawSession) as Session;
-    const adminOnlyPages = ["/admin", "/master-data", "/users"];
 
     if (parsedSession.role === "trainer" && adminOnlyPages.includes(pathname)) {
       router.replace("/flight-logs");
@@ -75,10 +76,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const navigation = (
     <>
-      <div className="mb-6 flex items-center gap-3 px-2">
+      <div className="mb-6 flex items-center gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white shadow-sm">
           <Plane size={22} />
         </div>
+
         <div className="min-w-0">
           <p className="truncate text-sm font-bold tracking-wide text-slate-950">
             UAPL LMS
@@ -87,11 +89,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-brand-navy shadow-sm">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-brand-navy shadow-sm">
             {session.role === "admin" ? <Shield size={18} /> : <UserCircle size={19} />}
           </div>
+
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-950">
               {session.name}
@@ -132,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-600"
         >
           <LogOut size={18} />
-          Logout
+          <span>Logout</span>
         </button>
       </div>
     </>
@@ -146,6 +149,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
               <Plane size={20} />
             </div>
+
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-950">UAPL LMS</p>
               <p className="truncate text-xs text-slate-500">Flight Log System</p>
@@ -154,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm"
             aria-label="Open menu"
           >
             <Menu size={20} />
@@ -165,12 +169,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
           <button
-            className="absolute inset-0 bg-slate-950/40"
+            className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close menu overlay"
           />
 
-          <aside className="absolute left-0 top-0 flex h-full w-[86vw] max-w-sm flex-col bg-white p-4 shadow-2xl">
+          <aside className="absolute left-0 top-0 flex h-full w-[86vw] max-w-sm flex-col bg-white p-5 shadow-2xl">
             <div className="mb-4 flex justify-end">
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -186,13 +190,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-<aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col border-r border-slate-200 bg-white p-5 md:flex">
-  {navigation}
-</aside>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col border-r border-slate-200 bg-white p-5 md:flex">
+        {navigation}
+      </aside>
 
-<main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:ml-[280px] md:w-[calc(100%-280px)]">
-  <div className="w-full min-w-0 overflow-hidden">{children}</div>
-</main>
+      <main className="min-w-0 px-4 py-5 sm:px-6 lg:px-8 md:ml-[280px] md:w-[calc(100%-280px)]">
+        <div className="w-full min-w-0 overflow-hidden">{children}</div>
+      </main>
     </div>
   );
 }
