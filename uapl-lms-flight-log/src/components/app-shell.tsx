@@ -24,16 +24,12 @@ import {
   useState
 } from "react";
 import {
-  sessionKey,
-  type UserRole
-} from "@/lib/demo-auth";
-
-type Session = {
-  name: string;
-  email: string;
-  role: UserRole;
-  mustChangePassword?: boolean;
-};
+  getSecureSession,
+  isSessionExpired,
+  logoutSecurely,
+  type SecureSession,
+  verifySecureSession
+} from "@/lib/auth-api";
 
 type NavigationItem = {
   href: string;
@@ -44,7 +40,8 @@ type NavigationItem = {
 const LOGO_PATH =
   "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
-const PASSWORD_PAGE = "/change-password";
+const PASSWORD_PAGE =
+  "/change-password";
 
 const adminOnlyPages = [
   "/admin",
@@ -147,63 +144,181 @@ export function AppShell({
   const pathname = usePathname();
 
   const [session, setSession] =
-    useState<Session | null>(null);
+    useState<SecureSession | null>(
+      null
+    );
 
-  const [mobileMenuOpen, setMobileMenuOpen] =
+  const [
+    checkingSession,
+    setCheckingSession
+  ] = useState(true);
+
+  const [
+    mobileMenuOpen,
+    setMobileMenuOpen
+  ] = useState(false);
+
+  const [signingOut, setSigningOut] =
     useState(false);
 
-  const [checkingSession, setCheckingSession] =
-    useState(true);
-
   useEffect(() => {
-    function checkSession() {
-      const rawSession =
-        localStorage.getItem(sessionKey);
+    let active = true;
 
-      if (!rawSession) {
-        setCheckingSession(false);
+    async function initializeSession() {
+      const storedSession =
+        getSecureSession();
+
+      if (!storedSession) {
+        if (active) {
+          setCheckingSession(false);
+        }
+
         router.replace("/");
         return;
       }
 
       try {
-        const parsedSession =
-          JSON.parse(rawSession) as Session;
-
-        if (
-          parsedSession.mustChangePassword &&
-          pathname !== PASSWORD_PAGE
-        ) {
-          setCheckingSession(false);
-          router.replace(PASSWORD_PAGE);
-          return;
-        }
-
-        const isAdminOnlyPage =
-          adminOnlyPages.some((page) =>
-            pathname.startsWith(page)
+        const verified =
+          await verifySecureSession(
+            storedSession
           );
 
-        if (
-          parsedSession.role !== "admin" &&
-          isAdminOnlyPage
-        ) {
-          setCheckingSession(false);
-          router.replace("/flight-logs");
-          return;
-        }
+        if (!active) return;
 
-        setSession(parsedSession);
+        setSession(verified);
         setCheckingSession(false);
       } catch {
-        localStorage.removeItem(sessionKey);
+        if (!active) return;
+
+        setSession(null);
         setCheckingSession(false);
         router.replace("/");
       }
     }
 
-    checkSession();
-  }, [pathname, router]);
+    initializeSession();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    if (
+      session.mustChangePassword &&
+      pathname !== PASSWORD_PAGE
+    ) {
+      router.replace(PASSWORD_PAGE);
+      return;
+    }
+
+    const adminOnly =
+      adminOnlyPages.some((page) =>
+        pathname.startsWith(page)
+      );
+
+    if (
+      session.role !== "admin" &&
+      adminOnly
+    ) {
+      router.replace("/flight-logs");
+    }
+  }, [pathname, router, session]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    const checkExpiration = () => {
+      if (!isSessionExpired(session)) {
+        return;
+      }
+
+      setSession(null);
+      router.replace("/");
+    };
+
+    checkExpiration();
+
+    const interval =
+      window.setInterval(
+        checkExpiration,
+        60_000
+      );
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [router, session]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+
+    const verifyWithServer =
+      async () => {
+        const storedSession =
+          getSecureSession();
+
+        if (!storedSession) {
+          if (active) {
+            setSession(null);
+            router.replace("/");
+          }
+
+          return;
+        }
+
+        try {
+          const verified =
+            await verifySecureSession(
+              storedSession
+            );
+
+          if (active) {
+            setSession(verified);
+          }
+        } catch {
+          if (active) {
+            setSession(null);
+            router.replace("/");
+          }
+        }
+      };
+
+    const interval =
+      window.setInterval(
+        verifyWithServer,
+        5 * 60_000
+      );
+
+    const handleVisibility = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        verifyWithServer();
+      }
+    };
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibility
+    );
+
+    return () => {
+      active = false;
+
+      window.clearInterval(interval);
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibility
+      );
+    };
+  }, [router, session]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -215,20 +330,30 @@ export function AppShell({
       return;
     }
 
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow =
+      "hidden";
 
     return () => {
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
 
-  function logout() {
-    localStorage.removeItem(sessionKey);
+  async function logout() {
+    if (signingOut) return;
+
+    setSigningOut(true);
     setMobileMenuOpen(false);
+
+    await logoutSecurely();
+
+    setSession(null);
     router.replace("/");
   }
 
-  if (checkingSession || !session) {
+  if (
+    checkingSession ||
+    !session
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4">
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-lg shadow-slate-200/60">
@@ -236,11 +361,11 @@ export function AppShell({
 
           <div>
             <p className="text-sm font-semibold text-slate-900">
-              Loading workspace
+              Verifying session
             </p>
 
             <p className="text-xs text-slate-500">
-              Checking your account access...
+              Checking your secure access...
             </p>
           </div>
         </div>
@@ -324,10 +449,18 @@ export function AppShell({
         <button
           type="button"
           onClick={logout}
-          className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+          disabled={signingOut}
+          className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <LogOut className="h-[18px] w-[18px]" />
-          Sign out
+          {signingOut ? (
+            <Loader2 className="h-[18px] w-[18px] animate-spin" />
+          ) : (
+            <LogOut className="h-[18px] w-[18px]" />
+          )}
+
+          {signingOut
+            ? "Signing out..."
+            : "Sign out"}
         </button>
       </div>
     </>
