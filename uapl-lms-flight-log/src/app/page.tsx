@@ -390,9 +390,7 @@ export default function LoginPage() {
           </div>
 
           <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-            Authorized access only. Sessions
-            automatically expire after eight
-            hours.
+            Powered by: Jairus Github Repo
           </p>
         </div>
       </section>
