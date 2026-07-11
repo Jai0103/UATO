@@ -1,247 +1,492 @@
 "use client";
 
-import { LoadingOverlay } from "@/components/loading-overlay";
-import { useAppMessage } from "@/components/message-provider";
-import { sessionKey, type UserRole } from "@/lib/demo-auth";
-import { fetchGoogleUsers, saveGoogleUsers } from "@/lib/google-api";
-import { getManagedUsers, saveManagedUsers } from "@/lib/user-storage";
-import { ArrowRight, Lock, Plane, ShieldCheck } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
+import {
+  Check,
+  Circle,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Lock
+} from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  AuthApiError,
+  changePasswordSecurely,
+  getSecureSession,
+  type SecureSession
+} from "@/lib/auth-api";
 
-type Session = {
-  name: string;
-  email: string;
-  role: UserRole;
-  mustChangePassword?: boolean;
+type PasswordRule = {
+  label: string;
+  passed: boolean;
 };
 
 export default function ChangePasswordPage() {
   const router = useRouter();
-  const { notify } = useAppMessage();
 
-  const [session, setSession] = useState<Session | null>(null);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [session, setSession] =
+    useState<SecureSession | null>(
+      null
+    );
+
+  const [
+    currentPassword,
+    setCurrentPassword
+  ] = useState("");
+
+  const [
+    newPassword,
+    setNewPassword
+  ] = useState("");
+
+  const [
+    confirmPassword,
+    setConfirmPassword
+  ] = useState("");
+
+  const [
+    showPasswords,
+    setShowPasswords
+  ] = useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [
+    checkingSession,
+    setCheckingSession
+  ] = useState(true);
 
   useEffect(() => {
-    const rawSession = localStorage.getItem(sessionKey);
+    const storedSession =
+      getSecureSession();
 
-    if (!rawSession) {
+    if (!storedSession) {
+      setCheckingSession(false);
       router.replace("/");
       return;
     }
 
-    try {
-      setSession(JSON.parse(rawSession) as Session);
-    } catch {
-      localStorage.removeItem(sessionKey);
-      router.replace("/");
-    }
+    setSession(storedSession);
+    setCheckingSession(false);
   }, [router]);
 
-  async function loadUsers() {
-    try {
-      const googleUsers = await fetchGoogleUsers();
-      saveManagedUsers(googleUsers);
-      return googleUsers;
-    } catch {
-      return getManagedUsers();
-    }
-  }
+  const passwordRules =
+    useMemo<PasswordRule[]>(
+      () => [
+        {
+          label:
+            "At least 10 characters",
+          passed:
+            newPassword.length >= 10
+        },
+        {
+          label:
+            "One uppercase letter",
+          passed:
+            /[A-Z]/.test(
+              newPassword
+            )
+        },
+        {
+          label:
+            "One lowercase letter",
+          passed:
+            /[a-z]/.test(
+              newPassword
+            )
+        },
+        {
+          label: "One number",
+          passed:
+            /[0-9]/.test(
+              newPassword
+            )
+        },
+        {
+          label:
+            "One special character",
+          passed:
+            /[^A-Za-z0-9]/.test(
+              newPassword
+            )
+        }
+      ],
+      [newPassword]
+    );
 
-  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+  const passwordStrong =
+    passwordRules.every(
+      (rule) => rule.passed
+    );
+
+  const passwordsMatch =
+    confirmPassword.length > 0 &&
+    newPassword ===
+      confirmPassword;
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
-    if (!session) return;
+    if (saving) return;
 
-    if (!currentPassword.trim()) {
-      notify({
-        type: "warning",
-        title: "Current password required",
-        message: "Enter your current temporary password."
-      });
+    setError("");
+    setSuccess("");
+
+    if (!currentPassword) {
+      setError(
+        "Enter your current password."
+      );
       return;
     }
 
-    if (newPassword.length < 8) {
-      notify({
-        type: "warning",
-        title: "Password too short",
-        message: "Use at least 8 characters for the new password."
-      });
+    if (!passwordStrong) {
+      setError(
+        "Your new password does not meet all security requirements."
+      );
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      notify({
-        type: "warning",
-        title: "Passwords do not match",
-        message: "Confirm password must match the new password."
-      });
+    if (!passwordsMatch) {
+      setError(
+        "The new passwords do not match."
+      );
       return;
     }
 
-    if (newPassword === currentPassword) {
-      notify({
-        type: "warning",
-        title: "Choose a new password",
-        message: "The new password must be different from the current password."
-      });
+    if (
+      currentPassword ===
+      newPassword
+    ) {
+      setError(
+        "Your new password must be different from your current password."
+      );
       return;
     }
 
     setSaving(true);
 
     try {
-      const users = await loadUsers();
-      const userIndex = users.findIndex(
-        (user) => user.email.toLowerCase() === session.email.toLowerCase()
+      const updatedSession =
+        await changePasswordSecurely(
+          currentPassword,
+          newPassword,
+          confirmPassword
+        );
+
+      setSession(updatedSession);
+
+      setSuccess(
+        "Your password has been changed successfully."
       );
 
-      if (userIndex < 0) {
-        notify({
-          type: "error",
-          title: "Account not found",
-          message: "Your account could not be found in the user list."
-        });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      window.setTimeout(() => {
+        router.replace(
+          updatedSession.role ===
+            "admin"
+            ? "/admin"
+            : "/flight-logs"
+        );
+      }, 900);
+    } catch (caughtError) {
+      if (
+        caughtError instanceof
+        AuthApiError
+      ) {
+        setError(
+          caughtError.message
+        );
+
+        if (
+          caughtError.code ===
+          "AUTH_REQUIRED"
+        ) {
+          window.setTimeout(() => {
+            router.replace("/");
+          }, 1000);
+        }
+
         return;
       }
 
-      const user = users[userIndex];
-
-      if (user.temporaryPassword !== currentPassword) {
-        notify({
-          type: "error",
-          title: "Incorrect current password",
-          message: "The current password you entered is incorrect."
-        });
-        return;
-      }
-
-      const updatedUsers = [...users];
-      updatedUsers[userIndex] = {
-        ...user,
-        temporaryPassword: newPassword,
-        passwordChangedAt: new Date().toISOString()
-      };
-
-      try {
-        const googleUsers = await saveGoogleUsers(updatedUsers);
-        saveManagedUsers(googleUsers);
-      } catch {
-        saveManagedUsers(updatedUsers);
-        notify({
-          type: "warning",
-          title: "Saved locally",
-          message: "Google Sheets sync failed. Password was updated locally."
-        });
-      }
-
-      localStorage.setItem(
-        sessionKey,
-        JSON.stringify({
-          name: session.name,
-          email: session.email,
-          role: session.role,
-          mustChangePassword: false
-        })
+      setError(
+        "Unable to change your password. Please try again."
       );
-
-      notify({
-        type: "success",
-        title: "Password updated",
-        message: "You can now continue using the system."
-      });
-
-      router.push(session.role === "admin" ? "/admin" : "/flight-logs");
     } finally {
       setSaving(false);
     }
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-light px-4 py-8">
-      {saving ? <LoadingOverlay label="Updating password..." /> : null}
+  if (
+    checkingSession ||
+    !session
+  ) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xl shadow-slate-200/70">
+          <Loader2 className="h-5 w-5 animate-spin text-sky-700" />
 
-      <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-        <div className="mb-7 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-navy text-white">
-            <Plane size={24} />
-          </div>
           <div>
-            <p className="text-xl font-bold text-slate-950">UAPL LMS</p>
-            <p className="text-sm text-slate-500">Change Temporary Password</p>
-          </div>
-        </div>
+            <p className="text-sm font-semibold text-slate-950">
+              Checking session
+            </p>
 
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <div className="flex gap-3">
-            <ShieldCheck size={20} className="shrink-0 text-amber-600" />
-            <p className="text-sm leading-6 text-amber-800">
-              For account security, please change your temporary password before
-              continuing.
+            <p className="text-xs text-slate-500">
+              Verifying your account...
             </p>
           </div>
         </div>
+      </main>
+    );
+  }
 
-        <form onSubmit={handleChangePassword} className="mt-6 space-y-5">
-          <label>
-            <span className="text-sm font-medium text-slate-700">
-              Current Password
-            </span>
-            <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
-              <Lock size={18} className="text-slate-400" />
-              <input
-                type="password"
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4 py-8 sm:px-6">
+      <section className="w-full max-w-lg">
+        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="flex justify-center border-b border-slate-100 px-6 py-7 sm:px-8">
+            <img
+              src="../apollo-global-academy-logo.png"
+              alt="Apollo Global Academy"
+              className="h-auto max-h-24 w-auto max-w-[240px] object-contain sm:max-w-[280px]"
+            />
+          </div>
+
+          <div className="px-6 py-7 sm:px-8">
+            <div className="mb-6 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-white">
+                <KeyRound className="h-5 w-5" />
+              </div>
+
+              <h1 className="mt-4 text-2xl font-bold text-slate-950">
+                Change your password
+              </h1>
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Create a secure password for{" "}
+                <span className="font-semibold text-slate-700">
+                  {session.email}
+                </span>
+                .
+              </p>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
+              <PasswordField
+                label="Current password"
                 value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-                placeholder="Enter current password"
+                onChange={
+                  setCurrentPassword
+                }
+                placeholder="Enter your current password"
+                visible={showPasswords}
+                autoComplete="current-password"
+                disabled={saving}
               />
-            </div>
-          </label>
 
-          <label>
-            <span className="text-sm font-medium text-slate-700">
-              New Password
-            </span>
-            <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
-              <Lock size={18} className="text-slate-400" />
-              <input
-                type="password"
+              <PasswordField
+                label="New password"
                 value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-                placeholder="At least 8 characters"
+                onChange={setNewPassword}
+                placeholder="Create a new password"
+                visible={showPasswords}
+                autoComplete="new-password"
+                disabled={saving}
               />
-            </div>
-          </label>
 
-          <label>
-            <span className="text-sm font-medium text-slate-700">
-              Confirm New Password
-            </span>
-            <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
-              <Lock size={18} className="text-slate-400" />
-              <input
-                type="password"
+              <PasswordField
+                label="Confirm new password"
                 value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-                placeholder="Repeat new password"
+                onChange={
+                  setConfirmPassword
+                }
+                placeholder="Enter the new password again"
+                visible={showPasswords}
+                autoComplete="new-password"
+                disabled={saving}
               />
-            </div>
-          </label>
 
-          <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-navy text-sm font-semibold text-white hover:bg-slate-800">
-            Update Password
-            <ArrowRight size={17} />
-          </button>
-        </form>
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPasswords(
+                    (current) =>
+                      !current
+                  )
+                }
+                className="flex items-center gap-2 text-sm font-semibold text-sky-700 transition hover:text-sky-900"
+              >
+                {showPasswords ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+
+                {showPasswords
+                  ? "Hide passwords"
+                  : "Show passwords"}
+              </button>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-3 text-xs font-semibold uppercase text-slate-500">
+                  Password requirements
+                </p>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {passwordRules.map(
+                    (rule) => (
+                      <div
+                        key={rule.label}
+                        className={`flex items-center gap-2 text-xs font-medium ${
+                          rule.passed
+                            ? "text-emerald-700"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        {rule.passed ? (
+                          <Check className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <Circle className="h-4 w-4 shrink-0" />
+                        )}
+
+                        {rule.label}
+                      </div>
+                    )
+                  )}
+                </div>
+
+                {confirmPassword ? (
+                  <div
+                    className={`mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-xs font-medium ${
+                      passwordsMatch
+                        ? "text-emerald-700"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {passwordsMatch ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Circle className="h-4 w-4" />
+                    )}
+
+                    {passwordsMatch
+                      ? "Passwords match"
+                      : "Passwords do not match"}
+                  </div>
+                ) : null}
+              </div>
+
+              {error ? (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-700"
+                >
+                  {error}
+                </div>
+              ) : null}
+
+              {success ? (
+                <div
+                  role="status"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium leading-6 text-emerald-700"
+                >
+                  {success}
+                </div>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={
+                  saving ||
+                  !passwordStrong ||
+                  !passwordsMatch
+                }
+                className="app-button-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Lock className="h-4 w-4" />
+                )}
+
+                {saving
+                  ? "Changing password..."
+                  : "Change password"}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <p className="mt-5 text-center text-xs leading-5 text-slate-500">
+          Changing your password signs out
+          all previous sessions.
+        </p>
       </section>
     </main>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  visible,
+  autoComplete,
+  disabled
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  visible: boolean;
+  autoComplete: string;
+  disabled: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-slate-700">
+        {label}
+      </span>
+
+      <input
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+        type={
+          visible
+            ? "text"
+            : "password"
+        }
+        className="app-input"
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        disabled={disabled}
+        required
+      />
+    </label>
   );
 }
