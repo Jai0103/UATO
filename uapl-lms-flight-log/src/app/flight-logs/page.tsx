@@ -17,8 +17,10 @@ import {
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
 import {
-  CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   FileCheck2,
   MapPin,
@@ -34,6 +36,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
+type StepKey = "details" | "signature" | "flights" | "review";
+
 type FlightLogDraft = {
   recordId?: string;
   createdAt?: string;
@@ -41,6 +45,13 @@ type FlightLogDraft = {
   rows: FlightLogRow[];
   updatedAt: string;
 };
+
+const steps: { key: StepKey; title: string }[] = [
+  { key: "details", title: "Student" },
+  { key: "signature", title: "Signature" },
+  { key: "flights", title: "Flights" },
+  { key: "review", title: "Review" },
+];
 
 const fields: {
   key: keyof FlightLogRow;
@@ -70,6 +81,7 @@ function hasStudentDetails(student: StudentDetails) {
 export default function FlightLogsPage() {
   const { notify, confirm, clearMessage } = useAppMessage();
 
+  const [activeStep, setActiveStep] = useState<StepKey>("details");
   const [student, setStudent] = useState<StudentDetails>(emptyStudent);
   const [rows, setRows] = useState<FlightLogRow[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -87,6 +99,11 @@ export default function FlightLogsPage() {
 
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const detailsDone = hasStudentDetails(student);
+  const signatureDone = Boolean(student.studentSignatureDataUrl);
+  const flightsDone = rows.length > 0;
+  const completedCount = [detailsDone, signatureDone, flightsDone].filter(Boolean).length;
+
   useEffect(() => {
     setMasterData(getMasterData());
 
@@ -102,12 +119,10 @@ export default function FlightLogsPage() {
     }
 
     const savedDraft = localStorage.getItem(flightLogDraftKey);
-
     if (!savedDraft) return;
 
     try {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
-
       setStudent(parsedDraft.student);
       setRows(parsedDraft.rows);
       setActiveRecordId(parsedDraft.recordId ?? "");
@@ -132,33 +147,60 @@ export default function FlightLogsPage() {
     if (!student.studentSignatureDataUrl) return;
 
     const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
 
     const image = new Image();
-
     image.onload = () => {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
     };
-
     image.src = student.studentSignatureDataUrl;
-  }, [student.studentSignatureDataUrl]);
+  }, [student.studentSignatureDataUrl, activeStep]);
 
   function updateStudent(field: keyof StudentDetails, value: string) {
-    setStudent((currentStudent) => ({
-      ...currentStudent,
-      [field]: value,
-    }));
+    setStudent((current) => ({ ...current, [field]: value }));
   }
 
   function updateFlightForm(field: keyof FlightLogRow, value: string) {
-    setFlightForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
+    setFlightForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function goNext() {
+    if (activeStep === "details" && !detailsDone) {
+      notify({
+        type: "warning",
+        title: "Complete student details",
+        message: "Enter student name, company, and last 4 characters.",
+      });
+      return;
+    }
+
+    if (activeStep === "signature" && !signatureDone) {
+      notify({
+        type: "warning",
+        title: "Signature required",
+        message: "Capture the student signature before continuing.",
+      });
+      return;
+    }
+
+    if (activeStep === "flights" && !flightsDone) {
+      notify({
+        type: "warning",
+        title: "Flight entry required",
+        message: "Add at least one flight entry before review.",
+      });
+      return;
+    }
+
+    const index = steps.findIndex((step) => step.key === activeStep);
+    setActiveStep(steps[Math.min(index + 1, steps.length - 1)].key);
+  }
+
+  function goBack() {
+    const index = steps.findIndex((step) => step.key === activeStep);
+    setActiveStep(steps[Math.max(index - 1, 0)].key);
   }
 
   function getCanvasPoint(event: PointerEvent<HTMLCanvasElement>) {
@@ -175,15 +217,12 @@ export default function FlightLogsPage() {
     if (signatureLocked) return;
 
     const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
 
     event.currentTarget.setPointerCapture(event.pointerId);
 
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
     const point = getCanvasPoint(event);
-
     context.strokeStyle = "#111827";
     context.lineWidth = 4;
     context.lineCap = "round";
@@ -198,10 +237,8 @@ export default function FlightLogsPage() {
     if (!isSigning || signatureLocked) return;
 
     const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
 
     const point = getCanvasPoint(event);
     context.lineTo(point.x, point.y);
@@ -221,10 +258,8 @@ export default function FlightLogsPage() {
 
   function retakeSignature() {
     const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     updateStudent("studentSignatureDataUrl", "");
@@ -287,23 +322,13 @@ export default function FlightLogsPage() {
           };
 
     if (editingIndex === null) {
-      setRows((currentRows) => [...currentRows, entryToSave]);
-      notify({
-        type: "success",
-        title: "Flight added",
-        message: "The flight entry has been added.",
-      });
+      setRows((current) => [...current, entryToSave]);
+      notify({ type: "success", title: "Flight added" });
     } else {
-      setRows((currentRows) =>
-        currentRows.map((row, index) =>
-          index === editingIndex ? entryToSave : row
-        )
+      setRows((current) =>
+        current.map((row, index) => (index === editingIndex ? entryToSave : row))
       );
-      notify({
-        type: "success",
-        title: "Flight updated",
-        message: "The flight entry has been updated.",
-      });
+      notify({ type: "success", title: "Flight updated" });
     }
 
     closeFlightModal();
@@ -319,15 +344,8 @@ export default function FlightLogsPage() {
 
     if (!confirmed) return;
 
-    setRows((currentRows) =>
-      currentRows.filter((_, rowIndex) => rowIndex !== index)
-    );
-
-    notify({
-      type: "success",
-      title: "Flight deleted",
-      message: "The flight entry has been removed.",
-    });
+    setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+    notify({ type: "success", title: "Flight deleted" });
   }
 
   function saveDraft() {
@@ -366,44 +384,42 @@ export default function FlightLogsPage() {
     setActiveRecordId("");
     setActiveCreatedAt("");
     setSignatureLocked(false);
+    setActiveStep("details");
 
     const canvas = signatureCanvasRef.current;
     const context = canvas?.getContext("2d");
-    if (canvas && context) {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
 
-    notify({
-      type: "success",
-      title: "Draft cleared",
-      message: "The current flight log draft has been cleared.",
-    });
+    notify({ type: "success", title: "Draft cleared" });
   }
 
   async function saveRecord() {
-    if (!student.studentName.trim()) {
+    if (!detailsDone) {
+      setActiveStep("details");
       notify({
         type: "warning",
-        title: "Student name required",
-        message: "Enter the student name before saving the record.",
+        title: "Student details required",
+        message: "Complete the student details before saving.",
       });
       return;
     }
 
-    if (!student.studentSignatureDataUrl) {
+    if (!signatureDone) {
+      setActiveStep("signature");
       notify({
         type: "warning",
         title: "Signature required",
-        message: "Capture the student signature before saving the record.",
+        message: "Capture the student signature before saving.",
       });
       return;
     }
 
-    if (!rows.length) {
+    if (!flightsDone) {
+      setActiveStep("flights");
       notify({
         type: "warning",
         title: "Flight entry required",
-        message: "Add at least one flight entry before saving the record.",
+        message: "Add at least one flight entry before saving.",
       });
       return;
     }
@@ -444,7 +460,6 @@ export default function FlightLogsPage() {
       );
 
       clearMessage();
-
       notify({
         type: "success",
         title: "Record saved",
@@ -456,7 +471,6 @@ export default function FlightLogsPage() {
       setSignatureLocked(true);
 
       clearMessage();
-
       notify({
         type: "error",
         title: "Google Sheets save failed",
@@ -475,10 +489,7 @@ export default function FlightLogsPage() {
     const cleanValue = value.trim().toLowerCase();
 
     const filteredOptions = options
-      .filter((option) => {
-        if (!cleanValue) return true;
-        return option.toLowerCase().includes(cleanValue);
-      })
+      .filter((option) => !cleanValue || option.toLowerCase().includes(cleanValue))
       .slice(0, 12);
 
     const showSuggestions =
@@ -495,9 +506,7 @@ export default function FlightLogsPage() {
             updateFlightForm(fieldKey, event.target.value);
             setActiveSuggestField(fieldKey);
           }}
-          onBlur={() => {
-            window.setTimeout(() => setActiveSuggestField(null), 150);
-          }}
+          onBlur={() => window.setTimeout(() => setActiveSuggestField(null), 150)}
           placeholder={
             fieldKey === "uaModel"
               ? "Search UA model or serial number"
@@ -506,7 +515,7 @@ export default function FlightLogsPage() {
         />
 
         {showSuggestions ? (
-          <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[70] max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+          <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[80] max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
             {filteredOptions.map((option) => (
               <button
                 key={option}
@@ -611,94 +620,20 @@ export default function FlightLogsPage() {
     );
   }
 
-  const completedItems = [
-    hasStudentDetails(student),
-    Boolean(student.studentSignatureDataUrl),
-    rows.length > 0,
-  ].filter(Boolean).length;
-
-  return (
-    <AppShell>
-      {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
-
-      <div className="app-page pb-24 md:pb-0">
-        <section className="app-card">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                <FileCheck2 size={14} />
-                {activeRecordId ? "Continuing Record" : "New Flight Log"}
-              </div>
-
-              <h1 className="mt-3 text-2xl font-semibold text-slate-950">
-                Flight Log
-              </h1>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Capture student details, signature, and flight entries in a mobile-friendly workflow.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2 text-center">
-              <div className="rounded-lg bg-white px-3 py-2">
-                <p className="text-lg font-semibold text-slate-950">
-                  {completedItems}/3
-                </p>
-                <p className="text-[11px] font-medium uppercase text-slate-500">
-                  Ready
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-white px-3 py-2">
-                <p className="text-lg font-semibold text-slate-950">
-                  {rows.length}
-                </p>
-                <p className="text-[11px] font-medium uppercase text-slate-500">
-                  Flights
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-white px-3 py-2">
-                <p className="text-lg font-semibold text-slate-950">
-                  {student.studentSignatureDataUrl ? "Yes" : "No"}
-                </p>
-                <p className="text-[11px] font-medium uppercase text-slate-500">
-                  Sign
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 hidden flex-wrap gap-2 md:flex">
-            <button onClick={clearDraft} className="app-button-secondary">
-              <RotateCcw size={16} />
-              Clear
-            </button>
-
-            <button onClick={saveDraft} className="app-button-secondary">
-              <Save size={16} />
-              Save Draft
-            </button>
-
-            <button onClick={saveRecord} className="app-button-primary">
-              <ShieldCheck size={16} />
-              Save Record
-            </button>
-          </div>
-        </section>
-
+  function renderStepContent() {
+    if (activeStep === "details") {
+      return (
         <section className="app-card">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
               <UserRound size={18} />
             </div>
-
             <div>
               <h2 className="text-lg font-semibold text-slate-950">
                 Student Details
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Enter the identity used for the report header.
+                Enter the report header information first.
               </p>
             </div>
           </div>
@@ -742,20 +677,23 @@ export default function FlightLogsPage() {
             </label>
           </div>
         </section>
+      );
+    }
 
+    if (activeStep === "signature") {
+      return (
         <section className="app-card">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
                 <Signature size={18} />
               </div>
-
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
                   Student Signature
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Sign directly on phone, tablet, or mouse.
+                  The signature locks only after saving the record.
                 </p>
               </div>
             </div>
@@ -764,7 +702,7 @@ export default function FlightLogsPage() {
               <button
                 type="button"
                 onClick={retakeSignature}
-                className="inline-flex h-9 shrink-0 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="app-button-secondary"
               >
                 Retake Signature
               </button>
@@ -805,7 +743,11 @@ export default function FlightLogsPage() {
               : "No signature captured yet."}
           </p>
         </section>
+      );
+    }
 
+    if (activeStep === "flights") {
+      return (
         <section className="app-card">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -813,7 +755,7 @@ export default function FlightLogsPage() {
                 Flight Entries
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Add each flight through a simple form. The table stays read-only.
+                Add each flight through the flight form.
               </p>
             </div>
 
@@ -824,170 +766,71 @@ export default function FlightLogsPage() {
           </div>
 
           {rows.length ? (
-            <>
-              <div className="mt-5 space-y-3 lg:hidden">
-                {rows.map((row, index) => (
-                  <article
-                    key={index}
-                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-950">
-                          {row.date || "No date"} - {row.location || "No location"}
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
-                          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
-                            <Clock size={13} />
-                            {row.startTime || "--:--"}
-                          </span>
-
-                          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
-                            <CalendarDays size={13} />
-                            {row.duration || "0"} mins
-                          </span>
-
-                          <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
-                            <MapPin size={13} />
-                            {row.uaCategory || "-"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          onClick={() => openEditFlightModal(index)}
-                          className="app-icon-button"
-                          aria-label="Edit row"
-                        >
-                          <Pencil size={15} />
-                        </button>
-
-                        <button
-                          onClick={() => deleteFlightEntry(index)}
-                          className="app-danger-icon-button"
-                          aria-label="Delete row"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-2 text-sm text-slate-600">
-                      <p>
-                        <span className="font-semibold text-slate-800">UA:</span>{" "}
-                        {row.uaModel || "-"}
+            <div className="mt-5 space-y-3">
+              {rows.map((row, index) => (
+                <article
+                  key={index}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-950">
+                        {row.date || "No date"} - {row.location || "No location"}
                       </p>
-                      <p>
-                        <span className="font-semibold text-slate-800">
-                          Battery:
-                        </span>{" "}
-                        {row.batterySn || "-"}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-slate-800">PIC:</span>{" "}
-                        {row.pilotInCommand || "-"}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-slate-800">AFE:</span>{" "}
-                        {row.instructorInCommand || "-"}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
 
-              <div className="mt-5 hidden w-full overflow-x-auto rounded-lg border border-slate-200 lg:block">
-                <table className="w-full min-w-[1120px] table-fixed border-collapse text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-                      <th className="w-[110px] px-3 py-3 font-semibold">Date</th>
-                      <th className="w-[130px] px-3 py-3 font-semibold">
-                        Location
-                      </th>
-                      <th className="w-[110px] px-3 py-3 font-semibold">
-                        Start Time
-                      </th>
-                      <th className="w-[110px] px-3 py-3 font-semibold">
-                        Duration
-                      </th>
-                      <th className="w-[160px] px-3 py-3 font-semibold">
-                        UA Model & S/N
-                      </th>
-                      <th className="w-[120px] px-3 py-3 font-semibold">
-                        UA Category
-                      </th>
-                      <th className="w-[140px] px-3 py-3 font-semibold">
-                        Battery S/N
-                      </th>
-                      <th className="w-[160px] px-3 py-3 font-semibold">
-                        Pilot in Command
-                      </th>
-                      <th className="w-[170px] px-3 py-3 font-semibold">
-                        AFE / Instructor
-                      </th>
-                      <th className="w-[110px] px-3 py-3 font-semibold">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                          <Clock size={13} />
+                          {row.startTime || "--:--"}
+                        </span>
 
-                  <tbody>
-                    {rows.map((row, index) => (
-                      <tr key={index} className="border-b border-slate-100">
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.date || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.location || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.startTime || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.duration || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.uaModel || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                          <MapPin size={13} />
                           {row.uaCategory || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.batterySn || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.pilotInCommand || "-"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {row.instructorInCommand || "-"}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openEditFlightModal(index)}
-                              className="app-icon-button"
-                              aria-label="Edit row"
-                            >
-                              <Pencil size={15} />
-                            </button>
+                        </span>
+                      </div>
+                    </div>
 
-                            <button
-                              onClick={() => deleteFlightEntry(index)}
-                              className="app-danger-icon-button"
-                              aria-label="Delete row"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => openEditFlightModal(index)}
+                        className="app-icon-button"
+                        aria-label="Edit row"
+                      >
+                        <Pencil size={15} />
+                      </button>
+
+                      <button
+                        onClick={() => deleteFlightEntry(index)}
+                        className="app-danger-icon-button"
+                        aria-label="Delete row"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                    <p>
+                      <span className="font-semibold text-slate-800">UA:</span>{" "}
+                      {row.uaModel || "-"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-800">Battery:</span>{" "}
+                      {row.batterySn || "-"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-800">PIC:</span>{" "}
+                      {row.pilotInCommand || "-"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-800">AFE:</span>{" "}
+                      {row.instructorInCommand || "-"}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
           ) : (
             <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
               <CheckCircle2 size={28} className="mx-auto text-slate-400" />
@@ -1000,16 +843,170 @@ export default function FlightLogsPage() {
             </div>
           )}
         </section>
+      );
+    }
+
+    return (
+      <section className="app-card">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+            <ShieldCheck size={18} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Review and Save
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Confirm the details before saving the record.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase text-slate-500">
+              Student
+            </p>
+            <p className="mt-1 font-semibold text-slate-950">
+              {student.studentName || "-"}
+            </p>
+            <p className="text-sm text-slate-500">{student.company || "-"}</p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase text-slate-500">
+              Signature
+            </p>
+            <p className="mt-1 font-semibold text-slate-950">
+              {student.studentSignatureDataUrl ? "Captured" : "Missing"}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase text-slate-500">
+              Flights
+            </p>
+            <p className="mt-1 font-semibold text-slate-950">
+              {rows.length} entries
+            </p>
+          </div>
+        </div>
+
+        <button onClick={saveRecord} className="app-button-primary mt-5 w-full justify-center sm:w-auto">
+          <ShieldCheck size={16} />
+          Save Record
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <AppShell>
+      {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
+
+      <div className="app-page pb-28 md:pb-0">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <FileCheck2 size={14} />
+                {activeRecordId ? "Continuing Record" : "New Flight Log"}
+              </div>
+
+              <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+                Flight Log
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Guided workflow for details, signature, flight entries, and final save.
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+              <p className="font-semibold text-slate-950">
+                {completedCount}/3 ready
+              </p>
+              <p className="text-slate-500">{rows.length} flight entries</p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-4 gap-2">
+            {steps.map((step, index) => {
+              const isActive = activeStep === step.key;
+              const isComplete =
+                (step.key === "details" && detailsDone) ||
+                (step.key === "signature" && signatureDone) ||
+                (step.key === "flights" && flightsDone) ||
+                (step.key === "review" && detailsDone && signatureDone && flightsDone);
+
+              return (
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => setActiveStep(step.key)}
+                  className={`rounded-xl border px-2 py-3 text-center text-xs font-bold sm:text-sm ${
+                    isActive
+                      ? "border-brand-navy bg-brand-navy text-white"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  <span className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
+                    {isComplete ? <Check size={14} /> : index + 1}
+                  </span>
+                  {step.title}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 hidden flex-wrap gap-2 md:flex">
+            <button onClick={clearDraft} className="app-button-secondary">
+              <RotateCcw size={16} />
+              Clear
+            </button>
+
+            <button onClick={saveDraft} className="app-button-secondary">
+              <Save size={16} />
+              Save Draft
+            </button>
+          </div>
+        </section>
+
+        {renderStepContent()}
+
+        <section className="hidden items-center justify-between gap-3 md:flex">
+          <button
+            onClick={goBack}
+            disabled={activeStep === "details"}
+            className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ChevronLeft size={16} />
+            Back
+          </button>
+
+          {activeStep === "review" ? (
+            <button onClick={saveRecord} className="app-button-primary">
+              <ShieldCheck size={16} />
+              Save Record
+            </button>
+          ) : (
+            <button onClick={goNext} className="app-button-primary">
+              Next
+              <ChevronRight size={16} />
+            </button>
+          )}
+        </section>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={clearDraft}
-            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
+            onClick={goBack}
+            disabled={activeStep === "details"}
+            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 disabled:opacity-50"
           >
-            <RotateCcw size={15} />
-            Clear
+            <ChevronLeft size={15} />
+            Back
           </button>
 
           <button
@@ -1020,13 +1017,23 @@ export default function FlightLogsPage() {
             Draft
           </button>
 
-          <button
-            onClick={saveRecord}
-            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
-          >
-            <ShieldCheck size={15} />
-            Save
-          </button>
+          {activeStep === "review" ? (
+            <button
+              onClick={saveRecord}
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+            >
+              <ShieldCheck size={15} />
+              Save
+            </button>
+          ) : (
+            <button
+              onClick={goNext}
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+            >
+              Next
+              <ChevronRight size={15} />
+            </button>
+          )}
         </div>
       </div>
 
