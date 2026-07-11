@@ -22,8 +22,8 @@ import {
   getManagedUsers,
   saveManagedUsers,
   type ManagedUser,
-  type UserRole,
 } from "@/lib/user-storage";
+type UserRole = "admin" | "trainer";
 import { fetchGoogleUsers, saveGoogleUsers } from "@/lib/google-api";
 
 const GOOGLE_SCRIPT_URL =
