@@ -609,34 +609,25 @@ function renderModalField(field: (typeof fields)[number]) {
   );
 }
 
+if (field.key === "uaModel") {
+  return renderSmartSuggestionField("uaModel", masterData?.uaModels ?? []);
+}
 
-const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
-  uaModel: masterData?.uaModels ?? [],
-  batterySn: masterData?.batterySerialNumbers ?? [],
-};
-
-const options = datalistOptions[field.key];
-const listId = options ? `flight-${field.key}-options` : undefined;
+if (field.key === "batterySn") {
+  return renderSmartSuggestionField(
+    "batterySn",
+    masterData?.batterySerialNumbers ?? []
+  );
+}
 
 return (
-  <>
-    <input
-      type={field.type ?? "text"}
-      min={field.type === "number" ? "0" : undefined}
-      list={listId}
-      className={inputClass}
-      value={flightForm[field.key]}
-      onChange={(event) => updateFlightForm(field.key, event.target.value)}
-    />
-
-    {options ? (
-      <datalist id={listId}>
-        {options.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
-    ) : null}
-  </>
+  <input
+    type={field.type ?? "text"}
+    min={field.type === "number" ? "0" : undefined}
+    className={inputClass}
+    value={flightForm[field.key]}
+    onChange={(event) => updateFlightForm(field.key, event.target.value)}
+  />
 );
 
   const completedItems = [
