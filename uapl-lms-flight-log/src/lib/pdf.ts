@@ -110,6 +110,16 @@ function drawLogo(doc: jsPDF) {
   const logoHeight = 18;
   const logoX = PAGE_WIDTH - PAGE_MARGIN - logoWidth;
   const logoY = 7;
+  doc.addImage(
+  cachedLogoImage,
+  "PNG",
+  logoX,
+  logoY,
+  logoWidth,
+  logoHeight,
+  undefined,
+  "FAST"
+);
 
   if (
     cachedLogoImage &&
