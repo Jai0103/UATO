@@ -54,7 +54,7 @@ const passwordAllowedPage = "/change-password";
 
     if (
       parsedSession.role !== "admin" &&
-      adminOnlyPaths.some((path) => pathname.startsWith(path))
+      adminOnlyPages.some((path) => pathname.startsWith(path))
     ) {
       router.replace("/flight-logs");
       return;
