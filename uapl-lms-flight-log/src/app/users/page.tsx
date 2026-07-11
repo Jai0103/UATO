@@ -1,5 +1,6 @@
 "use client";
 
+
 import {
   FormEvent,
   useEffect,
@@ -25,6 +26,7 @@ import { useAppMessage } from "@/components/message-provider";
 import {
   fetchGoogleUsers,
   googleAppsScriptUrl,
+  postToGoogle,
   saveGoogleUsers
 } from "@/lib/google-api";
 import {
@@ -474,83 +476,102 @@ export default function UsersPage() {
     }
   }
 
-  async function toggleUserStatus(
-    user: SecureManagedUser
+ async function toggleUserStatus(
+  user: SecureManagedUser
+) {
+  const currentStatus =
+    user.accountStatus ||
+    "active";
+
+  const nextStatus:
+    AccountStatus =
+    currentStatus === "active"
+      ? "inactive"
+      : "active";
+
+  const isCurrentUser =
+    currentSession?.email
+      .trim()
+      .toLowerCase() ===
+    user.email
+      .trim()
+      .toLowerCase();
+
+  if (
+    isCurrentUser &&
+    nextStatus === "inactive"
   ) {
-    const currentStatus =
-      user.accountStatus ||
-      "active";
+    message.notify({
+      type: "warning",
+      title:
+        "Action not allowed",
+      message:
+        "You cannot deactivate your own account."
+    });
 
-    const nextStatus:
-      AccountStatus =
-      currentStatus === "active"
-        ? "inactive"
-        : "active";
-
-    const isCurrentUser =
-      currentSession?.email
-        .trim()
-        .toLowerCase() ===
-      user.email
-        .trim()
-        .toLowerCase();
-
-    if (
-      isCurrentUser &&
-      nextStatus === "inactive"
-    ) {
-      message.notify({
-        type: "warning",
-        title:
-          "Action not allowed",
-        message:
-          "You cannot deactivate your own account."
-      });
-
-      return;
-    }
-
-    const confirmed =
-      await message.confirm({
-        title:
-          nextStatus === "inactive"
-            ? "Deactivate user?"
-            : "Activate user?",
-        message:
-          nextStatus === "inactive"
-            ? `${user.name} will no longer be able to sign in.`
-            : `${user.name} will be allowed to sign in again.`,
-        confirmLabel:
-          nextStatus === "inactive"
-            ? "Deactivate"
-            : "Activate",
-        variant:
-          nextStatus === "inactive"
-            ? "danger"
-            : "default"
-      });
-
-    if (!confirmed) return;
-
-    const nextUsers =
-      users.map((item) =>
-        item.id === user.id
-          ? {
-              ...item,
-              accountStatus:
-                nextStatus
-            }
-          : item
-      );
-
-    await saveUsersSecurely(
-      nextUsers,
-      nextStatus === "active"
-        ? "User activated"
-        : "User deactivated",
-      `${user.name} is now ${nextStatus}.`
-    );
+    return;
   }
+
+  const confirmed =
+    await message.confirm({
+      title:
+        nextStatus === "inactive"
+          ? "Deactivate user?"
+          : "Activate user?",
+      message:
+        nextStatus === "inactive"
+          ? `${user.name} will be signed out and prevented from signing in.`
+          : `${user.name} will be allowed to sign in again.`,
+      confirmLabel:
+        nextStatus === "inactive"
+          ? "Deactivate"
+          : "Activate",
+      variant:
+        nextStatus === "inactive"
+          ? "danger"
+          : "default"
+    });
+
+  if (!confirmed) return;
+
+  setSaving(true);
+
+  try {
+    await postToGoogle<{
+      userId: string;
+      status: AccountStatus;
+    }>({
+      action:
+        "setUserAccountStatus",
+      userId: user.id,
+      status: nextStatus
+    });
+
+    await refreshUsers();
+
+    message.notify({
+      type: "success",
+      title:
+        nextStatus === "active"
+          ? "User activated"
+          : "User deactivated",
+      message:
+        `${user.name} is now ${nextStatus}.`
+    });
+  } catch (error) {
+    message.notify({
+      type: "error",
+      title:
+        "Status update failed",
+      message:
+        error instanceof Error
+          ? error.message
+          : "The account status could not be updated."
+    });
+  } finally {
+    setSaving(false);
+  }
+}
 
   async function handleDeleteUser(
     user: SecureManagedUser
