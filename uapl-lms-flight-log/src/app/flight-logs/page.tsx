@@ -525,67 +525,90 @@ export default function FlightLogsPage() {
     </div>
   );
 }
+function renderModalField(field: (typeof fields)[number]) {
+  const inputClass =
+    "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm";
 
-  function renderModalField(field: (typeof fields)[number]) {
-    const inputClass =
-      "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm";
+  if (field.key === "pilotInCommand") {
+    return (
+      <input
+        className={`${inputClass} bg-slate-100 text-slate-600`}
+        value={student.studentName}
+        readOnly
+      />
+    );
+  }
 
-    if (field.key === "pilotInCommand") {
-      return (
-        <input
-          className={`${inputClass} bg-slate-100 text-slate-600`}
-          value={student.studentName}
-          readOnly
-        />
-      );
-    }
+  if (field.key === "instructorInCommand") {
+    return (
+      <input
+        className={`${inputClass} bg-slate-100 text-slate-600`}
+        value={flightForm.instructorInCommand || accountName}
+        readOnly
+      />
+    );
+  }
 
-    if (field.key === "instructorInCommand") {
-      return (
-        <input
-          className={`${inputClass} bg-slate-100 text-slate-600`}
-          value={flightForm.instructorInCommand || accountName}
-          readOnly
-        />
-      );
-    }
+  if (field.key === "location") {
+    const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
 
-    if (field.key === "location") {
-      const locations = masterData?.locations ?? ["Kranji", "Old Holland"];
+    return (
+      <select
+        className={inputClass}
+        value={flightForm.location}
+        onChange={(event) => updateFlightForm("location", event.target.value)}
+      >
+        <option value="">Select location</option>
+        {locations.map((location) => (
+          <option key={location} value={location}>
+            {location}
+          </option>
+        ))}
+      </select>
+    );
+  }
 
-      return (
-        <select
-          className={inputClass}
-          value={flightForm.location}
-          onChange={(event) => updateFlightForm("location", event.target.value)}
-        >
-          <option value="">Select location</option>
-          {locations.map((location) => (
-            <option key={location} value={location}>
-              {location}
-            </option>
-          ))}
-        </select>
-      );
-    }
+  if (field.key === "uaCategory") {
+    const categories = masterData?.uaCategories ?? ["M7", "M25", "H"];
 
-    if (field.key === "uaCategory") {
-      const categories = masterData?.uaCategories ?? ["M7", "M25", "H"];
+    return (
+      <select
+        className={inputClass}
+        value={flightForm.uaCategory}
+        onChange={(event) => updateFlightForm("uaCategory", event.target.value)}
+      >
+        <option value="">Select category</option>
+        {categories.map((category) => (
+          <option key={category} value={category}>
+            {category}
+          </option>
+        ))}
+      </select>
+    );
+  }
 
-      return (
-        <select
-          className={inputClass}
-          value={flightForm.uaCategory}
-          onChange={(event) => updateFlightForm("uaCategory", event.target.value)}
-        >
-          {categories.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      );
-    }
+  if (field.key === "uaModel") {
+    return renderSmartSuggestionField("uaModel", masterData?.uaModels ?? []);
+  }
+
+  if (field.key === "batterySn") {
+    return renderSmartSuggestionField(
+      "batterySn",
+      masterData?.batterySerialNumbers ?? []
+    );
+  }
+
+  return (
+    <input
+      type={field.type ?? "text"}
+      min={field.type === "number" ? "0" : undefined}
+      className={inputClass}
+      value={flightForm[field.key]}
+      onChange={(event) => updateFlightForm(field.key, event.target.value)}
+    />
+  );
+}
+
 
 const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
   uaModel: masterData?.uaModels ?? [],
