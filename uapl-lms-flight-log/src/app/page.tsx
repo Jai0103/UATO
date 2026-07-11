@@ -1,4 +1,4 @@
-
+"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Plane } from "lucide-react";
@@ -37,9 +37,9 @@ export default function LoginPage() {
           return;
         }
 
-       setUsers(getManagedUsers());
+        setUsers(getManagedUsers());
       } catch {
-      setUsers(getManagedUsers());
+        setUsers(getManagedUsers());
       } finally {
         setLoadingUsers(false);
       }
@@ -225,7 +225,9 @@ export default function LoginPage() {
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
                       className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
