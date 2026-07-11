@@ -22,36 +22,38 @@ export type SecureSession = {
   expiresAt: string;
 };
 
-type SecureLoginResponse = {
+type BaseAuthResponse = {
   ok: boolean;
   success: boolean;
   code?: string;
   message?: string;
-  user?: SecureUser;
-  sessionToken?: string;
-  expiresAt?: string;
-  remainingAttempts?: number;
 };
 
-type VerifySessionResponse = {
-  ok: boolean;
-  success: boolean;
-  code?: string;
-  message?: string;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-    role: SecureUserRole;
+type SecureLoginResponse =
+  BaseAuthResponse & {
+    user?: SecureUser;
+    sessionToken?: string;
+    expiresAt?: string;
+    remainingAttempts?: number;
   };
-  expiresAt?: string;
-};
 
-type LogoutResponse = {
-  ok: boolean;
-  success: boolean;
-  message?: string;
-};
+type VerifySessionResponse =
+  BaseAuthResponse & {
+    user?: {
+      id: string;
+      name: string;
+      email: string;
+      role: SecureUserRole;
+    };
+    expiresAt?: string;
+  };
+
+type ChangePasswordResponse =
+  BaseAuthResponse & {
+    user?: SecureUser;
+    sessionToken?: string;
+    expiresAt?: string;
+  };
 
 export class AuthApiError extends Error {
   code: string;
@@ -98,18 +100,20 @@ async function postAuthentication<T>(
     );
   }
 
-  let result: T;
-
   try {
-    result = (await response.json()) as T;
+    return (await response.json()) as T;
   } catch {
     throw new AuthApiError(
       "The authentication service returned an invalid response.",
       "INVALID_RESPONSE"
     );
   }
+}
 
-  return result;
+function responseSucceeded(
+  response: BaseAuthResponse
+) {
+  return response.success ?? response.ok;
 }
 
 export async function loginSecurely(
@@ -123,11 +127,8 @@ export async function loginSecurely(
       password
     });
 
-  const successful =
-    result.success ?? result.ok;
-
   if (
-    !successful ||
+    !responseSucceeded(result) ||
     !result.user ||
     !result.sessionToken ||
     !result.expiresAt
@@ -146,7 +147,8 @@ export async function loginSecurely(
     role: result.user.role,
     mustChangePassword:
       result.user.mustChangePassword,
-    sessionToken: result.sessionToken,
+    sessionToken:
+      result.sessionToken,
     expiresAt: result.expiresAt
   };
 
@@ -173,14 +175,12 @@ export async function verifySecureSession(
   const result =
     await postAuthentication<VerifySessionResponse>({
       action: "verifySession",
-      sessionToken: session.sessionToken
+      sessionToken:
+        session.sessionToken
     });
 
-  const successful =
-    result.success ?? result.ok;
-
   if (
-    !successful ||
+    !responseSucceeded(result) ||
     !result.user ||
     !result.expiresAt
   ) {
@@ -189,7 +189,8 @@ export async function verifySecureSession(
     throw new AuthApiError(
       result.message ||
         "Your session has expired. Please sign in again.",
-      result.code || "AUTH_REQUIRED"
+      result.code ||
+        "AUTH_REQUIRED"
     );
   }
 
@@ -201,32 +202,119 @@ export async function verifySecureSession(
     expiresAt: result.expiresAt
   };
 
-  saveSecureSession(verifiedSession);
+  saveSecureSession(
+    verifiedSession
+  );
 
   return verifiedSession;
 }
 
+export async function changePasswordSecurely(
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<SecureSession> {
+  const existingSession =
+    getSecureSession();
+
+  if (!existingSession) {
+    throw new AuthApiError(
+      "Your session has expired. Please sign in again.",
+      "AUTH_REQUIRED"
+    );
+  }
+
+  if (
+    isSessionExpired(
+      existingSession
+    )
+  ) {
+    clearSecureSession();
+
+    throw new AuthApiError(
+      "Your session has expired. Please sign in again.",
+      "AUTH_REQUIRED"
+    );
+  }
+
+  const result =
+    await postAuthentication<ChangePasswordResponse>({
+      action:
+        "secureChangePassword",
+      sessionToken:
+        existingSession.sessionToken,
+      currentPassword,
+      newPassword,
+      confirmPassword
+    });
+
+  if (
+    !responseSucceeded(result) ||
+    !result.user ||
+    !result.sessionToken ||
+    !result.expiresAt
+  ) {
+    if (
+      result.code ===
+      "AUTH_REQUIRED"
+    ) {
+      clearSecureSession();
+    }
+
+    throw new AuthApiError(
+      result.message ||
+        "Unable to change your password.",
+      result.code ||
+        "PASSWORD_CHANGE_FAILED"
+    );
+  }
+
+  const updatedSession: SecureSession = {
+    name: result.user.name,
+    email: result.user.email,
+    role: result.user.role,
+    mustChangePassword: false,
+    sessionToken:
+      result.sessionToken,
+    expiresAt: result.expiresAt
+  };
+
+  saveSecureSession(
+    updatedSession
+  );
+
+  return updatedSession;
+}
+
 export async function logoutSecurely() {
-  const session = getSecureSession();
+  const session =
+    getSecureSession();
 
   clearSecureSession();
 
-  if (!session?.sessionToken) return;
+  if (!session?.sessionToken) {
+    return;
+  }
 
   try {
-    await postAuthentication<LogoutResponse>({
+    await postAuthentication<BaseAuthResponse>({
       action: "secureLogout",
-      sessionToken: session.sessionToken
+      sessionToken:
+        session.sessionToken
     });
   } catch {
-    // Local sign-out still succeeds if the server is unavailable.
+    // Local logout remains successful.
   }
 }
 
 export function saveSecureSession(
   session: SecureSession
 ) {
-  if (typeof window === "undefined") return;
+  if (
+    typeof window === "undefined"
+  ) {
+    return;
+  }
 
   localStorage.setItem(
     sessionKey,
@@ -237,14 +325,20 @@ export function saveSecureSession(
 export function getSecureSession():
   | SecureSession
   | null {
-  if (typeof window === "undefined") {
+  if (
+    typeof window === "undefined"
+  ) {
     return null;
   }
 
   const storedSession =
-    localStorage.getItem(sessionKey);
+    localStorage.getItem(
+      sessionKey
+    );
 
-  if (!storedSession) return null;
+  if (!storedSession) {
+    return null;
+  }
 
   try {
     const parsedSession =
@@ -275,7 +369,9 @@ export function getSecureSession():
         parsedSession.expiresAt
     };
 
-    if (isSessionExpired(session)) {
+    if (
+      isSessionExpired(session)
+    ) {
       clearSecureSession();
       return null;
     }
@@ -288,9 +384,15 @@ export function getSecureSession():
 }
 
 export function clearSecureSession() {
-  if (typeof window === "undefined") return;
+  if (
+    typeof window === "undefined"
+  ) {
+    return;
+  }
 
-  localStorage.removeItem(sessionKey);
+  localStorage.removeItem(
+    sessionKey
+  );
 }
 
 export function isSessionExpired(
@@ -321,7 +423,8 @@ export function getSessionToken() {
 }
 
 export function getSessionRemainingTime() {
-  const session = getSecureSession();
+  const session =
+    getSecureSession();
 
   if (!session) return 0;
 
