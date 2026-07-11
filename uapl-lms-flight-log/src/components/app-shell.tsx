@@ -25,35 +25,46 @@ type Session = {
   role: UserRole;
 };
 
-const adminOnlyPages = ["/admin", "/master-data", "/users"];
-const passwordAllowedPage = "/change-password";
+
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const adminOnlyPages = ["/admin", "/master-data", "/users"];
+const passwordAllowedPage = "/change-password";
 
-  useEffect(() => {
-    const rawSession = localStorage.getItem(sessionKey);
+ useEffect(() => {
+  const rawSession = localStorage.getItem(sessionKey);
+
+  if (!rawSession) {
+    router.replace("/");
+    return;
+  }
+
+  try {
+    const parsedSession = JSON.parse(rawSession) as Session;
+
     if (parsedSession.mustChangePassword && pathname !== passwordAllowedPage) {
-  router.replace(passwordAllowedPage);
-  return;
-}
-    if (!rawSession) {
-      router.replace("/");
+      router.replace(passwordAllowedPage);
       return;
     }
 
-    const parsedSession = JSON.parse(rawSession) as Session;
-
-    if (parsedSession.role === "trainer" && adminOnlyPages.includes(pathname)) {
+    if (
+      parsedSession.role !== "admin" &&
+      adminOnlyPaths.some((path) => pathname.startsWith(path))
+    ) {
       router.replace("/flight-logs");
       return;
     }
 
     setSession(parsedSession);
-  }, [pathname, router]);
+  } catch {
+    localStorage.removeItem(sessionKey);
+    router.replace("/");
+  }
+}, [pathname, router]);
 
   function logout() {
     localStorage.removeItem(sessionKey);
