@@ -32,10 +32,20 @@ const columns: ColumnDefinition[] = [
   { label: "Start\n(HH:MM)", width: 18, align: "center" },
   { label: "Duration\n(MIN)", width: 19, align: "center" },
   { label: "UA Model & S/N", width: 32 },
-  { label: "UA Category\n(M7/M25/H25)", width: 23, align: "center" },
-  { label: "Battery S/N", width: 26 },
-  { label: "Pilot in Command\n(INITIALS)", width: 32 },
-  { label: "AFE / Instructor\nin Command", width: 37 },
+  {
+    label: "UA Category\n(M7/M25/H25)",
+    width: 23,
+    align: "center"
+  },
+  { label: "Battery\nS/N", width: 26 },
+  {
+    label: "Pilot in Command\n(INITIALS)",
+    width: 32
+  },
+  {
+    label: "AFE / Instructor\nin Command",
+    width: 37
+  },
   { label: "Remarks", width: 49 }
 ];
 
@@ -64,6 +74,7 @@ function preloadLogo() {
   const image = new Image();
   image.crossOrigin = "anonymous";
   image.src = getLogoUrl();
+
   cachedLogoImage = image;
 }
 
@@ -110,25 +121,17 @@ function drawLogo(doc: jsPDF) {
   const logoHeight = 18;
   const logoX = PAGE_WIDTH - PAGE_MARGIN - logoWidth;
   const logoY = 7;
-  doc.addImage(
-  cachedLogoImage,
-  "PNG",
-  logoX,
-  logoY,
-  logoWidth,
-  logoHeight,
-  undefined,
-  "FAST"
-);
+
+  const logoImage = cachedLogoImage;
 
   if (
-    cachedLogoImage &&
-    cachedLogoImage.complete &&
-    cachedLogoImage.naturalWidth > 0
+    logoImage !== null &&
+    logoImage.complete &&
+    logoImage.naturalWidth > 0
   ) {
     try {
       doc.addImage(
-        cachedLogoImage,
+        logoImage,
         "PNG",
         logoX,
         logoY,
@@ -137,9 +140,10 @@ function drawLogo(doc: jsPDF) {
         undefined,
         "FAST"
       );
+
       return;
     } catch {
-      // The text fallback below is used if the image cannot be embedded.
+      // Use the text fallback below.
     }
   }
 
@@ -150,14 +154,22 @@ function drawLogo(doc: jsPDF) {
   doc.setTextColor(30, 64, 175);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text("APOLLO GLOBAL", logoX + logoWidth / 2, logoY + 7, {
-    align: "center"
-  });
+
+  doc.text(
+    "APOLLO GLOBAL",
+    logoX + logoWidth / 2,
+    logoY + 7,
+    { align: "center" }
+  );
 
   doc.setFontSize(7);
-  doc.text("ACADEMY", logoX + logoWidth / 2, logoY + 12, {
-    align: "center"
-  });
+
+  doc.text(
+    "ACADEMY",
+    logoX + logoWidth / 2,
+    logoY + 12,
+    { align: "center" }
+  );
 
   doc.setTextColor(15, 23, 42);
 }
@@ -186,27 +198,31 @@ function drawIdentityCell(
   x: number,
   y: number,
   width: number,
-  height: number
+  height: number,
+  labelWidth: number
 ) {
+  doc.setFillColor(222, 235, 246);
+  doc.rect(x, y, labelWidth, height, "F");
+
   doc.setDrawColor(100, 116, 139);
   doc.setLineWidth(0.25);
-  doc.rect(x, y, width, height);
-
-  doc.setFillColor(222, 235, 246);
-  doc.rect(x, y, 45, height, "F");
+  doc.rect(x, y, width, height, "S");
 
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(7.6);
+
   doc.text(label, x + 2.5, y + height / 2, {
-    baseline: "middle"
+    baseline: "middle",
+    maxWidth: labelWidth - 5
   });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(value || "-", x + 48, y + height / 2, {
+  doc.setFontSize(9.5);
+
+  doc.text(value || "-", x + labelWidth + 3, y + height / 2, {
     baseline: "middle",
-    maxWidth: width - 51
+    maxWidth: width - labelWidth - 6
   });
 }
 
@@ -218,16 +234,19 @@ function drawSignatureIdentityCell(
   width: number,
   height: number
 ) {
-  doc.setDrawColor(100, 116, 139);
-  doc.setLineWidth(0.25);
-  doc.rect(x, y, width, height);
+  const labelWidth = 29;
 
   doc.setFillColor(222, 235, 246);
-  doc.rect(x, y, 29, height, "F");
+  doc.rect(x, y, labelWidth, height, "F");
+
+  doc.setDrawColor(100, 116, 139);
+  doc.setLineWidth(0.25);
+  doc.rect(x, y, width, height, "S");
 
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
+
   doc.text("Signature", x + 2.5, y + height / 2, {
     baseline: "middle"
   });
@@ -237,23 +256,25 @@ function drawSignatureIdentityCell(
       doc.addImage(
         signatureDataUrl,
         "PNG",
-        x + 32,
+        x + labelWidth + 3,
         y + 1,
-        width - 35,
+        width - labelWidth - 6,
         height - 2,
         undefined,
         "FAST"
       );
+
       return;
     } catch {
-      // Keep an empty signature field if the stored image is invalid.
+      // Leave the field blank if the signature cannot be loaded.
     }
   }
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
-  doc.text("-", x + 34, y + height / 2, {
+
+  doc.text("-", x + labelWidth + 4, y + height / 2, {
     baseline: "middle"
   });
 }
@@ -274,7 +295,8 @@ function drawStudentDetails(
     PAGE_MARGIN,
     startY,
     leftWidth,
-    rowHeight
+    rowHeight,
+    45
   );
 
   drawSignatureIdentityCell(
@@ -293,7 +315,8 @@ function drawStudentDetails(
     PAGE_MARGIN,
     startY + rowHeight,
     leftWidth,
-    rowHeight
+    rowHeight,
+    45
   );
 
   drawIdentityCell(
@@ -303,7 +326,8 @@ function drawStudentDetails(
     PAGE_MARGIN + leftWidth,
     startY + rowHeight,
     rightWidth,
-    rowHeight
+    rowHeight,
+    55
   );
 
   return startY + rowHeight * 2;
@@ -313,22 +337,19 @@ function drawTableHeader(doc: jsPDF, y: number) {
   let x = PAGE_MARGIN;
 
   columns.forEach((column) => {
-    // Draw the light-blue background separately.
     doc.setFillColor(222, 235, 246);
     doc.rect(x, y, column.width, TABLE_HEADER_HEIGHT, "F");
 
-    // Draw the border separately.
     doc.setDrawColor(71, 85, 105);
     doc.setLineWidth(0.25);
     doc.rect(x, y, column.width, TABLE_HEADER_HEIGHT, "S");
 
-    // Force dark header text.
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
+    doc.setFontSize(7.2);
 
     const lines = column.label.split("\n");
-    const lineHeight = 3.4;
+    const lineHeight = 3.3;
     const totalTextHeight = lines.length * lineHeight;
 
     const textY =
@@ -336,7 +357,7 @@ function drawTableHeader(doc: jsPDF, y: number) {
       TABLE_HEADER_HEIGHT / 2 -
       totalTextHeight / 2 +
       lineHeight -
-      0.4;
+      0.3;
 
     doc.text(lines, x + column.width / 2, textY, {
       align: "center",
@@ -382,25 +403,33 @@ function drawTableRow(
 
     doc.setDrawColor(100, 116, 139);
     doc.setLineWidth(0.2);
-    doc.rect(x, y, column.width, TABLE_ROW_HEIGHT);
+    doc.rect(x, y, column.width, TABLE_ROW_HEIGHT, "S");
 
     doc.setTextColor(30, 41, 59);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.2);
 
     const value = values[columnIndex] || "";
+
     const lines = doc
       .splitTextToSize(value, column.width - 3)
       .slice(0, 3);
 
     const lineHeight = 3.5;
     const textHeight = Math.max(lines.length, 1) * lineHeight;
+
     const textY =
-      y + TABLE_ROW_HEIGHT / 2 - textHeight / 2 + lineHeight - 0.6;
+      y +
+      TABLE_ROW_HEIGHT / 2 -
+      textHeight / 2 +
+      lineHeight -
+      0.6;
 
     doc.text(
       lines,
-      column.align === "center" ? x + column.width / 2 : x + 1.7,
+      column.align === "center"
+        ? x + column.width / 2
+        : x + 1.7,
       textY,
       {
         align: column.align || "left",
@@ -420,17 +449,29 @@ function drawPageFooter(doc: jsPDF, pageNumber: number) {
 
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.2);
-  doc.line(PAGE_MARGIN, footerY - 3, PAGE_WIDTH - PAGE_MARGIN, footerY - 3);
+  doc.line(
+    PAGE_MARGIN,
+    footerY - 3,
+    PAGE_WIDTH - PAGE_MARGIN,
+    footerY - 3
+  );
 
   doc.setTextColor(100, 116, 139);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
 
-  doc.text("ADA-UATO-2B | Flight Log", PAGE_MARGIN, footerY);
+  doc.text(
+    "ADA-UATO-2B | Flight Log",
+    PAGE_MARGIN,
+    footerY
+  );
 
-  doc.text(`Page ${pageNumber}`, PAGE_WIDTH - PAGE_MARGIN, footerY, {
-    align: "right"
-  });
+  doc.text(
+    `Page ${pageNumber}`,
+    PAGE_WIDTH - PAGE_MARGIN,
+    footerY,
+    { align: "right" }
+  );
 }
 
 function drawContinuationHeader(
@@ -453,13 +494,32 @@ function drawContinuationHeader(
   );
 
   doc.setFont("helvetica", "bold");
-  doc.text("CONTINUED", PAGE_WIDTH - PAGE_MARGIN, 35, {
-    align: "right"
-  });
+
+  doc.text(
+    "CONTINUED",
+    PAGE_WIDTH - PAGE_MARGIN,
+    35,
+    { align: "right" }
+  );
 
   drawPageFooter(doc, pageNumber);
 
   return drawTableHeader(doc, 40);
+}
+
+function getEmptyRow(): FlightLogRow {
+  return {
+    date: "",
+    location: "",
+    startTime: "",
+    duration: "",
+    uaModel: "",
+    uaCategory: "",
+    batterySn: "",
+    pilotInCommand: "",
+    instructorInCommand: "",
+    remarks: ""
+  };
 }
 
 function addFlightLogPages(
@@ -473,38 +533,34 @@ function addFlightLogPages(
     doc.addPage("a4", "landscape");
   }
 
-  let pageNumber = 1;
+  let studentPageNumber = 1;
 
   drawTitleAndLogo(doc);
 
-  const detailsBottom = drawStudentDetails(doc, data.student, 34);
+  const detailsBottom = drawStudentDetails(
+    doc,
+    data.student,
+    34
+  );
+
   let y = drawTableHeader(doc, detailsBottom + 4);
 
-  drawPageFooter(doc, pageNumber);
+  drawPageFooter(doc, studentPageNumber);
 
   const rowsToDraw: FlightLogRow[] =
-    data.rows.length > 0
-      ? data.rows
-      : [
-          {
-            date: "",
-            location: "",
-            startTime: "",
-            duration: "",
-            uaModel: "",
-            uaCategory: "",
-            batterySn: "",
-            pilotInCommand: "",
-            instructorInCommand: "",
-            remarks: ""
-          }
-        ];
+    data.rows.length > 0 ? data.rows : [getEmptyRow()];
 
   rowsToDraw.forEach((row, rowIndex) => {
     if (y + TABLE_ROW_HEIGHT > PAGE_HEIGHT - 13) {
       doc.addPage("a4", "landscape");
-      pageNumber += 1;
-      y = drawContinuationHeader(doc, data.student, pageNumber);
+
+      studentPageNumber += 1;
+
+      y = drawContinuationHeader(
+        doc,
+        data.student,
+        studentPageNumber
+      );
     }
 
     y = drawTableRow(doc, row, y, rowIndex);
@@ -520,9 +576,13 @@ function createDocument() {
   });
 }
 
-export function createSingleFlightLogPdf(source: PdfSource) {
+export function createSingleFlightLogPdf(
+  source: PdfSource
+) {
   const doc = createDocument();
+
   addFlightLogPages(doc, source, false);
+
   return doc;
 }
 
@@ -535,9 +595,13 @@ function drawCombinedCover(
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.text("COMBINED FLIGHT LOG REPORT", PAGE_WIDTH / 2, 66, {
-    align: "center"
-  });
+
+  doc.text(
+    "COMBINED FLIGHT LOG REPORT",
+    PAGE_WIDTH / 2,
+    66,
+    { align: "center" }
+  );
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
@@ -552,26 +616,33 @@ function drawCombinedCover(
     { align: "center" }
   );
 
-  doc.setDrawColor(203, 213, 225);
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(64, 90, 169, 52, 2, 2, "FD");
+  doc.roundedRect(64, 90, 169, 52, 2, 2, "F");
+
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(64, 90, 169, 52, 2, 2, "S");
 
   doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
+
   doc.text("STUDENTS INCLUDED", 72, 101);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
 
   records.slice(0, 12).forEach((record, index) => {
-    const column = index >= 6 ? 1 : 0;
-    const row = index % 6;
-    const x = column === 0 ? 72 : 153;
-    const y = 111 + row * 5;
+    const columnIndex = index >= 6 ? 1 : 0;
+    const rowIndex = index % 6;
+
+    const x = columnIndex === 0 ? 72 : 153;
+    const y = 111 + rowIndex * 5;
 
     doc.text(
-      `${index + 1}. ${record.student.studentName || "Unnamed Student"}`,
+      `${index + 1}. ${
+        record.student.studentName || "Unnamed Student"
+      }`,
       x,
       y,
       { maxWidth: 73 }
@@ -580,6 +651,7 @@ function drawCombinedCover(
 
   if (records.length > 12) {
     doc.setFont("helvetica", "italic");
+
     doc.text(
       `and ${records.length - 12} more student records`,
       PAGE_WIDTH / 2,
@@ -591,6 +663,7 @@ function drawCombinedCover(
   doc.setTextColor(100, 116, 139);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
+
   doc.text(
     `Generated on ${new Date().toLocaleString()}`,
     PAGE_WIDTH / 2,
@@ -608,6 +681,7 @@ export function createCombinedFlightLogPdf(
 
   if (records.length === 0) {
     drawCombinedCover(doc, []);
+
     return doc;
   }
 
@@ -622,17 +696,24 @@ export function createCombinedFlightLogPdf(
   }
 
   addFlightLogPages(doc, records[0], false);
+
   return doc;
 }
 
-export function generateFlightLogPdf(data: FlightLogPdfData) {
+export function generateFlightLogPdf(
+  data: FlightLogPdfData
+) {
   const doc = createSingleFlightLogPdf(data);
+
   const studentName = safePdfFileName(
     data.student.studentName || "Student"
   );
+
   const reportDate = formatReportDate();
 
-  doc.save(`${studentName} - FLIGHT LOG - ${reportDate}.pdf`);
+  doc.save(
+    `${studentName} - FLIGHT LOG - ${reportDate}.pdf`
+  );
 }
 
 export function getPdfBlob(doc: jsPDF) {
@@ -641,5 +722,8 @@ export function getPdfBlob(doc: jsPDF) {
 
 export function getPdfBase64(doc: jsPDF) {
   const dataUri = String(doc.output("datauristring"));
-  return dataUri.includes(",") ? dataUri.split(",")[1] : dataUri;
+
+  return dataUri.includes(",")
+    ? dataUri.split(",")[1]
+    : dataUri;
 }
