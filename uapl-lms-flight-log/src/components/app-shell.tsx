@@ -26,6 +26,7 @@ type Session = {
 };
 
 const adminOnlyPages = ["/admin", "/master-data", "/users"];
+const passwordAllowedPage = "/change-password";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -35,7 +36,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const rawSession = localStorage.getItem(sessionKey);
-
+    if (parsedSession.mustChangePassword && pathname !== passwordAllowedPage) {
+  router.replace(passwordAllowedPage);
+  return;
+}
     if (!rawSession) {
       router.replace("/");
       return;
