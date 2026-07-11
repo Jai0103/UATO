@@ -5,8 +5,6 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  Loader2,
-  Mail,
   Plus,
   RefreshCcw,
   Search,
@@ -23,8 +21,9 @@ import {
   saveManagedUsers,
   type ManagedUser,
 } from "@/lib/user-storage";
-type UserRole = "admin" | "trainer";
 import { fetchGoogleUsers, saveGoogleUsers } from "@/lib/google-api";
+
+type UserRole = "admin" | "trainer";
 
 const GOOGLE_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
@@ -132,14 +131,20 @@ export default function UsersPage() {
       setUsers(nextUsers);
       await saveGoogleUsers(nextUsers);
 
-      message.success(successMessage);
+      message.notify({
+        type: "success",
+        title: successMessage,
+      });
     } catch {
       saveManagedUsers(nextUsers);
       setUsers(nextUsers);
 
-      message.info(
-        "Saved locally. Google Sheets sync failed, so please check the Apps Script deployment."
-      );
+      message.notify({
+        type: "info",
+        title: "Saved locally",
+        message:
+          "Google Sheets sync failed, so please check the Apps Script deployment.",
+      });
     } finally {
       setSaving(false);
     }
@@ -153,7 +158,11 @@ export default function UsersPage() {
     const cleanPassword = form.temporaryPassword.trim();
 
     if (!cleanName || !cleanEmail || !cleanPassword) {
-      message.error("Please complete the name, email, and temporary password.");
+      message.notify({
+        type: "error",
+        title: "Missing information",
+        message: "Please complete the name, email, and temporary password.",
+      });
       return;
     }
 
@@ -165,7 +174,11 @@ export default function UsersPage() {
     });
 
     if (alreadyExists) {
-      message.error("A user with the same name or email already exists.");
+      message.notify({
+        type: "error",
+        title: "User already exists",
+        message: "A user with the same name or email already exists.",
+      });
       return;
     }
 
@@ -194,9 +207,9 @@ export default function UsersPage() {
   async function handleDeleteUser(user: ManagedUser) {
     const confirmed = await message.confirm({
       title: "Delete user?",
-      description: `This will remove ${user.name} from the Users database.`,
+      message: `This will remove ${user.name} from the Users database.`,
       confirmLabel: "Delete",
-      tone: "danger",
+      variant: "danger",
     });
 
     if (!confirmed) return;
@@ -210,9 +223,8 @@ export default function UsersPage() {
   async function handleResetPassword(user: ManagedUser) {
     const confirmed = await message.confirm({
       title: "Reset password?",
-      description: `A temporary password will be emailed to ${user.email}. The user will need to change it after login.`,
+      message: `A temporary password will be emailed to ${user.email}. The user will need to change it after login.`,
       confirmLabel: "Reset and email",
-      tone: "warning",
     });
 
     if (!confirmed) return;
@@ -231,7 +243,11 @@ export default function UsersPage() {
       const result = await response.json();
 
       if (!result.success) {
-        message.error(result.message || "Password reset failed.");
+        message.notify({
+          type: "error",
+          title: "Password reset failed",
+          message: result.message || "Please try again.",
+        });
         return;
       }
 
@@ -239,11 +255,16 @@ export default function UsersPage() {
       setUsers(latestUsers);
       saveManagedUsers(latestUsers);
 
-      message.success("Temporary password sent by email.");
+      message.notify({
+        type: "success",
+        title: "Temporary password sent by email.",
+      });
     } catch {
-      message.error(
-        "Unable to reset password. Please check Apps Script email permission."
-      );
+      message.notify({
+        type: "error",
+        title: "Unable to reset password",
+        message: "Please check Apps Script email permission.",
+      });
     } finally {
       setSaving(false);
     }
@@ -314,9 +335,7 @@ export default function UsersPage() {
           <div className="border-b border-slate-200 p-4 sm:p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-950">
-                  Accounts
-                </h2>
+                <h2 className="text-lg font-bold text-slate-950">Accounts</h2>
                 <p className="text-sm text-slate-500">
                   {adminCount} admin, {trainerCount} trainer
                 </p>
@@ -392,7 +411,7 @@ export default function UsersPage() {
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-slate-500">Password</span>
                       <span className="font-semibold text-slate-900">
-                        {showPasswords ? user.temporaryPassword : "••••••••"}
+                        {showPasswords ? user.temporaryPassword : "********"}
                       </span>
                     </div>
 
@@ -499,7 +518,7 @@ export default function UsersPage() {
                       </td>
 
                       <td className="px-5 py-4 font-semibold text-slate-800">
-                        {showPasswords ? user.temporaryPassword : "••••••••"}
+                        {showPasswords ? user.temporaryPassword : "********"}
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-500">
