@@ -1,289 +1,326 @@
 "use client";
 
-import { LoadingOverlay } from "@/components/loading-overlay";
-import { useAppMessage } from "@/components/message-provider";
-import { sessionKey, type UserRole } from "@/lib/demo-auth";
-import { fetchGoogleUsers } from "@/lib/google-api";
-import { getManagedUsers, saveManagedUsers } from "@/lib/user-storage";
-import {
-  ArrowRight,
-  BadgeCheck,
-  Lock,
-  Mail,
-  Plane,
-  ShieldCheck,
-  Sparkles
-} from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Plane } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { sessionKey } from "@/lib/demo-auth";
+import {
+  getStoredUsers,
+  type ManagedUser,
+} from "@/lib/user-storage";
+import { fetchGoogleUsers } from "@/lib/google-api";
 
-type LoginUser = {
-  email: string;
-  password: string;
-  name: string;
-  role: UserRole;
-  passwordChangedAt?: string;
-};
+const GOOGLE_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { notify } = useAppMessage();
 
-  const [email, setEmail] = useState("");
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [forgotIdentifier, setForgotIdentifier] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
+
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
 
   useEffect(() => {
-    const rawSession = localStorage.getItem(sessionKey);
+    async function loadUsers() {
+      try {
+        const googleUsers = await fetchGoogleUsers();
 
-    if (!rawSession) return;
+        if (googleUsers.length > 0) {
+          setUsers(googleUsers);
+          return;
+        }
 
-    try {
-      const session = JSON.parse(rawSession) as {
-        role?: UserRole;
-        mustChangePassword?: boolean;
-      };
-
-      if (session.mustChangePassword) {
-        router.replace("/change-password");
-      } else if (session.role === "admin") {
-        router.replace("/admin");
-      } else if (session.role === "trainer") {
-        router.replace("/flight-logs");
+        setUsers(getStoredUsers());
+      } catch {
+        setUsers(getStoredUsers());
+      } finally {
+        setLoadingUsers(false);
       }
-    } catch {
-      localStorage.removeItem(sessionKey);
     }
-  }, [router]);
 
-  async function getLoginUsers(): Promise<LoginUser[]> {
-    try {
-      const googleUsers = await fetchGoogleUsers();
-      saveManagedUsers(googleUsers);
+    loadUsers();
+  }, []);
 
-      return googleUsers.map((user) => ({
-        email: user.email,
-        password: user.temporaryPassword,
-        name: user.name,
-        role: user.role,
-        passwordChangedAt: user.passwordChangedAt
-      }));
-    } catch {
-      const localUsers = getManagedUsers();
-
-      return localUsers.map((user) => ({
-        email: user.email,
-        password: user.temporaryPassword,
-        name: user.name,
-        role: user.role,
-        passwordChangedAt: user.passwordChangedAt
-      }));
-    }
-  }
-
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+  function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!email.trim()) {
-      notify({
-        type: "warning",
-        title: "Email required",
-        message: "Enter your account email to continue."
-      });
+    setLoginError("");
+    setLoggingIn(true);
+
+    const cleanIdentifier = identifier.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    const user = users.find((item) => {
+      const nameMatches = item.name.trim().toLowerCase() === cleanIdentifier;
+      const emailMatches = item.email.trim().toLowerCase() === cleanIdentifier;
+      const passwordMatches = item.temporaryPassword === cleanPassword;
+
+      return (nameMatches || emailMatches) && passwordMatches;
+    });
+
+    if (!user) {
+      setLoginError("Invalid username, email, or password.");
+      setLoggingIn(false);
       return;
     }
 
-    if (!password.trim()) {
-      notify({
-        type: "warning",
-        title: "Password required",
-        message: "Enter your password to continue."
-      });
+    const mustChangePassword = !user.passwordChangedAt;
+
+    localStorage.setItem(
+      sessionKey,
+      JSON.stringify({
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        mustChangePassword,
+      })
+    );
+
+    if (mustChangePassword) {
+      router.push("/change-password");
       return;
     }
 
-    setLoading(true);
+    router.push(user.role === "admin" ? "/admin" : "/flight-logs");
+  }
+
+  async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setForgotMessage("");
+    setForgotError("");
+
+    const cleanIdentifier = forgotIdentifier.trim();
+
+    if (!cleanIdentifier) {
+      setForgotError("Enter your email or username first.");
+      return;
+    }
+
+    setSendingReset(true);
 
     try {
-      const users = await getLoginUsers();
-
-      if (!users.length) {
-        notify({
-          type: "error",
-          title: "No accounts found",
-          message: "No admin or trainer accounts are available. Please check Google Sheets."
-        });
-        return;
-      }
-
-      const user = users.find(
-        (item) =>
-          item.email.trim().toLowerCase() === email.trim().toLowerCase() &&
-          item.password === password
-      );
-
-      if (!user) {
-        notify({
-          type: "error",
-          title: "Login failed",
-          message: "Invalid email or password."
-        });
-        return;
-      }
-
-      const mustChangePassword = !user.passwordChangedAt;
-
-      localStorage.setItem(
-        sessionKey,
-        JSON.stringify({
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          mustChangePassword
-        })
-      );
-
-      notify({
-        type: "success",
-        title: "Welcome back",
-        message: `Signed in as ${user.name}.`
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "forgotPassword",
+          identifier: cleanIdentifier,
+        }),
       });
 
-      router.push(
-        mustChangePassword
-          ? "/change-password"
-          : user.role === "admin"
-            ? "/admin"
-            : "/flight-logs"
+      const result = await response.json();
+
+      if (!result.success) {
+        setForgotError(result.message || "Password reset failed.");
+        return;
+      }
+
+      setForgotMessage(
+        result.message || "A temporary password has been sent to your email."
+      );
+      setForgotIdentifier("");
+    } catch {
+      setForgotError(
+        "Unable to send password reset. Please check the Google Apps Script deployment."
       );
     } finally {
-      setLoading(false);
+      setSendingReset(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-brand-light">
-      {loading ? <LoadingOverlay label="Signing in..." /> : null}
+    <main className="min-h-screen bg-[#f3f6fb] px-4 py-6 sm:px-6 lg:px-8">
+      <section className="mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="hidden lg:block">
+          <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+            <Plane className="h-4 w-4 text-sky-600" />
+            UAPL LMS Flight Operations
+          </div>
 
-      <div className="grid min-h-screen lg:grid-cols-[1fr_520px]">
-        <section className="hidden bg-brand-navy px-10 py-12 text-white lg:flex lg:flex-col lg:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-brand-navy">
-                <Plane size={25} />
+          <h1 className="max-w-xl text-5xl font-bold tracking-tight text-slate-950">
+            Premium flight log management for trainers and administrators.
+          </h1>
+
+          <p className="mt-5 max-w-lg text-base leading-7 text-slate-600">
+            Record student flights, manage master data, generate reports, and
+            keep operational records organized from desktop, tablet, or mobile.
+          </p>
+
+          <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
+            {["Flight Logs", "Reports", "Admin Control"].map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm"
+              >
+                <p className="text-sm font-semibold text-slate-900">{item}</p>
               </div>
-              <div>
-                <p className="text-lg font-bold">UAPL LMS</p>
-                <p className="text-sm text-white/65">Flight Log System</p>
-              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mx-auto w-full max-w-md">
+          <div className="mb-5 flex items-center justify-center gap-3 lg:hidden">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg">
+              <Plane className="h-5 w-5" />
             </div>
-
-            <div className="mt-20 max-w-xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-white/80">
-                <Sparkles size={15} />
-                Secure trainer flight log workflow
-              </div>
-
-              <h1 className="mt-6 text-5xl font-semibold leading-tight">
-                Manage student flight logs with a clean, mobile-first system.
-              </h1>
-
-              <p className="mt-5 max-w-lg text-base leading-7 text-white/70">
-                Sign in with your admin-created account to capture records,
-                continue student logs, and generate PDF reports.
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-sky-700">
+                UAPL LMS
               </p>
+              <h1 className="text-xl font-bold text-slate-950">Flight Logs</h1>
             </div>
           </div>
 
-          <div className="grid max-w-3xl grid-cols-3 gap-3">
-            {[
-              { label: "Role access", icon: ShieldCheck },
-              { label: "PDF reports", icon: BadgeCheck },
-              { label: "Mobile ready", icon: Plane }
-            ].map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <div
-                  key={item.label}
-                  className="rounded-xl border border-white/10 bg-white/10 p-4"
-                >
-                  <Icon size={20} className="text-brand-gold" />
-                  <p className="mt-3 text-sm font-semibold">{item.label}</p>
+          <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+            <div className="border-b border-slate-100 bg-slate-950 px-6 py-6 text-white sm:px-8">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                  <Lock className="h-5 w-5" />
                 </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
-          <div className="w-full max-w-md">
-            <div className="mb-7 flex items-center gap-3 lg:hidden">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-navy text-white">
-                <Plane size={24} />
-              </div>
-              <div>
-                <p className="text-xl font-bold text-slate-950">UAPL LMS</p>
-                <p className="text-sm text-slate-500">Flight Log System</p>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200">
+                    Secure Login
+                  </p>
+                  <h2 className="text-2xl font-bold">Welcome back</h2>
+                </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-              <div>
-                <p className="text-sm font-semibold uppercase text-brand-gold">
-                  Authorized Access
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-                  Sign in to continue
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Use the email and temporary password issued by the administrator.
-                </p>
-              </div>
-
-              <form onSubmit={handleLogin} className="mt-7 space-y-5">
+            <div className="space-y-6 px-6 py-6 sm:px-8">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <label className="block">
-                  <span className="text-sm font-medium text-slate-700">Email</span>
-                  <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
-                    <Mail size={18} className="text-slate-400" />
-                    <input
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-                      placeholder="name@example.com"
-                    />
-                  </div>
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Email or username
+                  </span>
+                  <input
+                    value={identifier}
+                    onChange={(event) => setIdentifier(event.target.value)}
+                    className="app-input"
+                    placeholder="Enter your account"
+                    autoComplete="username"
+                  />
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
                     Password
                   </span>
-                  <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
-                    <Lock size={18} className="text-slate-400" />
+                  <div className="relative">
                     <input
-                      type="password"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
-                      placeholder="Enter password"
+                      className="app-input pr-12"
+                      placeholder="Enter your password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </label>
 
-                <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-navy text-sm font-semibold text-white hover:bg-slate-800">
-                  Sign In
-                  <ArrowRight size={17} />
+                {loginError ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                    {loginError}
+                  </div>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={loadingUsers || loggingIn}
+                  className="app-button-primary w-full justify-center"
+                >
+                  {loadingUsers || loggingIn ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Lock className="h-4 w-4" />
+                  )}
+                  {loadingUsers
+                    ? "Loading accounts..."
+                    : loggingIn
+                      ? "Signing in..."
+                      : "Sign in"}
                 </button>
               </form>
-            </div>
 
-            <p className="mt-5 text-center text-xs text-slate-500">
-              Optimized for mobile trainers, tablets, laptops, and desktop monitors.
-            </p>
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm">
+                    <KeyRound className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Forgot password?
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Receive a temporary password by email.
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleForgotPassword} className="space-y-3">
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={forgotIdentifier}
+                      onChange={(event) =>
+                        setForgotIdentifier(event.target.value)
+                      }
+                      className="app-input pl-10"
+                      placeholder="Email or username"
+                    />
+                  </div>
+
+                  {forgotMessage ? (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                      {forgotMessage}
+                    </div>
+                  ) : null}
+
+                  {forgotError ? (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                      {forgotError}
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="submit"
+                    disabled={sendingReset}
+                    className="app-button-secondary w-full justify-center"
+                  >
+                    {sendingReset ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Mail className="h-4 w-4" />
+                    )}
+                    {sendingReset ? "Sending..." : "Send reset email"}
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }
