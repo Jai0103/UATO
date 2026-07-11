@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import type {
   FlightLogRecord,
   FlightLogRow,
-  StudentDetails,
+  StudentDetails
 } from "@/lib/flight-log-storage";
 
 export type FlightLogPdfData = {
@@ -10,50 +10,166 @@ export type FlightLogPdfData = {
   rows: FlightLogRow[];
 };
 
-const brandBlue = "#deebf6";
-const darkInk = "#111827";
-const borderInk = "#000000";
+type PdfSource = FlightLogRecord | FlightLogPdfData;
 
-export function safePdfFileName(studentName: string) {
-  const cleanName =
-    studentName
-      .trim()
-      .replace(/[\\/:*?"<>|]/g, "")
-      .replace(/\s+/g, " ") || "Student";
+type ColumnDefinition = {
+  label: string;
+  width: number;
+  align?: "left" | "center";
+};
 
-  const date = new Date().toISOString().slice(0, 10);
+const PAGE_MARGIN = 8;
+const PAGE_WIDTH = 297;
+const PAGE_HEIGHT = 210;
+const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
-  return `${cleanName} - FLIGHT LOG - ${date}.pdf`;
-}
+const TABLE_HEADER_HEIGHT = 14;
+const TABLE_ROW_HEIGHT = 14;
 
-function formatToday() {
-  return new Intl.DateTimeFormat("en-SG", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(new Date());
-}
+const columns: ColumnDefinition[] = [
+  { label: "Date\n(DD/MM/YY)", width: 20, align: "center" },
+  { label: "Location\n(KR/OHR/TRC)", width: 25, align: "center" },
+  { label: "Start\n(HH:MM)", width: 18, align: "center" },
+  { label: "Duration\n(MIN)", width: 19, align: "center" },
+  { label: "UA Model & S/N", width: 32 },
+  { label: "UA Category\n(M7/M25/H25)", width: 23, align: "center" },
+  { label: "Battery S/N", width: 26 },
+  { label: "Pilot in Command\n(INITIALS)", width: 32 },
+  { label: "AFE / Instructor\nin Command", width: 37 },
+  { label: "Remarks", width: 49 }
+];
 
-function drawText(
-  doc: jsPDF,
-  text: string,
-  x: number,
-  y: number,
-  options?: {
-    bold?: boolean;
-    size?: number;
-    align?: "left" | "center" | "right";
+let cachedLogoImage: HTMLImageElement | null = null;
+
+function getLogoUrl() {
+  if (typeof window === "undefined") return "";
+
+  const nextScript = Array.from(document.scripts).find((script) =>
+    script.src.includes("/_next/")
+  );
+
+  if (nextScript) {
+    const scriptUrl = new URL(nextScript.src);
+    const basePath = scriptUrl.pathname.split("/_next/")[0];
+
+    return `${scriptUrl.origin}${basePath}/apollo-global-academy-logo.png`;
   }
-) {
-  doc.setFont("helvetica", options?.bold ? "bold" : "normal");
-  doc.setFontSize(options?.size ?? 8);
-  doc.setTextColor(darkInk);
-  doc.text(text || "-", x, y, {
-    align: options?.align ?? "left",
-  });
+
+  return `${window.location.origin}/apollo-global-academy-logo.png`;
 }
 
-function drawFieldBox(
+function preloadLogo() {
+  if (typeof window === "undefined" || cachedLogoImage) return;
+
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.src = getLogoUrl();
+  cachedLogoImage = image;
+}
+
+preloadLogo();
+
+export function safePdfFileName(value: string) {
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeSource(source: PdfSource): FlightLogPdfData {
+  return {
+    student: source.student,
+    rows: source.rows
+  };
+}
+
+function formatReportDate(value?: string) {
+  const date = value ? new Date(value) : new Date();
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function formatFlightDate(value: string) {
+  if (!value) return "";
+
+  const parts = value.split("-");
+
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0].slice(-2)}`;
+  }
+
+  return value;
+}
+
+function drawLogo(doc: jsPDF) {
+  const logoWidth = 46;
+  const logoHeight = 18;
+  const logoX = PAGE_WIDTH - PAGE_MARGIN - logoWidth;
+  const logoY = 7;
+
+  if (
+    cachedLogoImage &&
+    cachedLogoImage.complete &&
+    cachedLogoImage.naturalWidth > 0
+  ) {
+    try {
+      doc.addImage(
+        cachedLogoImage,
+        "PNG",
+        logoX,
+        logoY,
+        logoWidth,
+        logoHeight,
+        undefined,
+        "FAST"
+      );
+      return;
+    } catch {
+      // The text fallback below is used if the image cannot be embedded.
+    }
+  }
+
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(logoX, logoY, logoWidth, logoHeight, 2, 2);
+
+  doc.setTextColor(30, 64, 175);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("APOLLO GLOBAL", logoX + logoWidth / 2, logoY + 7, {
+    align: "center"
+  });
+
+  doc.setFontSize(7);
+  doc.text("ACADEMY", logoX + logoWidth / 2, logoY + 12, {
+    align: "center"
+  });
+
+  doc.setTextColor(15, 23, 42);
+}
+
+function drawTitleAndLogo(doc: jsPDF) {
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+
+  doc.setFontSize(13);
+  doc.text("ADA-UATO-2B", PAGE_MARGIN, 12);
+
+  doc.setFontSize(20);
+  doc.text("FLIGHT LOG", PAGE_MARGIN, 22);
+
+  drawLogo(doc);
+
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(0.8);
+  doc.line(PAGE_MARGIN, 29, PAGE_WIDTH - PAGE_MARGIN, 29);
+}
+
+function drawIdentityCell(
   doc: jsPDF,
   label: string,
   value: string,
@@ -62,215 +178,292 @@ function drawFieldBox(
   width: number,
   height: number
 ) {
-  doc.setDrawColor(borderInk);
+  doc.setDrawColor(100, 116, 139);
   doc.setLineWidth(0.25);
   doc.rect(x, y, width, height);
 
+  doc.setFillColor(222, 235, 246);
+  doc.rect(x, y, 45, height, "F");
+
+  doc.setTextColor(15, 23, 42);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.text(label, x + 2, y + 5);
+  doc.setFontSize(8);
+  doc.text(label, x + 2.5, y + height / 2, {
+    baseline: "middle"
+  });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  const lines = doc.splitTextToSize(value || "-", width - 4);
-  doc.text(lines.slice(0, 2), x + 2, y + 10);
+  doc.setFontSize(10);
+  doc.text(value || "-", x + 48, y + height / 2, {
+    baseline: "middle",
+    maxWidth: width - 51
+  });
 }
 
-function drawCell(
+function drawSignatureIdentityCell(
   doc: jsPDF,
-  text: string,
+  signatureDataUrl: string,
   x: number,
   y: number,
   width: number,
-  height: number,
-  options?: {
-    bold?: boolean;
-    align?: "left" | "center";
-    fontSize?: number;
-    fill?: string;
-  }
+  height: number
 ) {
-  if (options?.fill) {
-    doc.setFillColor(options.fill);
-    doc.rect(x, y, width, height, "F");
-  }
-
-  doc.setDrawColor(borderInk);
-  doc.setLineWidth(0.2);
+  doc.setDrawColor(100, 116, 139);
+  doc.setLineWidth(0.25);
   doc.rect(x, y, width, height);
 
-  doc.setFont("helvetica", options?.bold ? "bold" : "normal");
-  doc.setFontSize(options?.fontSize ?? 6.5);
-  doc.setTextColor(darkInk);
+  doc.setFillColor(222, 235, 246);
+  doc.rect(x, y, 29, height, "F");
 
-  const lines = doc.splitTextToSize(text || "-", width - 3);
-  const textX = options?.align === "center" ? x + width / 2 : x + 1.5;
-
-  doc.text(lines.slice(0, 4), textX, y + 3, {
-    align: options?.align ?? "left",
-    baseline: "top",
-  });
-}
-
-function drawReportHeader(doc: jsPDF, data: FlightLogPdfData) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 8;
-  let y = 8;
-
-  doc.setDrawColor(borderInk);
-  doc.setLineWidth(0.35);
-
-  doc.roundedRect(margin, y, 34, 12, 1, 1);
-  drawText(doc, "UAPL", margin + 17, y + 5, {
-    bold: true,
-    size: 11,
-    align: "center",
-  });
-  drawText(doc, "LMS", margin + 17, y + 9.5, {
-    bold: true,
-    size: 6.5,
-    align: "center",
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("Signature", x + 2.5, y + height / 2, {
+    baseline: "middle"
   });
 
-  drawText(doc, "ATTENDANCE / FLIGHT LOG", pageWidth / 2, y + 5, {
-    bold: true,
-    size: 13,
-    align: "center",
-  });
-  drawText(doc, "Unmanned Aircraft Practical Training Record", pageWidth / 2, y + 10, {
-    size: 8,
-    align: "center",
-  });
-
-  drawText(doc, `Generated: ${formatToday()}`, pageWidth - margin, y + 6, {
-    size: 7.5,
-    align: "right",
-  });
-
-  y += 17;
-
-  drawFieldBox(
-    doc,
-    "Name as per NRIC/PASSPORT:",
-    data.student.studentName || "-",
-    margin,
-    y,
-    88,
-    15
-  );
-
-  drawFieldBox(
-    doc,
-    "Signature:",
-    "",
-    margin + 88,
-    y,
-    64,
-    15
-  );
-
-  if (data.student.studentSignatureDataUrl) {
+  if (signatureDataUrl) {
     try {
       doc.addImage(
-        data.student.studentSignatureDataUrl,
+        signatureDataUrl,
         "PNG",
-        margin + 91,
-        y + 2,
-        48,
-        10
+        x + 32,
+        y + 1,
+        width - 35,
+        height - 2,
+        undefined,
+        "FAST"
       );
+      return;
     } catch {
-      // Ignore broken image data so the PDF can still generate.
+      // Keep an empty signature field if the stored image is invalid.
     }
   }
 
-  drawFieldBox(
-    doc,
-    "Company/Organisation:",
-    data.student.company || "-",
-    margin,
-    y + 15,
-    88,
-    15
-  );
-
-  drawFieldBox(
-    doc,
-    "NRIC/FIN/Travel Doc. ref.no.:",
-    data.student.lastFourCharacters || "-",
-    margin + 88,
-    y + 15,
-    64,
-    15
-  );
-
-  return y + 36;
-}
-
-function drawPageFooter(doc: jsPDF, pageNumber: number) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor("#475569");
-
-  doc.text("UAPL LMS Flight Log", 8, pageHeight - 6);
-  doc.text(`Page ${pageNumber}`, pageWidth - 8, pageHeight - 6, {
-    align: "right",
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text("-", x + 34, y + height / 2, {
+    baseline: "middle"
   });
 }
 
-function addFlightLogToDoc(
+function drawStudentDetails(
   doc: jsPDF,
-  data: FlightLogPdfData,
-  isFirst: boolean
+  student: StudentDetails,
+  startY: number
 ) {
-  if (!isFirst) {
-    doc.addPage();
-  }
+  const leftWidth = 175;
+  const rightWidth = CONTENT_WIDTH - leftWidth;
+  const rowHeight = 13;
 
-  let pageNumber = doc.getNumberOfPages();
-  let y = drawReportHeader(doc, data);
+  drawIdentityCell(
+    doc,
+    "Name as per NRIC/PASSPORT",
+    student.studentName,
+    PAGE_MARGIN,
+    startY,
+    leftWidth,
+    rowHeight
+  );
 
-  const margin = 8;
-  const usablePageHeight = doc.internal.pageSize.getHeight() - 15;
+  drawSignatureIdentityCell(
+    doc,
+    student.studentSignatureDataUrl,
+    PAGE_MARGIN + leftWidth,
+    startY,
+    rightWidth,
+    rowHeight
+  );
 
-  const columns = [
-    { label: "Date\n(DD/MM/YY)", width: 22 },
-    { label: "Location\n(KR/OHR/TRC)", width: 24 },
-    { label: "Start\n(HH:MM)", width: 21 },
-    { label: "Duration\n(MIN)", width: 21 },
-    { label: "UA Model & S/N", width: 35 },
-    { label: "UA\nCategory\n(M7/M25/H)", width: 25 },
-    { label: "Battery\nS/N", width: 27 },
-    { label: "Pilot in Command\n(INITIALS)", width: 34 },
-    { label: "AFE / Instructor\nin Command", width: 38 },
-    { label: "Remarks", width: 34 },
-  ];
+  drawIdentityCell(
+    doc,
+    "Company/Organisation",
+    student.company,
+    PAGE_MARGIN,
+    startY + rowHeight,
+    leftWidth,
+    rowHeight
+  );
 
-  const headerHeight = 14;
-  const rowHeight = 14;
+  drawIdentityCell(
+    doc,
+    "NRIC/FIN/Travel Doc. ref. no.",
+    student.lastFourCharacters,
+    PAGE_MARGIN + leftWidth,
+    startY + rowHeight,
+    rightWidth,
+    rowHeight
+  );
 
-  function drawTableHeader() {
-    let x = margin;
+  return startY + rowHeight * 2;
+}
 
-    columns.forEach((column) => {
-      drawCell(doc, column.label, x, y, column.width, headerHeight, {
-        bold: true,
-        align: "center",
-        fontSize: 6.4,
-        fill: brandBlue,
-      });
-      x += column.width;
+function drawTableHeader(doc: jsPDF, y: number) {
+  let x = PAGE_MARGIN;
+
+  doc.setFillColor(222, 235, 246);
+  doc.setDrawColor(71, 85, 105);
+  doc.setLineWidth(0.25);
+
+  columns.forEach((column) => {
+    doc.rect(x, y, column.width, TABLE_HEADER_HEIGHT, "FD");
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.4);
+
+    const lines = column.label.split("\n");
+    const lineHeight = 3.5;
+    const totalHeight = lines.length * lineHeight;
+    const textY =
+      y + TABLE_HEADER_HEIGHT / 2 - totalHeight / 2 + lineHeight - 0.5;
+
+    doc.text(lines, x + column.width / 2, textY, {
+      align: "center",
+      lineHeightFactor: 1.05,
+      maxWidth: column.width - 2
     });
 
-    y += headerHeight;
+    x += column.width;
+  });
+
+  return y + TABLE_HEADER_HEIGHT;
+}
+
+function getRowValues(row: FlightLogRow) {
+  return [
+    formatFlightDate(row.date),
+    row.location,
+    row.startTime,
+    row.duration,
+    row.uaModel,
+    row.uaCategory,
+    row.batterySn,
+    row.pilotInCommand,
+    row.instructorInCommand,
+    row.remarks
+  ];
+}
+
+function drawTableRow(
+  doc: jsPDF,
+  row: FlightLogRow,
+  y: number,
+  rowIndex: number
+) {
+  const values = getRowValues(row);
+  let x = PAGE_MARGIN;
+
+  columns.forEach((column, columnIndex) => {
+    if (rowIndex % 2 === 1) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(x, y, column.width, TABLE_ROW_HEIGHT, "F");
+    }
+
+    doc.setDrawColor(100, 116, 139);
+    doc.setLineWidth(0.2);
+    doc.rect(x, y, column.width, TABLE_ROW_HEIGHT);
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.2);
+
+    const value = values[columnIndex] || "";
+    const lines = doc
+      .splitTextToSize(value, column.width - 3)
+      .slice(0, 3);
+
+    const lineHeight = 3.5;
+    const textHeight = Math.max(lines.length, 1) * lineHeight;
+    const textY =
+      y + TABLE_ROW_HEIGHT / 2 - textHeight / 2 + lineHeight - 0.6;
+
+    doc.text(
+      lines,
+      column.align === "center" ? x + column.width / 2 : x + 1.7,
+      textY,
+      {
+        align: column.align || "left",
+        lineHeightFactor: 1.05,
+        maxWidth: column.width - 3
+      }
+    );
+
+    x += column.width;
+  });
+
+  return y + TABLE_ROW_HEIGHT;
+}
+
+function drawPageFooter(doc: jsPDF, pageNumber: number) {
+  const footerY = PAGE_HEIGHT - 5.5;
+
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.2);
+  doc.line(PAGE_MARGIN, footerY - 3, PAGE_WIDTH - PAGE_MARGIN, footerY - 3);
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+
+  doc.text("ADA-UATO-2B | Flight Log", PAGE_MARGIN, footerY);
+
+  doc.text(`Page ${pageNumber}`, PAGE_WIDTH - PAGE_MARGIN, footerY, {
+    align: "right"
+  });
+}
+
+function drawContinuationHeader(
+  doc: jsPDF,
+  student: StudentDetails,
+  pageNumber: number
+) {
+  drawTitleAndLogo(doc);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+
+  doc.text(
+    `Student: ${student.studentName || "-"} | Company: ${
+      student.company || "-"
+    }`,
+    PAGE_MARGIN,
+    35
+  );
+
+  doc.setFont("helvetica", "bold");
+  doc.text("CONTINUED", PAGE_WIDTH - PAGE_MARGIN, 35, {
+    align: "right"
+  });
+
+  drawPageFooter(doc, pageNumber);
+
+  return drawTableHeader(doc, 40);
+}
+
+function addFlightLogPages(
+  doc: jsPDF,
+  source: PdfSource,
+  addFirstPage: boolean
+) {
+  const data = normalizeSource(source);
+
+  if (addFirstPage) {
+    doc.addPage("a4", "landscape");
   }
 
-  drawTableHeader();
+  let pageNumber = 1;
 
-  const rowsToDraw =
+  drawTitleAndLogo(doc);
+
+  const detailsBottom = drawStudentDetails(doc, data.student, 34);
+  let y = drawTableHeader(doc, detailsBottom + 4);
+
+  drawPageFooter(doc, pageNumber);
+
+  const rowsToDraw: FlightLogRow[] =
     data.rows.length > 0
       ? data.rows
       : [
@@ -284,239 +477,143 @@ function addFlightLogToDoc(
             batterySn: "",
             pilotInCommand: "",
             instructorInCommand: "",
-            remarks: "",
-          },
+            remarks: ""
+          }
         ];
 
-  rowsToDraw.forEach((row) => {
-    if (y + rowHeight > usablePageHeight) {
-      drawPageFooter(doc, pageNumber);
-      doc.addPage();
-      pageNumber = doc.getNumberOfPages();
-      y = 10;
-      drawTableHeader();
+  rowsToDraw.forEach((row, rowIndex) => {
+    if (y + TABLE_ROW_HEIGHT > PAGE_HEIGHT - 13) {
+      doc.addPage("a4", "landscape");
+      pageNumber += 1;
+      y = drawContinuationHeader(doc, data.student, pageNumber);
     }
 
-    const values = [
-      row.date,
-      row.location,
-      row.startTime,
-      row.duration,
-      row.uaModel,
-      row.uaCategory,
-      row.batterySn,
-      row.pilotInCommand,
-      row.instructorInCommand,
-      row.remarks,
-    ];
-
-    let x = margin;
-
-    values.forEach((value, index) => {
-      drawCell(doc, value, x, y, columns[index].width, rowHeight, {
-        align: index <= 3 || index === 5 ? "center" : "left",
-        fontSize: 6.5,
-      });
-      x += columns[index].width;
-    });
-
-    y += rowHeight;
+    y = drawTableRow(doc, row, y, rowIndex);
   });
-
-  y += 8;
-
-  if (y + 18 > usablePageHeight) {
-    drawPageFooter(doc, pageNumber);
-    doc.addPage();
-    pageNumber = doc.getNumberOfPages();
-    y = 18;
-  }
-
-  doc.setDrawColor(borderInk);
-  doc.setLineWidth(0.25);
-
-  drawText(doc, "Student Signature:", margin, y, {
-    bold: true,
-    size: 8,
-  });
-
-  doc.line(margin + 34, y, margin + 100, y);
-
-  if (data.student.studentSignatureDataUrl) {
-    try {
-      doc.addImage(
-        data.student.studentSignatureDataUrl,
-        "PNG",
-        margin + 36,
-        y - 13,
-        54,
-        12
-      );
-    } catch {
-      // Ignore broken image data.
-    }
-  }
-
-  drawText(doc, "AFE / Instructor Signature:", 158, y, {
-    bold: true,
-    size: 8,
-  });
-
-  doc.line(198, y, 280, y);
-
-  drawPageFooter(doc, pageNumber);
 }
 
-function addCombinedCoverPage(doc: jsPDF, records: FlightLogRecord[]) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 18;
+function createDocument() {
+  return new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+    compress: true
+  });
+}
 
-  doc.setFillColor("#f8fafc");
-  doc.rect(0, 0, pageWidth, pageHeight, "F");
+export function createSingleFlightLogPdf(source: PdfSource) {
+  const doc = createDocument();
+  addFlightLogPages(doc, source, false);
+  return doc;
+}
 
-  doc.setDrawColor(borderInk);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(margin, 18, pageWidth - margin * 2, pageHeight - 36, 2, 2);
+function drawCombinedCover(
+  doc: jsPDF,
+  records: FlightLogRecord[]
+) {
+  drawTitleAndLogo(doc);
 
-  drawText(doc, "UAPL LMS", pageWidth / 2, 38, {
-    bold: true,
-    size: 22,
-    align: "center",
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.text("COMBINED FLIGHT LOG REPORT", PAGE_WIDTH / 2, 66, {
+    align: "center"
   });
 
-  drawText(doc, "COMBINED FLIGHT LOG REPORT", pageWidth / 2, 50, {
-    bold: true,
-    size: 16,
-    align: "center",
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(71, 85, 105);
+
+  doc.text(
+    `${records.length} student record${
+      records.length === 1 ? "" : "s"
+    } included`,
+    PAGE_WIDTH / 2,
+    77,
+    { align: "center" }
+  );
+
+  doc.setDrawColor(203, 213, 225);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(64, 90, 169, 52, 2, 2, "FD");
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("STUDENTS INCLUDED", 72, 101);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+
+  records.slice(0, 12).forEach((record, index) => {
+    const column = index >= 6 ? 1 : 0;
+    const row = index % 6;
+    const x = column === 0 ? 72 : 153;
+    const y = 111 + row * 5;
+
+    doc.text(
+      `${index + 1}. ${record.student.studentName || "Unnamed Student"}`,
+      x,
+      y,
+      { maxWidth: 73 }
+    );
   });
 
-  drawText(doc, `Generated: ${formatToday()}`, pageWidth / 2, 60, {
-    size: 9,
-    align: "center",
-  });
-
-  const totalFlights = records.reduce((sum, record) => sum + record.rows.length, 0);
-
-  drawFieldBox(doc, "Total Students", String(records.length), 54, 78, 55, 18);
-  drawFieldBox(doc, "Total Flight Entries", String(totalFlights), 121, 78, 55, 18);
-  drawFieldBox(doc, "Report Type", "Combined PDF", 188, 78, 55, 18);
-
-  let y = 112;
-
-  drawText(doc, "Included Students", margin + 8, y, {
-    bold: true,
-    size: 11,
-  });
-
-  y += 7;
-
-  const columns = [
-    { label: "No.", width: 16 },
-    { label: "Student", width: 82 },
-    { label: "Company", width: 72 },
-    { label: "Last 4", width: 32 },
-    { label: "Flights", width: 28 },
-  ];
-
-  let x = margin + 8;
-
-  columns.forEach((column) => {
-    drawCell(doc, column.label, x, y, column.width, 10, {
-      bold: true,
-      align: "center",
-      fill: brandBlue,
-      fontSize: 7,
-    });
-    x += column.width;
-  });
-
-  y += 10;
-
-  records.slice(0, 15).forEach((record, index) => {
-    x = margin + 8;
-
-    const values = [
-      String(index + 1),
-      record.student.studentName || "-",
-      record.student.company || "-",
-      record.student.lastFourCharacters || "-",
-      String(record.rows.length),
-    ];
-
-    values.forEach((value, valueIndex) => {
-      drawCell(doc, value, x, y, columns[valueIndex].width, 9, {
-        align: valueIndex === 0 || valueIndex >= 3 ? "center" : "left",
-        fontSize: 6.8,
-      });
-      x += columns[valueIndex].width;
-    });
-
-    y += 9;
-  });
-
-  if (records.length > 15) {
-    drawText(doc, `+ ${records.length - 15} more student(s) included`, margin + 8, y + 6, {
-      size: 8,
-    });
+  if (records.length > 12) {
+    doc.setFont("helvetica", "italic");
+    doc.text(
+      `and ${records.length - 12} more student records`,
+      PAGE_WIDTH / 2,
+      151,
+      { align: "center" }
+    );
   }
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.text(
+    `Generated on ${new Date().toLocaleString()}`,
+    PAGE_WIDTH / 2,
+    174,
+    { align: "center" }
+  );
 
   drawPageFooter(doc, 1);
 }
 
-export function createSingleFlightLogPdf(data: FlightLogPdfData) {
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4",
-  });
+export function createCombinedFlightLogPdf(
+  records: FlightLogRecord[]
+) {
+  const doc = createDocument();
 
-  addFlightLogToDoc(doc, data, true);
-
-  return doc;
-}
-
-export function createCombinedFlightLogPdf(records: FlightLogRecord[]) {
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4",
-  });
+  if (records.length === 0) {
+    drawCombinedCover(doc, []);
+    return doc;
+  }
 
   if (records.length > 1) {
-    addCombinedCoverPage(doc, records);
+    drawCombinedCover(doc, records);
 
     records.forEach((record) => {
-      addFlightLogToDoc(
-        doc,
-        {
-          student: record.student,
-          rows: record.rows,
-        },
-        false
-      );
+      addFlightLogPages(doc, record, true);
     });
 
     return doc;
   }
 
-  if (records[0]) {
-    addFlightLogToDoc(
-      doc,
-      {
-        student: records[0].student,
-        rows: records[0].rows,
-      },
-      true
-    );
-  }
-
+  addFlightLogPages(doc, records[0], false);
   return doc;
 }
 
 export function generateFlightLogPdf(data: FlightLogPdfData) {
   const doc = createSingleFlightLogPdf(data);
-  doc.save(safePdfFileName(data.student.studentName));
+  const studentName = safePdfFileName(
+    data.student.studentName || "Student"
+  );
+  const reportDate = formatReportDate();
+
+  doc.save(`${studentName} - FLIGHT LOG - ${reportDate}.pdf`);
 }
 
 export function getPdfBlob(doc: jsPDF) {
@@ -524,6 +621,6 @@ export function getPdfBlob(doc: jsPDF) {
 }
 
 export function getPdfBase64(doc: jsPDF) {
-  const dataUri = doc.output("datauristring");
-  return dataUri.split(",")[1] || "";
+  const dataUri = String(doc.output("datauristring"));
+  return dataUri.includes(",") ? dataUri.split(",")[1] : dataUri;
 }
