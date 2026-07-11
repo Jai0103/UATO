@@ -5,10 +5,10 @@ import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Plane } from "lucide-react"
 import { useRouter } from "next/navigation";
 import { sessionKey } from "@/lib/demo-auth";
 import {
-  getStoredUsers,
+import {
+  getManagedUsers,
   type ManagedUser,
 } from "@/lib/user-storage";
-import { fetchGoogleUsers } from "@/lib/google-api";
 
 const GOOGLE_SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
@@ -40,9 +40,9 @@ export default function LoginPage() {
           return;
         }
 
-        setUsers(getStoredUsers());
+       setUsers(getManagedUsers());
       } catch {
-        setUsers(getStoredUsers());
+      setUsers(getManagedUsers());
       } finally {
         setLoadingUsers(false);
       }
