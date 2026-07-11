@@ -22,6 +22,7 @@ type LoginUser = {
   password: string;
   name: string;
   role: UserRole;
+  passwordChangedAt?: string;
 };
 
 export default function LoginPage() {
@@ -38,9 +39,14 @@ export default function LoginPage() {
     if (!rawSession) return;
 
     try {
-      const session = JSON.parse(rawSession) as { role?: UserRole };
+      const session = JSON.parse(rawSession) as {
+        role?: UserRole;
+        mustChangePassword?: boolean;
+      };
 
-      if (session.role === "admin") {
+      if (session.mustChangePassword) {
+        router.replace("/change-password");
+      } else if (session.role === "admin") {
         router.replace("/admin");
       } else if (session.role === "trainer") {
         router.replace("/flight-logs");
@@ -59,7 +65,8 @@ export default function LoginPage() {
         email: user.email,
         password: user.temporaryPassword,
         name: user.name,
-        role: user.role
+        role: user.role,
+        passwordChangedAt: user.passwordChangedAt
       }));
     } catch {
       const localUsers = getManagedUsers();
@@ -68,7 +75,8 @@ export default function LoginPage() {
         email: user.email,
         password: user.temporaryPassword,
         name: user.name,
-        role: user.role
+        role: user.role,
+        passwordChangedAt: user.passwordChangedAt
       }));
     }
   }
@@ -123,12 +131,15 @@ export default function LoginPage() {
         return;
       }
 
+      const mustChangePassword = !user.passwordChangedAt;
+
       localStorage.setItem(
         sessionKey,
         JSON.stringify({
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          mustChangePassword
         })
       );
 
@@ -138,7 +149,13 @@ export default function LoginPage() {
         message: `Signed in as ${user.name}.`
       });
 
-      router.push(user.role === "admin" ? "/admin" : "/flight-logs");
+      router.push(
+        mustChangePassword
+          ? "/change-password"
+          : user.role === "admin"
+            ? "/admin"
+            : "/flight-logs"
+      );
     } finally {
       setLoading(false);
     }
@@ -259,16 +276,6 @@ export default function LoginPage() {
                   <ArrowRight size={17} />
                 </button>
               </form>
-
-              <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase text-slate-500">
-                  Access note
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Demo access is disabled. Accounts must be created from the Users
-                  page by an administrator.
-                </p>
-              </div>
             </div>
 
             <p className="mt-5 text-center text-xs text-slate-500">
