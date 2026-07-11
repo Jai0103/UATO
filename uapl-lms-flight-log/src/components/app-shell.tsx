@@ -92,18 +92,13 @@ const passwordAllowedPage = "/change-password";
 
   const navigation = (
     <>
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white shadow-sm">
-          <Plane size={22} />
-        </div>
-
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold tracking-wide text-slate-950">
-            UAPL LMS
-          </p>
-          <p className="truncate text-xs text-slate-500">Flight Log System</p>
-        </div>
-      </div>
+<div className="mb-6 flex min-h-[72px] items-center justify-center border-b border-slate-100 px-2 pb-5">
+  <img
+    src="/UATO/aga-logo-horizontal.png"
+    alt="Apollo Global Academy"
+    className="max-h-14 w-auto max-w-full object-contain"
+  />
+</div>
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center gap-3">
@@ -166,11 +161,13 @@ const passwordAllowedPage = "/change-password";
               <Plane size={20} />
             </div>
 
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-slate-950">UAPL LMS</p>
-              <p className="truncate text-xs text-slate-500">Flight Log System</p>
-            </div>
-          </div>
+<div className="flex min-w-0 flex-1 items-center">
+  <img
+    src="/UATO/aga-logo-horizontal.png"
+    alt="Apollo Global Academy"
+    className="max-h-10 w-auto max-w-[190px] object-contain"
+  />
+</div>
 
           <button
             onClick={() => setMobileMenuOpen(true)}
