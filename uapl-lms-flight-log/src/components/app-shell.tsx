@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import {
+  usePathname,
+  useRouter
+} from "next/navigation";
 import {
   Archive,
   BarChart3,
@@ -16,7 +19,10 @@ import {
   UserCog,
   X
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 import {
   sessionKey,
   type UserRole
@@ -35,7 +41,9 @@ type NavigationItem = {
   icon: typeof BarChart3;
 };
 
-const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
+const LOGO_PATH =
+  "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
+
 const PASSWORD_PAGE = "/change-password";
 
 const adminOnlyPages = [
@@ -101,28 +109,15 @@ function BrandLogo({
   mobile?: boolean;
 }) {
   return (
-    <div
-      className={
-        mobile
-          ? "flex min-w-0 items-center gap-3"
-          : "flex min-w-0 items-center gap-3"
-      }
-    >
+    <div className="flex min-w-0 items-center gap-3">
       <img
         src={LOGO_PATH}
         alt="Apollo Global Academy"
         className={
           mobile
-            ? "max-h-10 w-auto max-w-[118px] shrink-0 object-contain"
-            : "max-h-12 w-auto max-w-[120px] shrink-0 object-contain"
+            ? "max-h-10 w-auto max-w-[112px] shrink-0 object-contain"
+            : "max-h-12 w-auto max-w-[116px] shrink-0 object-contain"
         }
-        onError={(event) => {
-          const image = event.currentTarget;
-
-          if (!image.src.endsWith("/AGA_Logo_fullcolor_Horizontal%20(1).png")) {
-            image.src = "/aga-logo-horizontal.png";
-          }
-        }}
       />
 
       <div className="min-w-0 border-l border-slate-200 pl-3">
@@ -134,7 +129,9 @@ function BrandLogo({
           }
         >
           Flight Management
-          <span className="block">System</span>
+          <span className="block">
+            System
+          </span>
         </p>
       </div>
     </div>
@@ -164,6 +161,7 @@ export function AppShell({
         localStorage.getItem(sessionKey);
 
       if (!rawSession) {
+        setCheckingSession(false);
         router.replace("/");
         return;
       }
@@ -176,6 +174,7 @@ export function AppShell({
           parsedSession.mustChangePassword &&
           pathname !== PASSWORD_PAGE
         ) {
+          setCheckingSession(false);
           router.replace(PASSWORD_PAGE);
           return;
         }
@@ -189,16 +188,17 @@ export function AppShell({
           parsedSession.role !== "admin" &&
           isAdminOnlyPage
         ) {
+          setCheckingSession(false);
           router.replace("/flight-logs");
           return;
         }
 
         setSession(parsedSession);
+        setCheckingSession(false);
       } catch {
         localStorage.removeItem(sessionKey);
-        router.replace("/");
-      } finally {
         setCheckingSession(false);
+        router.replace("/");
       }
     }
 
@@ -238,6 +238,7 @@ export function AppShell({
             <p className="text-sm font-semibold text-slate-900">
               Loading workspace
             </p>
+
             <p className="text-xs text-slate-500">
               Checking your account access...
             </p>
@@ -286,7 +287,9 @@ export function AppShell({
 
           const active =
             pathname === item.href ||
-            pathname.startsWith(`${item.href}/`);
+            pathname.startsWith(
+              `${item.href}/`
+            );
 
           return (
             <Link
@@ -331,7 +334,7 @@ export function AppShell({
   );
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#f3f6fb]">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#f3f6fb] md:grid md:grid-cols-[280px_minmax(0,1fr)]">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
@@ -380,11 +383,11 @@ export function AppShell({
         </div>
       ) : null}
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 md:flex">
+      <aside className="sticky top-0 hidden h-screen min-h-0 w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 md:flex">
         {navigation}
       </aside>
 
-      <main className="min-w-0 px-4 py-5 sm:px-6 md:ml-[280px] md:px-7 md:py-7 lg:px-8">
+      <main className="min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8">
         <div className="mx-auto w-full min-w-0 max-w-[1600px]">
           {children}
         </div>
