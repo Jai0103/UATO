@@ -312,26 +312,35 @@ function drawStudentDetails(
 function drawTableHeader(doc: jsPDF, y: number) {
   let x = PAGE_MARGIN;
 
-  doc.setFillColor(222, 235, 246);
-  doc.setDrawColor(71, 85, 105);
-  doc.setLineWidth(0.25);
-
   columns.forEach((column) => {
-    doc.rect(x, y, column.width, TABLE_HEADER_HEIGHT, "FD");
+    // Draw the light-blue background separately.
+    doc.setFillColor(222, 235, 246);
+    doc.rect(x, y, column.width, TABLE_HEADER_HEIGHT, "F");
 
+    // Draw the border separately.
+    doc.setDrawColor(71, 85, 105);
+    doc.setLineWidth(0.25);
+    doc.rect(x, y, column.width, TABLE_HEADER_HEIGHT, "S");
+
+    // Force dark header text.
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);
 
     const lines = column.label.split("\n");
-    const lineHeight = 3.5;
-    const totalHeight = lines.length * lineHeight;
+    const lineHeight = 3.4;
+    const totalTextHeight = lines.length * lineHeight;
+
     const textY =
-      y + TABLE_HEADER_HEIGHT / 2 - totalHeight / 2 + lineHeight - 0.5;
+      y +
+      TABLE_HEADER_HEIGHT / 2 -
+      totalTextHeight / 2 +
+      lineHeight -
+      0.4;
 
     doc.text(lines, x + column.width / 2, textY, {
       align: "center",
-      lineHeightFactor: 1.05,
+      lineHeightFactor: 1,
       maxWidth: column.width - 2
     });
 
