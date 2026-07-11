@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
-import { googleAppsScriptUrl } from "@/lib/google-api";
+import { postToGoogle } from "@/lib/google-api";
 import {
   getMasterData,
   masterDataLabels,
@@ -186,36 +186,20 @@ function getActiveMasterData(
   };
 }
 
+type CatalogApiResponse = {
+  ok?: boolean;
+  success?: boolean;
+  message?: string;
+  catalog?: MasterDataCatalog;
+  masterData?: MasterData;
+};
+
 async function postCatalog(
   payload: Record<string, unknown>
 ) {
-  const response = await fetch(
-    googleAppsScriptUrl,
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
+  return postToGoogle<CatalogApiResponse>(
+    payload
   );
-
-  if (!response.ok) {
-    throw new Error(
-      "Unable to reach Google Sheets."
-    );
-  }
-
-  const result = await response.json();
-  const successful =
-    result.success ?? result.ok;
-
-  if (!successful) {
-    throw new Error(
-      result.message ||
-        result.error ||
-        "Master Data request failed."
-    );
-  }
-
-  return result;
 }
 
 function createItemId() {
