@@ -1,16 +1,25 @@
 import jsPDF from "jspdf";
-import type { FlightLogRow, StudentDetails } from "@/lib/flight-log-storage";
+import type {
+  FlightLogRecord,
+  FlightLogRow,
+  StudentDetails,
+} from "@/lib/flight-log-storage";
 
 export type FlightLogPdfData = {
   student: StudentDetails;
   rows: FlightLogRow[];
 };
 
-function safeFileName(value: string) {
-  return value
-    .trim()
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/\s+/g, " ");
+export function safePdfFileName(studentName: string) {
+  const cleanName =
+    studentName
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, " ") || "Student";
+
+  const date = new Date().toISOString().slice(0, 10);
+
+  return `${cleanName} - FLIGHT LOG - ${date}.pdf`;
 }
 
 function drawCell(
@@ -35,16 +44,14 @@ function drawCell(
 
   doc.text(lines.slice(0, 3), textX, y + 3, {
     align: options?.align ?? "left",
-    baseline: "top"
+    baseline: "top",
   });
 }
 
-export function generateFlightLogPdf(data: FlightLogPdfData) {
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4"
-  });
+function addFlightLogToDoc(doc: jsPDF, data: FlightLogPdfData, isFirst: boolean) {
+  if (!isFirst) {
+    doc.addPage();
+  }
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 10;
@@ -62,8 +69,6 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
   doc.text(`Company: ${data.student.company || "-"}`, 110, y);
   doc.text(`Last 4 Characters: ${data.student.lastFourCharacters || "-"}`, 210, y);
 
-
-
   y += 8;
 
   const columns = [
@@ -76,45 +81,38 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
     { label: "Battery S/N", width: 28 },
     { label: "Pilot in Command", width: 35 },
     { label: "AFE / Instructor", width: 36 },
-    { label: "Remarks", width: 34 }
+    { label: "Remarks", width: 34 },
   ];
 
   const headerHeight = 12;
   const rowHeight = 16;
-  let x = margin;
+  const usablePageHeight = doc.internal.pageSize.getHeight() - 18;
+
+  function drawHeader() {
+    let x = margin;
+
+    columns.forEach((column) => {
+      drawCell(doc, column.label, x, y, column.width, headerHeight, {
+        bold: true,
+        align: "center",
+        fontSize: 7,
+      });
+      x += column.width;
+    });
+
+    y += headerHeight;
+  }
 
   doc.setDrawColor(30, 41, 59);
   doc.setLineWidth(0.2);
 
-  columns.forEach((column) => {
-    drawCell(doc, column.label, x, y, column.width, headerHeight, {
-      bold: true,
-      align: "center",
-      fontSize: 7
-    });
-    x += column.width;
-  });
-
-  y += headerHeight;
-
-  const usablePageHeight = doc.internal.pageSize.getHeight() - 18;
+  drawHeader();
 
   data.rows.forEach((row) => {
     if (y + rowHeight > usablePageHeight) {
       doc.addPage();
       y = 10;
-      x = margin;
-
-      columns.forEach((column) => {
-        drawCell(doc, column.label, x, y, column.width, headerHeight, {
-          bold: true,
-          align: "center",
-          fontSize: 7
-        });
-        x += column.width;
-      });
-
-      y += headerHeight;
+      drawHeader();
     }
 
     const values = [
@@ -127,10 +125,10 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
       row.batterySn,
       row.pilotInCommand,
       row.instructorInCommand,
-      row.remarks
+      row.remarks,
     ];
 
-    x = margin;
+    let x = margin;
 
     values.forEach((value, index) => {
       drawCell(doc, value, x, y, columns[index].width, rowHeight);
@@ -142,19 +140,67 @@ export function generateFlightLogPdf(data: FlightLogPdfData) {
 
   y += 10;
 
+  if (y > usablePageHeight - 20) {
+    doc.addPage();
+    y = 20;
+  }
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-doc.text("Student Signature:", margin, y);
+  doc.text("Student Signature:", margin, y);
 
-if (data.student.studentSignatureDataUrl) {
-  doc.addImage(data.student.studentSignatureDataUrl, "PNG", 45, y - 12, 55, 16);
+  if (data.student.studentSignatureDataUrl) {
+    doc.addImage(data.student.studentSignatureDataUrl, "PNG", 45, y - 12, 55, 16);
+  }
+
+  doc.line(45, y, 110, y);
+  doc.text("AFE / Instructor Signature:", 150, y);
+  doc.line(190, y, 270, y);
 }
 
-doc.line(45, y, 110, y);
+export function createSingleFlightLogPdf(data: FlightLogPdfData) {
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
 
-doc.text("AFE / Instructor Signature:", 150, y);
-doc.line(190, y, 270, y);
+  addFlightLogToDoc(doc, data, true);
 
-  const studentName = safeFileName(data.student.studentName || "Student");
-  doc.save(`${studentName} (FLIGHT LOG).pdf`);
+  return doc;
+}
+
+export function createCombinedFlightLogPdf(records: FlightLogRecord[]) {
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
+
+  records.forEach((record, index) => {
+    addFlightLogToDoc(
+      doc,
+      {
+        student: record.student,
+        rows: record.rows,
+      },
+      index === 0
+    );
+  });
+
+  return doc;
+}
+
+export function generateFlightLogPdf(data: FlightLogPdfData) {
+  const doc = createSingleFlightLogPdf(data);
+  doc.save(safePdfFileName(data.student.studentName));
+}
+
+export function getPdfBlob(doc: jsPDF) {
+  return doc.output("blob");
+}
+
+export function getPdfBase64(doc: jsPDF) {
+  const dataUri = doc.output("datauristring");
+  return dataUri.split(",")[1] || "";
 }
