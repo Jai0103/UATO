@@ -77,3 +77,20 @@ export async function saveGoogleUsers(users: ManagedUser[]) {
 
   return data.users || [];
 }
+
+
+export async function saveGeneratedReportPdf(payload: {
+  fileName: string;
+  base64Pdf: string;
+  recordIds: string[];
+}) {
+  const data = await postToGoogle<{
+    reportUrl: string;
+    reportFileId: string;
+  }>({
+    action: "saveGeneratedReportPdf",
+    ...payload,
+  });
+
+  return data;
+}
