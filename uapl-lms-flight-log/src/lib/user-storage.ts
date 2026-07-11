@@ -7,6 +7,7 @@ export type ManagedUser = {
   role: UserRole;
   temporaryPassword: string;
   createdAt: string;
+  passwordChangedAt?: string;
 };
 
 export const managedUsersKey = "uapl_managed_users";
@@ -34,13 +35,14 @@ export function createManagedUser(input: {
   email: string;
   role: UserRole;
   temporaryPassword: string;
-}) {
+}): ManagedUser {
   return {
     id: crypto.randomUUID(),
     name: input.name,
     email: input.email,
     role: input.role,
     temporaryPassword: input.temporaryPassword,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    passwordChangedAt: ""
   };
 }
