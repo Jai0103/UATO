@@ -5,25 +5,23 @@ import type { ManagedUser } from "@/lib/user-storage";
 export const googleAppsScriptUrl =
   "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
 
-type ApiResponse<T> =
-  | {
-      ok: true;
-    } & T
-  | {
-      ok: false;
-      error: string;
-    };
+type ApiResponse<T> = {
+  ok?: boolean;
+  success?: boolean;
+  error?: string;
+  message?: string;
+} & T;
 
 async function postToGoogle<T>(payload: Record<string, unknown>): Promise<T> {
   const response = await fetch(googleAppsScriptUrl, {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   const data = (await response.json()) as ApiResponse<T>;
 
-  if (!data.ok) {
-    throw new Error(data.error || "Google API request failed");
+  if (data.ok === false || data.success === false) {
+    throw new Error(data.error || data.message || "Google API request failed");
   }
 
   return data as T;
@@ -31,16 +29,16 @@ async function postToGoogle<T>(payload: Record<string, unknown>): Promise<T> {
 
 export async function fetchGoogleRecords() {
   const data = await postToGoogle<{ records: FlightLogRecord[] }>({
-    action: "getRecords"
+    action: "getRecords",
   });
 
-  return data.records;
+  return data.records || [];
 }
 
 export async function saveGoogleRecord(record: FlightLogRecord) {
   const data = await postToGoogle<{ record: FlightLogRecord }>({
     action: "saveRecord",
-    record
+    record,
   });
 
   return data.record;
@@ -48,7 +46,7 @@ export async function saveGoogleRecord(record: FlightLogRecord) {
 
 export async function fetchGoogleMasterData() {
   const data = await postToGoogle<{ masterData: MasterData }>({
-    action: "getMasterData"
+    action: "getMasterData",
   });
 
   return data.masterData;
@@ -57,26 +55,25 @@ export async function fetchGoogleMasterData() {
 export async function saveGoogleMasterData(masterData: MasterData) {
   const data = await postToGoogle<{ masterData: MasterData }>({
     action: "saveMasterData",
-    masterData
+    masterData,
   });
 
   return data.masterData;
 }
 
-
 export async function fetchGoogleUsers() {
   const data = await postToGoogle<{ users: ManagedUser[] }>({
-    action: "getUsers"
+    action: "getUsers",
   });
 
-  return data.users;
+  return data.users || [];
 }
 
 export async function saveGoogleUsers(users: ManagedUser[]) {
   const data = await postToGoogle<{ users: ManagedUser[] }>({
     action: "saveUsers",
-    users
+    users,
   });
 
-  return data.users;
+  return data.users || [];
 }
