@@ -2,7 +2,7 @@
 
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
-import { demoUsers, sessionKey, type UserRole } from "@/lib/demo-auth";
+import { sessionKey, type UserRole } from "@/lib/demo-auth";
 import { fetchGoogleUsers } from "@/lib/google-api";
 import { getManagedUsers, saveManagedUsers } from "@/lib/user-storage";
 import {
@@ -51,36 +51,25 @@ export default function LoginPage() {
   }, [router]);
 
   async function getLoginUsers(): Promise<LoginUser[]> {
-    const demoLoginUsers: LoginUser[] = demoUsers.map((user) => ({
-      email: user.email,
-      password: user.password,
-      name: user.name,
-      role: user.role
-    }));
-
     try {
       const googleUsers = await fetchGoogleUsers();
       saveManagedUsers(googleUsers);
 
-      const managedLoginUsers: LoginUser[] = googleUsers.map((user) => ({
+      return googleUsers.map((user) => ({
         email: user.email,
         password: user.temporaryPassword,
         name: user.name,
         role: user.role
       }));
-
-      return [...managedLoginUsers, ...demoLoginUsers];
     } catch {
       const localUsers = getManagedUsers();
 
-      const localLoginUsers: LoginUser[] = localUsers.map((user) => ({
+      return localUsers.map((user) => ({
         email: user.email,
         password: user.temporaryPassword,
         name: user.name,
         role: user.role
       }));
-
-      return [...localLoginUsers, ...demoLoginUsers];
     }
   }
 
@@ -109,6 +98,15 @@ export default function LoginPage() {
 
     try {
       const users = await getLoginUsers();
+
+      if (!users.length) {
+        notify({
+          type: "error",
+          title: "No accounts found",
+          message: "No admin or trainer accounts are available. Please check Google Sheets."
+        });
+        return;
+      }
 
       const user = users.find(
         (item) =>
@@ -146,17 +144,6 @@ export default function LoginPage() {
     }
   }
 
-  function fillDemo(role: "admin" | "trainer") {
-    if (role === "admin") {
-      setEmail("admin@uapl.local");
-      setPassword("Admin@1234");
-      return;
-    }
-
-    setEmail("trainer@uapl.local");
-    setPassword("Trainer@1234");
-  }
-
   return (
     <main className="min-h-screen bg-brand-light">
       {loading ? <LoadingOverlay label="Signing in..." /> : null}
@@ -177,23 +164,23 @@ export default function LoginPage() {
             <div className="mt-20 max-w-xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-white/80">
                 <Sparkles size={15} />
-                Trainer-first flight log workflow
+                Secure trainer flight log workflow
               </div>
 
               <h1 className="mt-6 text-5xl font-semibold leading-tight">
-                Capture, manage, and generate flight logs with confidence.
+                Manage student flight logs with a clean, mobile-first system.
               </h1>
 
               <p className="mt-5 max-w-lg text-base leading-7 text-white/70">
-                Built for responsive use across mobile, tablet, laptop, and desktop.
-                Trainers can continue records, capture signatures, and prepare reports.
+                Sign in with your admin-created account to capture records,
+                continue student logs, and generate PDF reports.
               </p>
             </div>
           </div>
 
           <div className="grid max-w-3xl grid-cols-3 gap-3">
             {[
-              { label: "Secure roles", icon: ShieldCheck },
+              { label: "Role access", icon: ShieldCheck },
               { label: "PDF reports", icon: BadgeCheck },
               { label: "Mobile ready", icon: Plane }
             ].map((item) => {
@@ -227,13 +214,13 @@ export default function LoginPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <div>
                 <p className="text-sm font-semibold uppercase text-brand-gold">
-                  Account Access
+                  Authorized Access
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-slate-950">
                   Sign in to continue
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Use your admin-created account or trainer credentials.
+                  Use the email and temporary password issued by the administrator.
                 </p>
               </div>
 
@@ -275,26 +262,12 @@ export default function LoginPage() {
 
               <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase text-slate-500">
-                  Demo access
+                  Access note
                 </p>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <button
-                    onClick={() => fillDemo("admin")}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-left text-xs hover:bg-slate-50"
-                  >
-                    <p className="font-semibold text-slate-950">Admin</p>
-                    <p className="mt-1 text-slate-500">admin@uapl.local</p>
-                  </button>
-
-                  <button
-                    onClick={() => fillDemo("trainer")}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-left text-xs hover:bg-slate-50"
-                  >
-                    <p className="font-semibold text-slate-950">Trainer</p>
-                    <p className="mt-1 text-slate-500">trainer@uapl.local</p>
-                  </button>
-                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Demo access is disabled. Accounts must be created from the Users
+                  page by an administrator.
+                </p>
               </div>
             </div>
 
