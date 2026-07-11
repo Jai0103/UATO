@@ -108,9 +108,11 @@ export default function FlightLogsPage() {
 
       setStudent(parsedDraft.student);
       setRows(parsedDraft.rows);
-      setSignatureLocked(Boolean(parsedDraft.student.studentSignatureDataUrl));
       setActiveRecordId(parsedDraft.recordId ?? "");
       setActiveCreatedAt(parsedDraft.createdAt ?? "");
+      setSignatureLocked(
+        Boolean(parsedDraft.recordId && parsedDraft.student.studentSignatureDataUrl)
+      );
 
       notify({
         type: "info",
@@ -213,13 +215,6 @@ export default function FlightLogsPage() {
     if (!canvas) return;
 
     updateStudent("studentSignatureDataUrl", canvas.toDataURL("image/png"));
-    setSignatureLocked(true);
-
-    notify({
-      type: "success",
-      title: "Signature captured",
-      message: "The signature is now locked. Use Retake Signature to sign again.",
-    });
   }
 
   function retakeSignature() {
@@ -432,7 +427,7 @@ export default function FlightLogsPage() {
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
       setActiveCreatedAt(savedRecord.createdAt);
-      setSignatureLocked(Boolean(savedRecord.student.studentSignatureDataUrl));
+      setSignatureLocked(true);
 
       localStorage.setItem(
         flightLogDraftKey,
@@ -455,6 +450,7 @@ export default function FlightLogsPage() {
     } catch {
       saveFlightLogRecord(student, rows);
       saveDraft();
+      setSignatureLocked(true);
 
       clearMessage();
 
@@ -747,7 +743,9 @@ export default function FlightLogsPage() {
             }`}
           >
             {student.studentSignatureDataUrl
-              ? "Signature captured and locked."
+              ? signatureLocked
+                ? "Signature saved and locked."
+                : "Signature captured. It will lock after saving the record."
               : "No signature captured yet."}
           </p>
         </section>
