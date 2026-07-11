@@ -1,6 +1,4 @@
-"use client";
 
-"use client";
 
 import { FormEvent, useEffect, useState } from "react";
 import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Plane } from "lucide-react";
