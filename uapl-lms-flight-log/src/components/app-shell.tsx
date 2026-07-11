@@ -23,6 +23,7 @@ type Session = {
   name: string;
   email: string;
   role: UserRole;
+  mustChangePassword?: boolean;
 };
 
 
