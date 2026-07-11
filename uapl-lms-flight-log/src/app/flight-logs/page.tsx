@@ -13,7 +13,7 @@ import {
   saveFlightLogRecord,
   type FlightLogRecord,
   type FlightLogRow,
-  type StudentDetails
+  type StudentDetails,
 } from "@/lib/flight-log-storage";
 import { getMasterData, type MasterData } from "@/lib/master-data";
 import {
@@ -30,7 +30,7 @@ import {
   Signature,
   Trash2,
   UserRound,
-  X
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
@@ -56,7 +56,7 @@ const fields: {
   { key: "batterySn", label: "Battery S/N" },
   { key: "pilotInCommand", label: "Pilot in Command" },
   { key: "instructorInCommand", label: "AFE / Instructor in Command" },
-  { key: "remarks", label: "Remarks" }
+  { key: "remarks", label: "Remarks" },
 ];
 
 function hasStudentDetails(student: StudentDetails) {
@@ -78,6 +78,7 @@ export default function FlightLogsPage() {
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [accountName, setAccountName] = useState("");
   const [isSigning, setIsSigning] = useState(false);
+  const [signatureLocked, setSignatureLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
@@ -104,8 +105,10 @@ export default function FlightLogsPage() {
 
     try {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
+
       setStudent(parsedDraft.student);
       setRows(parsedDraft.rows);
+      setSignatureLocked(Boolean(parsedDraft.student.studentSignatureDataUrl));
       setActiveRecordId(parsedDraft.recordId ?? "");
       setActiveCreatedAt(parsedDraft.createdAt ?? "");
 
@@ -114,24 +117,43 @@ export default function FlightLogsPage() {
         title: parsedDraft.recordId ? "Record loaded" : "Draft loaded",
         message: parsedDraft.recordId
           ? "This student record is ready to continue."
-          : "Your previous flight log draft has been restored."
+          : "Your previous flight log draft has been restored.",
       });
     } catch {
       localStorage.removeItem(flightLogDraftKey);
     }
   }, [notify]);
 
+  useEffect(() => {
+    if (!student.studentSignatureDataUrl) return;
+
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const image = new Image();
+
+    image.onload = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+
+    image.src = student.studentSignatureDataUrl;
+  }, [student.studentSignatureDataUrl]);
+
   function updateStudent(field: keyof StudentDetails, value: string) {
     setStudent((currentStudent) => ({
       ...currentStudent,
-      [field]: value
+      [field]: value,
     }));
   }
 
   function updateFlightForm(field: keyof FlightLogRow, value: string) {
     setFlightForm((currentForm) => ({
       ...currentForm,
-      [field]: value
+      [field]: value,
     }));
   }
 
@@ -141,11 +163,13 @@ export default function FlightLogsPage() {
 
     return {
       x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((event.clientY - rect.top) / rect.height) * canvas.height
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
     };
   }
 
   function startSignature(event: PointerEvent<HTMLCanvasElement>) {
+    if (signatureLocked) return;
+
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
 
@@ -167,7 +191,7 @@ export default function FlightLogsPage() {
   }
 
   function drawSignature(event: PointerEvent<HTMLCanvasElement>) {
-    if (!isSigning) return;
+    if (!isSigning || signatureLocked) return;
 
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
@@ -178,20 +202,27 @@ export default function FlightLogsPage() {
     const point = getCanvasPoint(event);
     context.lineTo(point.x, point.y);
     context.stroke();
-
-    updateStudent("studentSignatureDataUrl", canvas.toDataURL("image/png"));
   }
 
   function endSignature() {
+    if (!isSigning || signatureLocked) return;
+
     setIsSigning(false);
 
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
 
     updateStudent("studentSignatureDataUrl", canvas.toDataURL("image/png"));
+    setSignatureLocked(true);
+
+    notify({
+      type: "success",
+      title: "Signature captured",
+      message: "The signature is now locked. Use Retake Signature to sign again.",
+    });
   }
 
-  function clearSignature() {
+  function retakeSignature() {
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
 
@@ -200,11 +231,13 @@ export default function FlightLogsPage() {
 
     context.clearRect(0, 0, canvas.width, canvas.height);
     updateStudent("studentSignatureDataUrl", "");
+    setSignatureLocked(false);
+    setIsSigning(false);
 
     notify({
       type: "info",
-      title: "Signature cleared",
-      message: "The student signature has been removed."
+      title: "Signature ready",
+      message: "The student can sign again.",
     });
   }
 
@@ -213,7 +246,7 @@ export default function FlightLogsPage() {
       notify({
         type: "warning",
         title: "Student name required",
-        message: "Enter the student name before adding a flight."
+        message: "Enter the student name before adding a flight.",
       });
       return;
     }
@@ -222,7 +255,7 @@ export default function FlightLogsPage() {
     setFlightForm({
       ...emptyRow,
       pilotInCommand: student.studentName,
-      instructorInCommand: accountName
+      instructorInCommand: accountName,
     });
     setModalOpen(true);
   }
@@ -231,7 +264,7 @@ export default function FlightLogsPage() {
     setEditingIndex(index);
     setFlightForm({
       ...rows[index],
-      pilotInCommand: student.studentName
+      pilotInCommand: student.studentName,
     });
     setModalOpen(true);
   }
@@ -248,11 +281,11 @@ export default function FlightLogsPage() {
         ? {
             ...flightForm,
             pilotInCommand: student.studentName,
-            instructorInCommand: accountName
+            instructorInCommand: accountName,
           }
         : {
             ...flightForm,
-            pilotInCommand: student.studentName
+            pilotInCommand: student.studentName,
           };
 
     if (editingIndex === null) {
@@ -260,7 +293,7 @@ export default function FlightLogsPage() {
       notify({
         type: "success",
         title: "Flight added",
-        message: "The flight entry has been added."
+        message: "The flight entry has been added.",
       });
     } else {
       setRows((currentRows) =>
@@ -271,7 +304,7 @@ export default function FlightLogsPage() {
       notify({
         type: "success",
         title: "Flight updated",
-        message: "The flight entry has been updated."
+        message: "The flight entry has been updated.",
       });
     }
 
@@ -283,7 +316,7 @@ export default function FlightLogsPage() {
       title: "Delete flight entry?",
       message: "This will remove the selected flight from the current record.",
       confirmLabel: "Delete",
-      variant: "danger"
+      variant: "danger",
     });
 
     if (!confirmed) return;
@@ -295,7 +328,7 @@ export default function FlightLogsPage() {
     notify({
       type: "success",
       title: "Flight deleted",
-      message: "The flight entry has been removed."
+      message: "The flight entry has been removed.",
     });
   }
 
@@ -307,14 +340,14 @@ export default function FlightLogsPage() {
         createdAt: activeCreatedAt,
         student,
         rows,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       })
     );
 
     notify({
       type: "success",
       title: "Draft saved",
-      message: "Your flight log draft was saved on this device."
+      message: "Your flight log draft was saved on this device.",
     });
   }
 
@@ -324,7 +357,7 @@ export default function FlightLogsPage() {
       message:
         "This will remove the current student details, signature, and flight entries from this device.",
       confirmLabel: "Clear draft",
-      variant: "danger"
+      variant: "danger",
     });
 
     if (!confirmed) return;
@@ -334,6 +367,7 @@ export default function FlightLogsPage() {
     setRows([]);
     setActiveRecordId("");
     setActiveCreatedAt("");
+    setSignatureLocked(false);
 
     const canvas = signatureCanvasRef.current;
     const context = canvas?.getContext("2d");
@@ -344,7 +378,7 @@ export default function FlightLogsPage() {
     notify({
       type: "success",
       title: "Draft cleared",
-      message: "The current flight log draft has been cleared."
+      message: "The current flight log draft has been cleared.",
     });
   }
 
@@ -353,7 +387,7 @@ export default function FlightLogsPage() {
       notify({
         type: "warning",
         title: "Student name required",
-        message: "Enter the student name before saving the record."
+        message: "Enter the student name before saving the record.",
       });
       return;
     }
@@ -362,7 +396,7 @@ export default function FlightLogsPage() {
       notify({
         type: "warning",
         title: "Signature required",
-        message: "Capture the student signature before saving the record."
+        message: "Capture the student signature before saving the record.",
       });
       return;
     }
@@ -371,7 +405,7 @@ export default function FlightLogsPage() {
       notify({
         type: "warning",
         title: "Flight entry required",
-        message: "Add at least one flight entry before saving the record."
+        message: "Add at least one flight entry before saving the record.",
       });
       return;
     }
@@ -381,7 +415,7 @@ export default function FlightLogsPage() {
       ? {
           ...newRecord,
           id: activeRecordId,
-          createdAt: activeCreatedAt || newRecord.createdAt
+          createdAt: activeCreatedAt || newRecord.createdAt,
         }
       : newRecord;
 
@@ -390,7 +424,7 @@ export default function FlightLogsPage() {
     notify({
       type: "loading",
       title: "Saving flight log...",
-      message: "Please wait while the record syncs with Google Sheets."
+      message: "Please wait while the record syncs with Google Sheets.",
     });
 
     try {
@@ -398,6 +432,7 @@ export default function FlightLogsPage() {
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
       setActiveCreatedAt(savedRecord.createdAt);
+      setSignatureLocked(Boolean(savedRecord.student.studentSignatureDataUrl));
 
       localStorage.setItem(
         flightLogDraftKey,
@@ -406,7 +441,7 @@ export default function FlightLogsPage() {
           createdAt: savedRecord.createdAt,
           student: savedRecord.student,
           rows: savedRecord.rows,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         })
       );
 
@@ -415,7 +450,7 @@ export default function FlightLogsPage() {
       notify({
         type: "success",
         title: "Record saved",
-        message: "Flight log record saved to Google Sheets."
+        message: "Flight log record saved to Google Sheets.",
       });
     } catch {
       saveFlightLogRecord(student, rows);
@@ -426,7 +461,7 @@ export default function FlightLogsPage() {
       notify({
         type: "error",
         title: "Google Sheets save failed",
-        message: "The record was saved locally on this device."
+        message: "The record was saved locally on this device.",
       });
     } finally {
       setSaving(false);
@@ -496,7 +531,7 @@ export default function FlightLogsPage() {
 
     const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
       uaModel: masterData?.uaModels ?? [],
-      batterySn: masterData?.batterySerialNumbers ?? []
+      batterySn: masterData?.batterySerialNumbers ?? [],
     };
 
     const options = datalistOptions[field.key];
@@ -527,7 +562,7 @@ export default function FlightLogsPage() {
   const completedItems = [
     hasStudentDetails(student),
     Boolean(student.studentSignatureDataUrl),
-    rows.length > 0
+    rows.length > 0,
   ].filter(Boolean).length;
 
   return (
@@ -673,16 +708,18 @@ export default function FlightLogsPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={clearSignature}
-              className="inline-flex h-9 shrink-0 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Clear
-            </button>
+            {student.studentSignatureDataUrl ? (
+              <button
+                type="button"
+                onClick={retakeSignature}
+                className="inline-flex h-9 shrink-0 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Retake Signature
+              </button>
+            ) : null}
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-2">
+          <div className="relative mt-4 rounded-xl border border-slate-300 bg-slate-50 p-2">
             <canvas
               ref={signatureCanvasRef}
               width={900}
@@ -692,8 +729,16 @@ export default function FlightLogsPage() {
               onPointerUp={endSignature}
               onPointerCancel={endSignature}
               onPointerLeave={endSignature}
-              className="h-48 w-full touch-none rounded-lg bg-white"
+              className={`h-48 w-full rounded-lg bg-white ${
+                signatureLocked ? "touch-auto cursor-not-allowed" : "touch-none"
+              }`}
             />
+
+            {signatureLocked ? (
+              <div className="pointer-events-none absolute right-4 top-4 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                Locked
+              </div>
+            ) : null}
           </div>
 
           <p
@@ -702,7 +747,7 @@ export default function FlightLogsPage() {
             }`}
           >
             {student.studentSignatureDataUrl
-              ? "Signature captured."
+              ? "Signature captured and locked."
               : "No signature captured yet."}
           </p>
         </section>
