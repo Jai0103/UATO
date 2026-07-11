@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
         <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
           <div className="flex justify-center border-b border-slate-100 px-6 py-7 sm:px-8">
             <img
-              src="../apollo-global-academy-logo.png"
+              src="../AGA_Logo_fullcolor_Horizontal (1).png"
               alt="Apollo Global Academy"
               className="h-auto max-h-24 w-auto max-w-[240px] object-contain sm:max-w-[280px]"
             />
