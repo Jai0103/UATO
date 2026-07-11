@@ -35,7 +35,7 @@ type NavigationItem = {
   icon: typeof BarChart3;
 };
 
-const LOGO_PATH = "/UATO/aga-logo-horizontal.png";
+const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 const PASSWORD_PAGE = "/change-password";
 
 const adminOnlyPages = [
@@ -119,7 +119,7 @@ function BrandLogo({
         onError={(event) => {
           const image = event.currentTarget;
 
-          if (!image.src.endsWith("/aga-logo-horizontal.png")) {
+          if (!image.src.endsWith("/AGA_Logo_fullcolor_Horizontal%20(1).png")) {
             image.src = "/aga-logo-horizontal.png";
           }
         }}
