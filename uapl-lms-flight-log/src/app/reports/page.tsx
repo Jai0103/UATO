@@ -7,15 +7,22 @@ import {
   getFlightLogRecords,
   type FlightLogRecord,
 } from "@/lib/flight-log-storage";
-import { fetchGoogleRecords } from "@/lib/google-api";
-import { generateFlightLogPdf } from "@/lib/pdf";
+import { fetchGoogleRecords, saveGeneratedReportPdf } from "@/lib/google-api";
 import {
-  CalendarDays,
+  createCombinedFlightLogPdf,
+  createSingleFlightLogPdf,
+  getPdfBase64,
+  safePdfFileName,
+} from "@/lib/pdf";
+import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Eye,
   FileText,
+  Link,
   Search,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -65,6 +72,16 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function combinedPdfFileName(records: FlightLogRecord[]) {
+  const date = new Date().toISOString().slice(0, 10);
+
+  if (records.length === 1) {
+    return safePdfFileName(records[0].student.studentName);
+  }
+
+  return `UAPL LMS - COMBINED FLIGHT LOG - ${date}.pdf`;
+}
+
 export default function ReportsPage() {
   const { notify } = useAppMessage();
 
@@ -74,7 +91,10 @@ export default function ReportsPage() {
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewTitle, setPreviewTitle] = useState("");
   const [loading, setLoading] = useState(true);
+  const [savingPdf, setSavingPdf] = useState(false);
 
   useEffect(() => {
     async function loadRecords() {
@@ -155,6 +175,10 @@ export default function ReportsPage() {
     visiblePageIds.length > 0 &&
     visiblePageIds.every((id) => selectedIds.includes(id));
 
+  const selectedRecords = useMemo(() => {
+    return records.filter((record) => selectedIds.includes(record.id));
+  }, [records, selectedIds]);
+
   function toggleRecord(id: string) {
     setSelectedIds((current) =>
       current.includes(id)
@@ -177,32 +201,102 @@ export default function ReportsPage() {
     setSelectedIds([]);
   }
 
-  function generateSelectedReports() {
-    const selectedRecords = records.filter((record) =>
-      selectedIds.includes(record.id)
-    );
-
+  function requireSelectedRecords() {
     if (!selectedRecords.length) {
       notify({
         type: "warning",
         title: "No records selected",
-        message: "Tick at least one student flight log before generating reports.",
+        message: "Tick at least one student flight log first.",
       });
-      return;
+
+      return false;
     }
 
-    selectedRecords.forEach((record) => {
-      generateFlightLogPdf({
-        student: record.student,
-        rows: record.rows,
+    return true;
+  }
+
+  function createSelectedPdf() {
+    if (selectedRecords.length === 1) {
+      return createSingleFlightLogPdf({
+        student: selectedRecords[0].student,
+        rows: selectedRecords[0].rows,
       });
-    });
+    }
+
+    return createCombinedFlightLogPdf(selectedRecords);
+  }
+
+  function previewSelectedReports() {
+    if (!requireSelectedRecords()) return;
+
+    const doc = createSelectedPdf();
+    const blob = doc.output("blob");
+    const url = URL.createObjectURL(blob);
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setPreviewUrl(url);
+    setPreviewTitle(combinedPdfFileName(selectedRecords));
+  }
+
+  function downloadSelectedReports() {
+    if (!requireSelectedRecords()) return;
+
+    const doc = createSelectedPdf();
+    doc.save(combinedPdfFileName(selectedRecords));
 
     notify({
       type: "success",
-      title: "Reports generated",
-      message: `${selectedRecords.length} PDF report(s) were downloaded.`,
+      title: "PDF downloaded",
+      message:
+        selectedRecords.length === 1
+          ? "The selected report was downloaded."
+          : `${selectedRecords.length} records were combined into one PDF.`,
     });
+  }
+
+  async function saveSelectedReportsToDrive() {
+    if (!requireSelectedRecords()) return;
+
+    setSavingPdf(true);
+
+    try {
+      const doc = createSelectedPdf();
+      const fileName = combinedPdfFileName(selectedRecords);
+      const base64Pdf = getPdfBase64(doc);
+
+      const result = await saveGeneratedReportPdf({
+        fileName,
+        base64Pdf,
+        recordIds: selectedRecords.map((record) => record.id),
+      });
+
+      notify({
+        type: "success",
+        title: "PDF saved to Google Drive",
+        message: result.reportUrl,
+      });
+    } catch {
+      notify({
+        type: "error",
+        title: "PDF save failed",
+        message:
+          "The PDF could not be saved to Google Drive. Check Apps Script deployment.",
+      });
+    } finally {
+      setSavingPdf(false);
+    }
+  }
+
+  function closePreview() {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setPreviewUrl("");
+    setPreviewTitle("");
   }
 
   function goToPreviousPage() {
@@ -216,6 +310,7 @@ export default function ReportsPage() {
   return (
     <AppShell>
       {loading ? <LoadingOverlay label="Loading report records..." /> : null}
+      {savingPdf ? <LoadingOverlay label="Saving PDF to Google Drive..." /> : null}
 
       <div className="app-page pb-24 md:pb-0">
         <section className="app-card">
@@ -231,25 +326,41 @@ export default function ReportsPage() {
               </h1>
 
               <p className="mt-1 text-sm text-slate-500">
-                Filter records, select one or multiple students, and generate PDF reports.
+                Preview, download, combine, and save PDF reports to Google Drive.
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <button
                 onClick={clearSelection}
                 className="app-button-secondary justify-center"
                 disabled={!selectedIds.length}
               >
-                Clear Selection
+                Clear
               </button>
 
               <button
-                onClick={generateSelectedReports}
+                onClick={previewSelectedReports}
+                className="app-button-secondary justify-center"
+              >
+                <Eye size={17} />
+                Preview
+              </button>
+
+              <button
+                onClick={downloadSelectedReports}
                 className="app-button-primary justify-center"
               >
                 <Download size={17} />
-                Generate Selected ({selectedIds.length})
+                Download
+              </button>
+
+              <button
+                onClick={saveSelectedReportsToDrive}
+                className="app-button-primary justify-center"
+              >
+                <Link size={17} />
+                Save Drive
               </button>
             </div>
           </div>
@@ -312,7 +423,7 @@ export default function ReportsPage() {
                 {filteredRecords.length} matching records
               </p>
               <p className="text-sm text-slate-500">
-                Showing max {recordsPerPage} records per page.
+                {selectedIds.length} selected. Showing max {recordsPerPage} per page.
               </p>
             </div>
 
@@ -464,7 +575,7 @@ export default function ReportsPage() {
 
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <button
-                onClick={goToPreviousPage}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage === 1}
                 className="app-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -473,7 +584,9 @@ export default function ReportsPage() {
               </button>
 
               <button
-                onClick={goToNextPage}
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
                 disabled={currentPage === totalPages}
                 className="app-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -486,14 +599,76 @@ export default function ReportsPage() {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
-        <button
-          onClick={generateSelectedReports}
-          className="app-button-primary w-full justify-center"
-        >
-          <Download size={17} />
-          Generate Selected ({selectedIds.length})
-        </button>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={previewSelectedReports}
+            className="app-button-secondary justify-center"
+          >
+            <Eye size={16} />
+            Preview
+          </button>
+
+          <button
+            onClick={downloadSelectedReports}
+            className="app-button-primary justify-center"
+          >
+            <Download size={16} />
+            PDF
+          </button>
+
+          <button
+            onClick={saveSelectedReportsToDrive}
+            className="app-button-primary justify-center"
+          >
+            <Link size={16} />
+            Drive
+          </button>
+        </div>
       </div>
+
+      {previewUrl ? (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="flex h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-6xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">
+                  PDF Preview
+                </h2>
+                <p className="text-sm text-slate-500">{previewTitle}</p>
+              </div>
+
+              <button
+                onClick={closePreview}
+                className="app-icon-button"
+                aria-label="Close preview"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <iframe
+              src={previewUrl}
+              title="PDF Preview"
+              className="min-h-0 flex-1 bg-slate-100"
+            />
+
+            <div className="flex flex-col gap-2 border-t border-slate-200 p-4 sm:flex-row sm:justify-end">
+              <button onClick={downloadSelectedReports} className="app-button-primary">
+                <Download size={16} />
+                Download PDF
+              </button>
+
+              <button
+                onClick={saveSelectedReportsToDrive}
+                className="app-button-primary"
+              >
+                <Link size={16} />
+                Save to Drive
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   );
 }
