@@ -10,6 +10,7 @@ import {
   Check,
   CircleOff,
   KeyRound,
+  Loader2,
   Plus,
   RefreshCcw,
   Search,
@@ -965,17 +966,30 @@ export default function UsersPage() {
                 </div>
               </div>
             </div>
+{saving ? (
+  <div className="mt-5 flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">
+    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+    Creating the account and sending the temporary password...
+  </div>
+) : null}
+            
 
             <div className="mt-7 grid grid-cols-2 gap-3">
               <button
-                type="button"
-                onClick={() =>
-                  setIsCreateOpen(false)
-                }
-                className="app-button-secondary justify-center"
-              >
-                Cancel
-              </button>
+  type="submit"
+  disabled={saving}
+  className="app-button-primary justify-center disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {saving ? (
+    <Loader2 className="h-4 w-4 animate-spin" />
+  ) : (
+    <Plus className="h-4 w-4" />
+  )}
+
+  {saving
+    ? "Creating and emailing..."
+    : "Create User"}
+</button>
 
               <button
                 type="submit"
