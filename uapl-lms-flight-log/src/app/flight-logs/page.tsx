@@ -80,6 +80,8 @@ export default function FlightLogsPage() {
   const [isSigning, setIsSigning] = useState(false);
   const [signatureLocked, setSignatureLocked] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeSuggestField, setActiveSuggestField] =
+  useState<keyof FlightLogRow | null>(null);
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
 
@@ -464,6 +466,66 @@ export default function FlightLogsPage() {
     }
   }
 
+  function renderSmartSuggestionField(
+  fieldKey: keyof FlightLogRow,
+  options: string[]
+) {
+  const value = flightForm[fieldKey];
+  const cleanValue = value.trim().toLowerCase();
+
+  const filteredOptions = options
+    .filter((option) => {
+      if (!cleanValue) return true;
+      return option.toLowerCase().includes(cleanValue);
+    })
+    .slice(0, 12);
+
+  const showSuggestions =
+    activeSuggestField === fieldKey && filteredOptions.length > 0;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
+        value={value}
+        onFocus={() => setActiveSuggestField(fieldKey)}
+        onChange={(event) => {
+          updateFlightForm(fieldKey, event.target.value);
+          setActiveSuggestField(fieldKey);
+        }}
+        onBlur={() => {
+          window.setTimeout(() => setActiveSuggestField(null), 150);
+        }}
+        placeholder={
+          fieldKey === "uaModel"
+            ? "Search UA model or serial number"
+            : "Search battery serial number"
+        }
+      />
+
+      {showSuggestions ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[70] max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+          {filteredOptions.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                updateFlightForm(fieldKey, option);
+                setActiveSuggestField(null);
+              }}
+              className="block w-full rounded-lg px-3 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
   function renderModalField(field: (typeof fields)[number]) {
     const inputClass =
       "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm";
@@ -525,35 +587,34 @@ export default function FlightLogsPage() {
       );
     }
 
-    const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
-      uaModel: masterData?.uaModels ?? [],
-      batterySn: masterData?.batterySerialNumbers ?? [],
-    };
+const datalistOptions: Partial<Record<keyof FlightLogRow, string[]>> = {
+  uaModel: masterData?.uaModels ?? [],
+  batterySn: masterData?.batterySerialNumbers ?? [],
+};
 
-    const options = datalistOptions[field.key];
-    const listId = options ? `flight-${field.key}-options` : undefined;
+const options = datalistOptions[field.key];
+const listId = options ? `flight-${field.key}-options` : undefined;
 
-    return (
-      <>
-        <input
-          type={field.type ?? "text"}
-          min={field.type === "number" ? "0" : undefined}
-          list={listId}
-          className={inputClass}
-          value={flightForm[field.key]}
-          onChange={(event) => updateFlightForm(field.key, event.target.value)}
-        />
+return (
+  <>
+    <input
+      type={field.type ?? "text"}
+      min={field.type === "number" ? "0" : undefined}
+      list={listId}
+      className={inputClass}
+      value={flightForm[field.key]}
+      onChange={(event) => updateFlightForm(field.key, event.target.value)}
+    />
 
-        {options ? (
-          <datalist id={listId}>
-            {options.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
-        ) : null}
-      </>
-    );
-  }
+    {options ? (
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    ) : null}
+  </>
+);
 
   const completedItems = [
     hasStudentDetails(student),
