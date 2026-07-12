@@ -4,7 +4,10 @@ import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { sessionKey } from "@/lib/demo-auth";
-import { saveGoogleRecord } from "@/lib/google-api";
+import {
+  fetchGoogleMasterData,
+  saveGoogleRecord,
+} from "@/lib/google-api";
 import {
   createFlightLogRecord,
   emptyRow,
@@ -15,7 +18,11 @@ import {
   type FlightLogRow,
   type StudentDetails,
 } from "@/lib/flight-log-storage";
-import { getMasterData, type MasterData } from "@/lib/master-data";
+import {
+  getMasterData,
+  saveMasterData,
+  type MasterData,
+} from "@/lib/master-data";
 import {
   Check,
   CheckCircle2,
@@ -106,6 +113,19 @@ export default function FlightLogsPage() {
 
   useEffect(() => {
     setMasterData(getMasterData());
+
+    fetchGoogleMasterData()
+      .then((googleMasterData) => {
+        setMasterData(googleMasterData);
+        saveMasterData(googleMasterData);
+      })
+      .catch(() => {
+        notify({
+          type: "warning",
+          title: "Using local Master Data",
+          message: "The latest active reference values could not be loaded from Google Sheets.",
+        });
+      });
 
     const rawSession = localStorage.getItem(sessionKey);
 
@@ -709,7 +729,7 @@ export default function FlightLogsPage() {
             ) : null}
           </div>
 
-          <div className="relative mt-4 rounded-xl border border-slate-300 bg-slate-50 p-2">
+          <div className="relative mt-4 overflow-hidden rounded-lg border border-slate-300 bg-slate-50 p-2">
             <canvas
               ref={signatureCanvasRef}
               width={900}
@@ -719,7 +739,7 @@ export default function FlightLogsPage() {
               onPointerUp={endSignature}
               onPointerCancel={endSignature}
               onPointerLeave={endSignature}
-              className={`h-48 w-full rounded-lg bg-white ${
+              className={`h-48 w-full rounded-md bg-white sm:h-56 ${
                 signatureLocked ? "touch-auto cursor-not-allowed" : "touch-none"
               }`}
             />
@@ -766,11 +786,11 @@ export default function FlightLogsPage() {
           </div>
 
           {rows.length ? (
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
               {rows.map((row, index) => (
                 <article
                   key={index}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -905,32 +925,36 @@ export default function FlightLogsPage() {
       {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
 
       <div className="app-page pb-28 md:pb-0">
-        <section className="app-card">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
+        <section className="app-card overflow-hidden">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
               <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                 <FileCheck2 size={14} />
                 {activeRecordId ? "Continuing Record" : "New Flight Log"}
               </div>
 
               <h1 className="mt-3 text-2xl font-semibold text-slate-950">
-                Flight Log
+                {student.studentName || "Flight Log"}
               </h1>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Guided workflow for details, signature, flight entries, and final save.
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                Complete the student profile, capture the signature, add flights, and review before saving.
               </p>
             </div>
 
-            <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
-              <p className="font-semibold text-slate-950">
-                {completedCount}/3 ready
-              </p>
-              <p className="text-slate-500">{rows.length} flight entries</p>
+            <div className="grid grid-cols-2 gap-2 sm:min-w-[300px]">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xl font-bold text-slate-950">{completedCount}/3</p>
+                <p className="text-xs font-medium text-slate-500">Sections ready</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xl font-bold text-slate-950">{rows.length}</p>
+                <p className="text-xs font-medium text-slate-500">Flight entries</p>
+              </div>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-4 gap-2">
+          <div className="mt-5 grid grid-cols-4 gap-2 xl:hidden">
             {steps.map((step, index) => {
               const isActive = activeStep === step.key;
               const isComplete =
@@ -944,58 +968,111 @@ export default function FlightLogsPage() {
                   key={step.key}
                   type="button"
                   onClick={() => setActiveStep(step.key)}
-                  className={`rounded-xl border px-2 py-3 text-center text-xs font-bold sm:text-sm ${
+                  className={`min-w-0 rounded-lg border px-1.5 py-2.5 text-center text-[11px] font-bold sm:px-3 sm:text-sm ${
                     isActive
-                      ? "border-brand-navy bg-brand-navy text-white"
-                      : "border-slate-200 bg-white text-slate-600"
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  <span className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
+                  <span className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-current/10">
                     {isComplete ? <Check size={14} /> : index + 1}
                   </span>
-                  {step.title}
+                  <span className="block truncate">{step.title}</span>
                 </button>
               );
             })}
           </div>
+        </section>
 
-          <div className="mt-5 hidden flex-wrap gap-2 md:flex">
-            <button onClick={clearDraft} className="app-button-secondary">
-              <RotateCcw size={16} />
-              Clear
-            </button>
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start">
+          <aside className="app-card sticky top-6 hidden p-3 xl:block">
+            <p className="px-2 pb-3 text-xs font-semibold uppercase text-slate-500">
+              Workflow
+            </p>
 
-            <button onClick={saveDraft} className="app-button-secondary">
-              <Save size={16} />
-              Save Draft
-            </button>
+            <div className="space-y-1">
+              {steps.map((step, index) => {
+                const isActive = activeStep === step.key;
+                const isComplete =
+                  (step.key === "details" && detailsDone) ||
+                  (step.key === "signature" && signatureDone) ||
+                  (step.key === "flights" && flightsDone) ||
+                  (step.key === "review" && detailsDone && signatureDone && flightsDone);
+
+                return (
+                  <button
+                    key={step.key}
+                    type="button"
+                    onClick={() => setActiveStep(step.key)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-slate-950 text-white"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                    }`}
+                  >
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${
+                      isActive ? "bg-white/15" : "bg-slate-100"
+                    }`}>
+                      {isComplete ? <Check size={14} /> : index + 1}
+                    </span>
+                    {step.title}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 space-y-2 border-t border-slate-200 pt-4">
+              <button onClick={saveDraft} className="app-button-secondary w-full justify-center">
+                <Save size={16} />
+                Save Draft
+              </button>
+              <button onClick={clearDraft} className="app-button-secondary w-full justify-center">
+                <RotateCcw size={16} />
+                Clear Draft
+              </button>
+            </div>
+          </aside>
+
+          <div className="min-w-0 space-y-5">
+            {renderStepContent()}
+
+            <section className="hidden items-center justify-between gap-3 md:flex">
+              <div className="flex gap-2 xl:hidden">
+                <button onClick={clearDraft} className="app-button-secondary">
+                  <RotateCcw size={16} />
+                  Clear
+                </button>
+                <button onClick={saveDraft} className="app-button-secondary">
+                  <Save size={16} />
+                  Save Draft
+                </button>
+              </div>
+
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={goBack}
+                  disabled={activeStep === "details"}
+                  className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ChevronLeft size={16} />
+                  Back
+                </button>
+
+                {activeStep === "review" ? (
+                  <button onClick={saveRecord} className="app-button-primary">
+                    <ShieldCheck size={16} />
+                    Save Record
+                  </button>
+                ) : (
+                  <button onClick={goNext} className="app-button-primary">
+                    Next
+                    <ChevronRight size={16} />
+                  </button>
+                )}
+              </div>
+            </section>
           </div>
-        </section>
-
-        {renderStepContent()}
-
-        <section className="hidden items-center justify-between gap-3 md:flex">
-          <button
-            onClick={goBack}
-            disabled={activeStep === "details"}
-            className="app-button-secondary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ChevronLeft size={16} />
-            Back
-          </button>
-
-          {activeStep === "review" ? (
-            <button onClick={saveRecord} className="app-button-primary">
-              <ShieldCheck size={16} />
-              Save Record
-            </button>
-          ) : (
-            <button onClick={goNext} className="app-button-primary">
-              Next
-              <ChevronRight size={16} />
-            </button>
-          )}
-        </section>
+        </div>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
@@ -1039,7 +1116,7 @@ export default function FlightLogsPage() {
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-lg">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">
