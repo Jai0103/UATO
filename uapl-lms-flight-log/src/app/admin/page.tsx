@@ -62,6 +62,46 @@ const emptyDashboard: DashboardData = {
   monthlyActivity: []
 };
 
+
+const monthlyActivityColors = [
+  {
+    bar: "bg-sky-500",
+    track: "bg-sky-50",
+    badge:
+      "bg-sky-50 text-sky-700 ring-sky-200"
+  },
+  {
+    bar: "bg-emerald-500",
+    track: "bg-emerald-50",
+    badge:
+      "bg-emerald-50 text-emerald-700 ring-emerald-200"
+  },
+  {
+    bar: "bg-amber-500",
+    track: "bg-amber-50",
+    badge:
+      "bg-amber-50 text-amber-700 ring-amber-200"
+  },
+  {
+    bar: "bg-rose-500",
+    track: "bg-rose-50",
+    badge:
+      "bg-rose-50 text-rose-700 ring-rose-200"
+  },
+  {
+    bar: "bg-indigo-500",
+    track: "bg-indigo-50",
+    badge:
+      "bg-indigo-50 text-indigo-700 ring-indigo-200"
+  },
+  {
+    bar: "bg-teal-500",
+    track: "bg-teal-50",
+    badge:
+      "bg-teal-50 text-teal-700 ring-teal-200"
+  }
+];
+
 function formatDate(value: string) {
   if (!value) return "-";
 
@@ -329,72 +369,108 @@ export default function AdminPage() {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <article className="app-card">
-            <h2 className="text-lg font-semibold text-slate-950">
-              Monthly Activity
-            </h2>
+          <article className="app-card overflow-hidden">
+  <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h2 className="text-lg font-semibold text-slate-950">
+        Monthly Activity
+      </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Records updated during the last six months.
+      <p className="mt-1 text-sm text-slate-500">
+        Records updated during the last six months.
+      </p>
+    </div>
+
+    <div className="w-fit rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+      <p className="text-lg font-bold text-slate-950">
+        {dashboard.monthlyActivity.reduce(
+          (total, month) =>
+            total + month.count,
+          0
+        )}
+      </p>
+
+      <p className="text-[11px] font-semibold uppercase text-slate-500">
+        Six-month total
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-5 space-y-4">
+    {dashboard.monthlyActivity.map(
+      (month, index) => {
+        const color =
+          monthlyActivityColors[
+            index %
+              monthlyActivityColors.length
+          ];
+
+        const percentage =
+          month.count > 0
+            ? Math.max(
+                10,
+                Math.round(
+                  (month.count /
+                    highestMonthlyCount) *
+                    100
+                )
+              )
+            : 0;
+
+        return (
+          <div
+            key={month.key}
+            className="grid grid-cols-[72px_minmax(0,1fr)_44px] items-center gap-3 sm:grid-cols-[88px_minmax(0,1fr)_52px]"
+          >
+            <p className="truncate text-xs font-semibold text-slate-600 sm:text-sm">
+              {month.label}
             </p>
 
-            <div className="mt-6 space-y-4">
-              {dashboard.monthlyActivity.map(
-                (month) => {
-                  const percentage =
-                    Math.max(
-                      month.count
-                        ? 8
-                        : 0,
-                      Math.round(
-                        (
-                          month.count /
-                          highestMonthlyCount
-                        ) *
-                          100
-                      )
-                    );
-
-                  return (
-                    <div
-                      key={month.key}
-                      className="grid grid-cols-[80px_minmax(0,1fr)_36px] items-center gap-3"
-                    >
-                      <p className="text-xs font-semibold text-slate-600">
-                        {month.label}
-                      </p>
-
-                      <div className="h-8 overflow-hidden rounded-md bg-slate-100">
-                        <div
-                          className="flex h-full items-center rounded-md bg-slate-950 px-2 text-xs font-semibold text-white transition-all"
-                          style={{
-                            width:
-                              `${percentage}%`
-                          }}
-                        >
-                          {month.count
-                            ? month.count
-                            : ""}
-                        </div>
-                      </div>
-
-                      <p className="text-right text-sm font-semibold text-slate-700">
-                        {month.count}
-                      </p>
-                    </div>
-                  );
-                }
-              )}
-
-              {!dashboard
-                .monthlyActivity
-                .length ? (
-                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-                  No monthly activity available.
+            <div
+              className={`relative h-9 overflow-hidden rounded-lg ${color.track}`}
+            >
+              {month.count > 0 ? (
+                <div
+                  className={`flex h-full items-center rounded-lg px-3 text-xs font-bold text-white transition-all duration-500 ${color.bar}`}
+                  style={{
+                    width: `${percentage}%`
+                  }}
+                  title={`${month.count} updated records`}
+                >
+                  <span className="truncate">
+                    {month.count}
+                  </span>
                 </div>
-              ) : null}
+              ) : (
+                <div className="flex h-full items-center px-3 text-xs font-medium text-slate-400">
+                  No activity
+                </div>
+              )}
             </div>
-          </article>
+
+            <span
+              className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-bold ring-1 ${color.badge}`}
+            >
+              {month.count}
+            </span>
+          </div>
+        );
+      }
+    )}
+
+    {!dashboard.monthlyActivity.length ? (
+      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+        <p className="text-sm font-semibold text-slate-700">
+          No monthly activity available
+        </p>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Updated flight records will appear here.
+        </p>
+      </div>
+    ) : null}
+  </div>
+</article>
 
           <article className="app-card">
             <div className="flex items-center justify-between gap-3">
