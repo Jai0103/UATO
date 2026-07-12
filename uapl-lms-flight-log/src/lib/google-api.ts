@@ -226,20 +226,7 @@ export async function postToGoogle<T>(
   return data as T;
 }
 
-/*
- * Legacy full-record request.
- * Keep temporarily for pages not yet migrated.
- */
-export async function fetchGoogleRecords() {
-  const data =
-    await postToGoogle<{
-      records: FlightLogRecord[];
-    }>({
-      action: "getRecords"
-    });
 
-  return data.records || [];
-}
 
 /*
  * Paginated record summaries.
