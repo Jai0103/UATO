@@ -27,6 +27,38 @@ type StoredSession = {
   expiresAt?: string;
 };
 
+export type FlightLogRecordSummary = {
+  id: string;
+  student: {
+    studentName: string;
+    company: string;
+    lastFourCharacters: string;
+    studentSignatureDataUrl: string;
+  };
+  rows: [];
+  flightCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RecordsPageRequest = {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  month?: string;
+  year?: string;
+};
+
+export type RecordsPageResponse = {
+  records: FlightLogRecordSummary[];
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+};
+
 export class GoogleApiError extends Error {
   code: string;
 
@@ -76,9 +108,7 @@ function getStoredSessionToken() {
       ).getTime();
 
     if (
-      !Number.isFinite(
-        expiresAt
-      ) ||
+      !Number.isFinite(expiresAt) ||
       expiresAt <= Date.now()
     ) {
       localStorage.removeItem(
@@ -183,9 +213,7 @@ export async function postToGoogle<T>(
       data.code ||
       "GOOGLE_API_ERROR";
 
-    handleAuthenticationError(
-      code
-    );
+    handleAuthenticationError(code);
 
     throw new GoogleApiError(
       data.error ||
@@ -198,12 +226,102 @@ export async function postToGoogle<T>(
   return data as T;
 }
 
+/*
+ * Legacy full-record request.
+ * Keep temporarily for pages not yet migrated.
+ */
 export async function fetchGoogleRecords() {
   const data =
     await postToGoogle<{
       records: FlightLogRecord[];
     }>({
       action: "getRecords"
+    });
+
+  return data.records || [];
+}
+
+/*
+ * Paginated record summaries.
+ * Signatures and flight rows are not downloaded.
+ */
+export async function fetchGoogleRecordsPage(
+  request: RecordsPageRequest = {}
+): Promise<RecordsPageResponse> {
+  const data =
+    await postToGoogle<RecordsPageResponse>({
+      action: "getRecordsPage",
+      page: request.page || 1,
+      pageSize:
+        request.pageSize || 10,
+      query:
+        request.query?.trim() || "",
+      month: request.month || "",
+      year: request.year || ""
+    });
+
+  return {
+    records: data.records || [],
+    page: data.page || 1,
+    pageSize: data.pageSize || 10,
+    totalRecords:
+      data.totalRecords || 0,
+    totalPages:
+      Math.max(
+        1,
+        data.totalPages || 1
+      ),
+    hasPreviousPage:
+      Boolean(
+        data.hasPreviousPage
+      ),
+    hasNextPage:
+      Boolean(data.hasNextPage)
+  };
+}
+
+/*
+ * Load one complete student record only
+ * when the user opens or continues it.
+ */
+export async function fetchGoogleRecordById(
+  recordId: string
+) {
+  const data =
+    await postToGoogle<{
+      record: FlightLogRecord;
+    }>({
+      action: "getRecordById",
+      recordId
+    });
+
+  return data.record;
+}
+
+/*
+ * Load selected complete records for
+ * combined PDF generation.
+ */
+export async function fetchGoogleRecordsByIds(
+  recordIds: string[]
+) {
+  const uniqueIds =
+    Array.from(
+      new Set(
+        recordIds.filter(Boolean)
+      )
+    ).slice(0, 25);
+
+  if (!uniqueIds.length) {
+    return [];
+  }
+
+  const data =
+    await postToGoogle<{
+      records: FlightLogRecord[];
+    }>({
+      action: "getRecordsByIds",
+      recordIds: uniqueIds
     });
 
   return data.records || [];
