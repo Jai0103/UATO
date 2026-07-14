@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Database,
   FileText,
+  History,
   Loader2,
   LogOut,
   Menu,
@@ -46,7 +47,8 @@ const PASSWORD_PAGE =
 const adminOnlyPages = [
   "/admin",
   "/master-data",
-  "/users"
+  "/users",
+  "/audit-history"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -79,6 +81,11 @@ const adminLinks: NavigationItem[] = [
     href: "/users",
     label: "Users",
     icon: UserCog
+  },
+  {
+    href: "/audit-history",
+    label: "Audit History",
+    icon: History
   }
 ];
 
