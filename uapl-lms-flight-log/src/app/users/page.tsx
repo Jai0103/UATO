@@ -31,6 +31,11 @@ import {
 
 type UserRole = "admin" | "trainer";
 
+type ManagedUserWithStatus = ManagedUser & {
+  accountStatus?: "active" | "inactive";
+  passwordUpdatedAt?: string;
+};
+
 type CreateUserForm = {
   name: string;
   email: string;
@@ -72,13 +77,13 @@ function createBootstrapPassword() {
     .join("")}`;
 }
 
-function accountStatus(user: ManagedUser) {
+function accountStatus(user: ManagedUserWithStatus) {
   return user.accountStatus === "inactive" ? "inactive" : "active";
 }
 
 export default function UsersPage() {
   const message = useAppMessage();
-  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [users, setUsers] = useState<ManagedUserWithStatus[]>([]);
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<CreateUserForm>(emptyForm);
   const [createOpen, setCreateOpen] = useState(false);
@@ -90,7 +95,7 @@ export default function UsersPage() {
 
     try {
       const latestUsers = await fetchGoogleUsers();
-      setUsers(latestUsers || []);
+      setUsers((latestUsers || []) as ManagedUserWithStatus[]);
     } catch (error) {
       message.notify({
         type: "error",
@@ -160,7 +165,7 @@ export default function UsersPage() {
     setOperationLabel("Creating user and sending email...");
 
     try {
-      const newUser: ManagedUser = {
+      const newUser: ManagedUserWithStatus = {
         id:
           typeof crypto !== "undefined" && crypto.randomUUID
             ? crypto.randomUUID()
@@ -205,7 +210,7 @@ export default function UsersPage() {
     }
   }
 
-  async function changeStatus(user: ManagedUser) {
+  async function changeStatus(user: ManagedUserWithStatus) {
     const currentStatus = accountStatus(user);
     const nextStatus = currentStatus === "active" ? "inactive" : "active";
     const confirmed =
@@ -253,7 +258,7 @@ export default function UsersPage() {
     }
   }
 
-  async function resetPassword(user: ManagedUser) {
+  async function resetPassword(user: ManagedUserWithStatus) {
     const confirmed = await message.confirm({
       title: "Reset password?",
       message: `A new temporary password will be sent to ${user.email}.`,
@@ -286,7 +291,7 @@ export default function UsersPage() {
     }
   }
 
-  async function deleteUser(user: ManagedUser) {
+  async function deleteUser(user: ManagedUserWithStatus) {
     const confirmed = await message.confirm({
       title: "Delete user?",
       message: `${user.name} will be permanently removed from the Users database.`,
