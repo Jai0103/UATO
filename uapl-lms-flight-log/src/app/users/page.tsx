@@ -1,1255 +1,440 @@
 "use client";
 
-
-import {
-  FormEvent,
-  useEffect,
-  useMemo,
-  useState
-} from "react";
-import {
-  Check,
-  CircleOff,
-  KeyRound,
-  Loader2,
-  Plus,
-  RefreshCcw,
-  Search,
-  Shield,
-  Trash2,
-  UserRound,
-  Users
-} from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import {
   fetchGoogleUsers,
-  googleAppsScriptUrl,
   postToGoogle,
-  saveGoogleUsers
+  saveGoogleUsers,
 } from "@/lib/google-api";
+import type { ManagedUser } from "@/lib/user-storage";
 import {
-  getSecureSession
-} from "@/lib/auth-api";
+  CheckCircle2,
+  KeyRound,
+  Plus,
+  Power,
+  Search,
+  ShieldCheck,
+  Trash2,
+  UserRound,
+  Users,
+  X,
+} from "lucide-react";
 import {
-  managedUsersKey,
-  type ManagedUser
-} from "@/lib/user-storage";
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
-type UserRole =
-  | "admin"
-  | "trainer";
+type UserRole = "admin" | "trainer";
 
-type AccountStatus =
-  | "active"
-  | "inactive";
-
-type SecureManagedUser =
-  ManagedUser & {
-    passwordChangedAt?: string;
-    passwordUpdatedAt?: string;
-    accountStatus?: AccountStatus;
-  };
-
-type UserForm = {
+type CreateUserForm = {
   name: string;
   email: string;
   role: UserRole;
 };
 
-const emptyForm: UserForm = {
+const emptyForm: CreateUserForm = {
   name: "",
   email: "",
-  role: "trainer"
+  role: "trainer",
 };
 
-function generateTemporaryPassword() {
-  const characters =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
+function formatDate(value: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
 
-  let password = "UAPL-";
-
-  for (
-    let index = 0;
-    index < 10;
-    index++
-  ) {
-    password +=
-      characters.charAt(
-        Math.floor(
-          Math.random() *
-            characters.length
-        )
-      );
-  }
-
-  return password;
+  return new Intl.DateTimeFormat("en-SG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
-function formatDate(value?: string) {
-  if (!value) return "Not yet";
+function createBootstrapPassword() {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint32Array(12);
 
-  const date = new Date(value);
-
-  if (
-    Number.isNaN(date.getTime())
-  ) {
-    return value;
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 1_000_000);
+    }
   }
 
-  return new Intl.DateTimeFormat(
-    "en-SG",
-    {
-      dateStyle: "medium",
-      timeStyle: "short"
-    }
-  ).format(date);
+  return `UAPL-${Array.from(bytes)
+    .map((value) => alphabet[value % alphabet.length])
+    .join("")}`;
+}
+
+function accountStatus(user: ManagedUser) {
+  return user.accountStatus === "inactive" ? "inactive" : "active";
 }
 
 export default function UsersPage() {
   const message = useAppMessage();
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [query, setQuery] = useState("");
+  const [form, setForm] = useState<CreateUserForm>(emptyForm);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [operationLabel, setOperationLabel] = useState("");
 
-  const [users, setUsers] =
-    useState<SecureManagedUser[]>([]);
-
-  const [query, setQuery] =
-    useState("");
-
-  const [form, setForm] =
-    useState<UserForm>(emptyForm);
-
-  const [
-    isCreateOpen,
-    setIsCreateOpen
-  ] = useState(false);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const currentSession =
-    getSecureSession();
-
-  useEffect(() => {
-    /*
-     * Remove old locally cached Users data
-     * because it may contain plain passwords.
-     */
-    localStorage.removeItem(
-      managedUsersKey
-    );
-
-    async function loadUsers() {
-      setLoading(true);
-
-      try {
-        const googleUsers =
-          await fetchGoogleUsers();
-
-        setUsers(
-          googleUsers as
-            SecureManagedUser[]
-        );
-      } catch (error) {
-        setUsers([]);
-
-        message.notify({
-          type: "error",
-          title:
-            "Unable to load users",
-          message:
-            error instanceof Error
-              ? error.message
-              : "The secure Users API could not be loaded."
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadUsers();
-  }, [message]);
-
-  const filteredUsers =
-    useMemo(() => {
-      const cleanQuery =
-        query.trim().toLowerCase();
-
-      if (!cleanQuery) {
-        return users;
-      }
-
-      return users.filter(
-        (user) =>
-          user.name
-            .toLowerCase()
-            .includes(cleanQuery) ||
-          user.email
-            .toLowerCase()
-            .includes(cleanQuery) ||
-          user.role
-            .toLowerCase()
-            .includes(cleanQuery) ||
-          (
-            user.accountStatus ||
-            "active"
-          ).includes(cleanQuery)
-      );
-    }, [query, users]);
-
-  const adminCount =
-    users.filter(
-      (user) =>
-        user.role === "admin"
-    ).length;
-
-  const trainerCount =
-    users.filter(
-      (user) =>
-        user.role === "trainer"
-    ).length;
-
-  const activeCount =
-    users.filter(
-      (user) =>
-        (
-          user.accountStatus ||
-          "active"
-        ) === "active"
-    ).length;
-
-  const temporaryCount =
-    users.filter(
-      (user) =>
-        !user.passwordChangedAt
-    ).length;
-
-  async function refreshUsers() {
-    const latestUsers =
-      await fetchGoogleUsers();
-
-    setUsers(
-      latestUsers as
-        SecureManagedUser[]
-    );
-  }
-
-  async function saveUsersSecurely(
-    nextUsers: SecureManagedUser[],
-    successTitle: string,
-    successMessage?: string
-  ) {
-    setSaving(true);
+  async function loadUsers(showLoader = true) {
+    if (showLoader) setLoading(true);
 
     try {
-      const savedUsers =
-        await saveGoogleUsers(
-          nextUsers
-        );
-
-      setUsers(
-        savedUsers as
-          SecureManagedUser[]
-      );
-
-      message.notify({
-        type: "success",
-        title: successTitle,
-        message: successMessage
-      });
-
-      return true;
+      const latestUsers = await fetchGoogleUsers();
+      setUsers(latestUsers || []);
     } catch (error) {
       message.notify({
         type: "error",
-        title:
-          "Unable to update users",
+        title: "Users could not be loaded",
         message:
           error instanceof Error
             ? error.message
-            : "The Users database could not be updated."
+            : "Check the Apps Script deployment and try again.",
       });
-
-      return false;
     } finally {
-      setSaving(false);
+      if (showLoader) setLoading(false);
     }
   }
 
-  async function sendResetEmail(
-    user: SecureManagedUser
-  ) {
-    const response = await fetch(
-      googleAppsScriptUrl,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          action: "forgotPassword",
-          identifier: user.email
-        })
-      }
+  useEffect(() => {
+    void loadUsers();
+  }, []);
+
+  const filteredUsers = useMemo(() => {
+    const cleanQuery = query.trim().toLowerCase();
+    if (!cleanQuery) return users;
+
+    return users.filter((user) =>
+      [user.name, user.email, user.role, accountStatus(user)]
+        .join(" ")
+        .toLowerCase()
+        .includes(cleanQuery)
     );
+  }, [query, users]);
 
-    if (!response.ok) {
-      throw new Error(
-        "The email service returned an error."
-      );
-    }
+  const activeCount = users.filter(
+    (user) => accountStatus(user) === "active"
+  ).length;
+  const trainerCount = users.filter((user) => user.role === "trainer").length;
+  const adminCount = users.filter((user) => user.role === "admin").length;
 
-    const result =
-      await response.json();
-
-    const successful =
-      result.success ?? result.ok;
-
-    if (!successful) {
-      throw new Error(
-        result.message ||
-          "Password reset failed."
-      );
-    }
-  }
-
-  async function handleCreateUser(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const cleanName =
-      form.name.trim();
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
 
-    const cleanEmail =
-      form.email
-        .trim()
-        .toLowerCase();
-
-    if (
-      !cleanName ||
-      !cleanEmail
-    ) {
+    if (!name || !email) {
       message.notify({
-        type: "warning",
-        title:
-          "Missing information",
-        message:
-          "Enter the user's full name and email."
+        type: "error",
+        title: "Missing information",
+        message: "Enter the user name and email address.",
       });
-
       return;
     }
 
-    const duplicate =
-      users.some(
-        (user) =>
-          user.email
-            .trim()
-            .toLowerCase() ===
-            cleanEmail ||
-          user.name
-            .trim()
-            .toLowerCase() ===
-            cleanName.toLowerCase()
-      );
+    const duplicate = users.some(
+      (user) =>
+        user.email.trim().toLowerCase() === email ||
+        user.name.trim().toLowerCase() === name.toLowerCase()
+    );
 
     if (duplicate) {
       message.notify({
-        type: "warning",
-        title:
-          "User already exists",
-        message:
-          "A user with the same name or email already exists."
+        type: "error",
+        title: "User already exists",
+        message: "The same name or email is already registered.",
       });
-
       return;
     }
 
-    const temporaryPassword =
-      generateTemporaryPassword();
-
-    const newUser: SecureManagedUser = {
-      id:
-        typeof crypto !==
-          "undefined" &&
-        crypto.randomUUID
-          ? crypto.randomUUID()
-          : `user-${Date.now()}`,
-
-      name: cleanName,
-      email: cleanEmail,
-      role: form.role,
-
-      /*
-       * Sent once to the server for hashing.
-       * It is not returned by getUsers.
-       */
-      temporaryPassword,
-
-      createdAt:
-        new Date().toISOString(),
-
-      passwordChangedAt: "",
-      accountStatus: "active"
-    };
-
-    setSaving(true);
+    setOperationLabel("Creating user and sending email...");
 
     try {
-      await saveGoogleUsers([
-        ...users,
-        newUser
-      ]);
+      const newUser: ManagedUser = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : String(Date.now()),
+        name,
+        email,
+        role: form.role,
+        temporaryPassword: createBootstrapPassword(),
+        createdAt: new Date().toISOString(),
+        passwordChangedAt: "",
+        accountStatus: "active",
+      };
 
-      /*
-       * Generate and email a fresh temporary
-       * password through the secure reset flow.
-       */
-      await sendResetEmail(newUser);
-      await refreshUsers();
+      await saveGoogleUsers([...users, newUser]);
 
+      await postToGoogle<{ message?: string }>({
+        action: "forgotPassword",
+        identifier: email,
+      });
+
+      await loadUsers(false);
       setForm(emptyForm);
-      setIsCreateOpen(false);
+      setCreateOpen(false);
 
       message.notify({
         type: "success",
-        title:
-          "User created",
-        message:
-          `A temporary password was emailed to ${cleanEmail}.`
+        title: "User created",
+        message: `A temporary password was emailed to ${email}.`,
       });
     } catch (error) {
+      await loadUsers(false);
       message.notify({
         type: "error",
-        title:
-          "Unable to create user",
+        title: "User creation failed",
         message:
           error instanceof Error
             ? error.message
-            : "The user could not be created."
+            : "The account could not be created.",
       });
     } finally {
-      setSaving(false);
+      setOperationLabel("");
     }
   }
 
-  async function handleResetPassword(
-    user: SecureManagedUser
-  ) {
+  async function changeStatus(user: ManagedUser) {
+    const currentStatus = accountStatus(user);
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
     const confirmed =
-      await message.confirm({
-        title: "Reset password?",
-        message:
-          `A new temporary password will be emailed to ${user.email}. All previous sessions for this account should be considered invalid.`,
-        confirmLabel:
-          "Reset and email"
-      });
+      nextStatus === "inactive"
+        ? await message.confirm({
+            title: "Deactivate user?",
+            message: `${user.name} will no longer be able to sign in.`,
+            confirmLabel: "Deactivate",
+            variant: "danger",
+          })
+        : await message.confirm({
+            title: "Activate user?",
+            message: `${user.name} will be allowed to sign in again.`,
+            confirmLabel: "Activate",
+          });
 
     if (!confirmed) return;
-
-    setSaving(true);
+    setOperationLabel(
+      nextStatus === "inactive" ? "Deactivating user..." : "Activating user..."
+    );
 
     try {
-      await sendResetEmail(user);
-      await refreshUsers();
+      await postToGoogle<{ userId: string; status: string; message?: string }>({
+        action: "setUserAccountStatus",
+        userId: user.id,
+        status: nextStatus,
+      });
+
+      await loadUsers(false);
 
       message.notify({
         type: "success",
-        title:
-          "Temporary password sent",
-        message:
-          `A new temporary password was emailed to ${user.email}.`
+        title: nextStatus === "inactive" ? "User deactivated" : "User activated",
+        message: `${user.name} is now ${nextStatus}.`,
+      });
+    } catch (error) {
+      await loadUsers(false);
+      message.notify({
+        type: "error",
+        title: "Status update failed",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setOperationLabel("");
+    }
+  }
+
+  async function resetPassword(user: ManagedUser) {
+    const confirmed = await message.confirm({
+      title: "Reset password?",
+      message: `A new temporary password will be sent to ${user.email}.`,
+      confirmLabel: "Reset and email",
+    });
+
+    if (!confirmed) return;
+    setOperationLabel("Resetting password and sending email...");
+
+    try {
+      await postToGoogle<{ message?: string }>({
+        action: "forgotPassword",
+        identifier: user.email,
+      });
+
+      await loadUsers(false);
+      message.notify({
+        type: "success",
+        title: "Temporary password sent",
+        message: user.email,
       });
     } catch (error) {
       message.notify({
         type: "error",
-        title:
-          "Password reset failed",
-        message:
-          error instanceof Error
-            ? error.message
-            : "The reset email could not be sent."
+        title: "Password reset failed",
+        message: error instanceof Error ? error.message : "Please try again.",
       });
     } finally {
-      setSaving(false);
+      setOperationLabel("");
     }
   }
 
- async function toggleUserStatus(
-  user: SecureManagedUser
-) {
-  const currentStatus =
-    user.accountStatus ||
-    "active";
-
-  const nextStatus:
-    AccountStatus =
-    currentStatus === "active"
-      ? "inactive"
-      : "active";
-
-  const isCurrentUser =
-    currentSession?.email
-      .trim()
-      .toLowerCase() ===
-    user.email
-      .trim()
-      .toLowerCase();
-
-  if (
-    isCurrentUser &&
-    nextStatus === "inactive"
-  ) {
-    message.notify({
-      type: "warning",
-      title:
-        "Action not allowed",
-      message:
-        "You cannot deactivate your own account."
+  async function deleteUser(user: ManagedUser) {
+    const confirmed = await message.confirm({
+      title: "Delete user?",
+      message: `${user.name} will be permanently removed from the Users database.`,
+      confirmLabel: "Delete",
+      variant: "danger",
     });
-
-    return;
-  }
-
-  const confirmed =
-    await message.confirm({
-      title:
-        nextStatus === "inactive"
-          ? "Deactivate user?"
-          : "Activate user?",
-      message:
-        nextStatus === "inactive"
-          ? `${user.name} will be signed out and prevented from signing in.`
-          : `${user.name} will be allowed to sign in again.`,
-      confirmLabel:
-        nextStatus === "inactive"
-          ? "Deactivate"
-          : "Activate",
-      variant:
-        nextStatus === "inactive"
-          ? "danger"
-          : "default"
-    });
-
-  if (!confirmed) return;
-
-  setSaving(true);
-
-  try {
-    await postToGoogle<{
-      userId: string;
-      status: AccountStatus;
-    }>({
-      action:
-        "setUserAccountStatus",
-      userId: user.id,
-      status: nextStatus
-    });
-
-    await refreshUsers();
-
-    message.notify({
-      type: "success",
-      title:
-        nextStatus === "active"
-          ? "User activated"
-          : "User deactivated",
-      message:
-        `${user.name} is now ${nextStatus}.`
-    });
-  } catch (error) {
-    message.notify({
-      type: "error",
-      title:
-        "Status update failed",
-      message:
-        error instanceof Error
-          ? error.message
-          : "The account status could not be updated."
-    });
-  } finally {
-    setSaving(false);
-  }
-}
-
-  async function handleDeleteUser(
-    user: SecureManagedUser
-  ) {
-    const isCurrentUser =
-      currentSession?.email
-        .trim()
-        .toLowerCase() ===
-      user.email
-        .trim()
-        .toLowerCase();
-
-    if (isCurrentUser) {
-      message.notify({
-        type: "warning",
-        title:
-          "Action not allowed",
-        message:
-          "You cannot delete your own account."
-      });
-
-      return;
-    }
-
-    if (
-      user.role === "admin" &&
-      adminCount <= 1
-    ) {
-      message.notify({
-        type: "warning",
-        title:
-          "Admin required",
-        message:
-          "The final administrator account cannot be deleted."
-      });
-
-      return;
-    }
-
-    const confirmed =
-      await message.confirm({
-        title: "Delete user?",
-        message:
-          `Delete ${user.name}? This removes their account but does not delete their existing flight records.`,
-        confirmLabel: "Delete",
-        variant: "danger"
-      });
 
     if (!confirmed) return;
+    setOperationLabel("Deleting user...");
 
-    await saveUsersSecurely(
-      users.filter(
-        (item) =>
-          item.id !== user.id
-      ),
-      "User deleted",
-      `${user.name} was removed.`
-    );
+    try {
+      await saveGoogleUsers(users.filter((item) => item.id !== user.id));
+      await loadUsers(false);
+
+      message.notify({
+        type: "success",
+        title: "User deleted",
+        message: `${user.name} was removed and recorded in Audit History.`,
+      });
+    } catch (error) {
+      await loadUsers(false);
+      message.notify({
+        type: "error",
+        title: "User deletion failed",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setOperationLabel("");
+    }
   }
 
   return (
     <AppShell>
-      {loading ? (
-        <LoadingOverlay label="Loading users..." />
-      ) : null}
+      {loading ? <LoadingOverlay label="Loading users..." /> : null}
+      {operationLabel ? <LoadingOverlay label={operationLabel} /> : null}
 
-      {saving ? (
-        <LoadingOverlay label="Updating users..." />
-      ) : null}
-
-      <div className="app-page space-y-5">
-        <section className="rounded-lg border border-slate-200 bg-slate-950 p-5 text-white shadow-lg sm:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="app-page">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase text-sky-100">
-                <Shield className="h-3.5 w-3.5" />
-                Admin Control
+              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <ShieldCheck size={14} /> Administrator Access
               </div>
-
-              <h1 className="text-2xl font-bold sm:text-3xl">
-                User Management
-              </h1>
-
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                Manage secure admin and trainer accounts. Passwords are never displayed or returned by the API.
-              </p>
+              <h1 className="mt-3 text-2xl font-semibold text-slate-950">Users</h1>
+              <p className="mt-1 text-sm text-slate-500">{users.length} registered accounts</p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setForm(emptyForm);
-                setIsCreateOpen(true);
-              }}
-              className="app-button-primary w-full justify-center bg-white text-slate-950 hover:bg-slate-100 sm:w-auto"
-            >
-              <Plus className="h-4 w-4" />
-              Add User
+            <button type="button" onClick={() => setCreateOpen(true)} className="app-button-primary justify-center">
+              <Plus size={17} /> Add User
             </button>
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat
-            label="Total Users"
-            value={users.length}
-          />
+        <section className="grid gap-3 sm:grid-cols-3">
+          <Metric label="Active" value={activeCount} icon={<CheckCircle2 size={19} />} color="text-emerald-600 bg-emerald-50" />
+          <Metric label="Trainers" value={trainerCount} icon={<Users size={19} />} color="text-sky-700 bg-sky-50" />
+          <Metric label="Administrators" value={adminCount} icon={<ShieldCheck size={19} />} color="text-indigo-700 bg-indigo-50" />
+        </section>
 
-          <Stat
-            label="Active"
-            value={activeCount}
-          />
-
-          <Stat
-            label="Trainers"
-            value={trainerCount}
-          />
-
-          <Stat
-            label="Temporary"
-            value={temporaryCount}
-          />
+        <section className="app-card">
+          <label className="block max-w-xl">
+            <span className="text-sm font-medium text-slate-700">Search users</span>
+            <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
+              <Search size={17} className="text-slate-400" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm" placeholder="Name, email, role, or status" />
+            </div>
+          </label>
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-950">
-                  Accounts
-                </h2>
+          <div className="divide-y divide-slate-200 lg:hidden">
+            {filteredUsers.map((user) => (
+              <article key={user.id} className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><UserRound size={19} /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-950">{user.name}</p>
+                    <p className="mt-0.5 truncate text-sm text-slate-500">{user.email}</p>
+                  </div>
+                  <StatusBadge status={accountStatus(user)} />
+                </div>
 
-                <p className="text-sm text-slate-500">
-                  {adminCount} admin,{" "}
-                  {trainerCount} trainer
-                </p>
-              </div>
+                <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
+                  <span className="capitalize text-slate-600">{user.role}</span>
+                  <span className="text-slate-500">{formatDate(user.createdAt)}</span>
+                </div>
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <div className="mt-4 flex justify-end gap-2">
+                  <IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={17} /></IconButton>
+                  <IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={17} /></IconButton>
+                  <IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={17} /></IconButton>
+                </div>
+              </article>
+            ))}
 
-                <input
-                  value={query}
-                  onChange={(event) =>
-                    setQuery(
-                      event.target.value
-                    )
-                  }
-                  className="app-input min-w-0 pl-10 sm:w-72"
-                  placeholder="Search users"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="divide-y divide-slate-100 lg:hidden">
-            {filteredUsers.map(
-              (user) => (
-                <UserCard
-                  key={user.id}
-                  user={user}
-                  onReset={() =>
-                    handleResetPassword(
-                      user
-                    )
-                  }
-                  onStatus={() =>
-                    toggleUserStatus(user)
-                  }
-                  onDelete={() =>
-                    handleDeleteUser(user)
-                  }
-                />
-              )
-            )}
+            {!filteredUsers.length && !loading ? <div className="p-10 text-center text-sm text-slate-500">No users found.</div> : null}
           </div>
 
           <div className="hidden overflow-x-auto lg:block">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
-                <tr>
-                  <Header>User</Header>
-                  <Header>Role</Header>
-                  <Header>Status</Header>
-                  <Header>
-                    Password
-                  </Header>
-                  <Header>Created</Header>
-
-                  <th className="px-5 py-3 text-right text-xs font-bold uppercase text-slate-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {filteredUsers.map(
-                  (user) => (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-slate-50"
-                    >
-                      <td className="px-5 py-4">
-                        <UserIdentity
-                          user={user}
-                        />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <RoleLabel
-                          role={user.role}
-                        />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <StatusLabel
-                          status={
-                            user.accountStatus ||
-                            "active"
-                          }
-                        />
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <PasswordLabel
-                          changed={
-                            Boolean(
-                              user.passwordChangedAt
-                            )
-                          }
-                        />
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-500">
-                        {formatDate(
-                          user.createdAt
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-1">
-                          <IconButton
-                            label="Reset password"
-                            onClick={() =>
-                              handleResetPassword(
-                                user
-                              )
-                            }
-                          >
-                            <RefreshCcw className="h-4 w-4" />
-                          </IconButton>
-
-                          <IconButton
-                            label={
-                              (
-                                user.accountStatus ||
-                                "active"
-                              ) === "active"
-                                ? "Deactivate user"
-                                : "Activate user"
-                            }
-                            onClick={() =>
-                              toggleUserStatus(
-                                user
-                              )
-                            }
-                          >
-                            {(
-                              user.accountStatus ||
-                              "active"
-                            ) === "active" ? (
-                              <CircleOff className="h-4 w-4" />
-                            ) : (
-                              <Check className="h-4 w-4" />
-                            )}
-                          </IconButton>
-
-                          <IconButton
-                            label="Delete user"
-                            danger
-                            onClick={() =>
-                              handleDeleteUser(
-                                user
-                              )
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </IconButton>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                )}
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">User</th><th className="px-5 py-3 font-semibold">Role</th><th className="px-5 py-3 font-semibold">Status</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50/70">
+                    <td className="px-5 py-4"><p className="font-semibold text-slate-950">{user.name}</p><p className="mt-0.5 text-xs text-slate-500">{user.email}</p></td>
+                    <td className="px-5 py-4 capitalize text-slate-700">{user.role}</td>
+                    <td className="px-5 py-4"><StatusBadge status={accountStatus(user)} /></td>
+                    <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(user.createdAt)}</td>
+                    <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={16} /></IconButton><IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={16} /></IconButton><IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={16} /></IconButton></div></td>
+                  </tr>
+                ))}
+                {!filteredUsers.length && !loading ? <tr><td colSpan={5} className="p-10 text-center text-slate-500">No users found.</td></tr> : null}
               </tbody>
             </table>
           </div>
-
-          {!filteredUsers.length &&
-          !loading ? (
-            <div className="px-5 py-12 text-center">
-              <Users className="mx-auto h-10 w-10 text-slate-300" />
-
-              <p className="mt-3 text-sm font-semibold text-slate-700">
-                No users found.
-              </p>
-            </div>
-          ) : null}
         </section>
       </div>
 
-      {isCreateOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 backdrop-blur-sm sm:items-center sm:p-4">
-          <button
-            type="button"
-            className="absolute inset-0"
-            onClick={() =>
-              !saving &&
-              setIsCreateOpen(false)
-            }
-            aria-label="Close dialog"
-          />
-
-          <form
-            onSubmit={
-              handleCreateUser
-            }
-            className="relative z-10 w-full rounded-t-xl bg-white p-5 shadow-2xl sm:max-w-lg sm:rounded-lg"
-          >
-            <h2 className="text-xl font-bold text-slate-950">
-              Add User
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              The temporary password will be generated securely and emailed to the user.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Full name
-                </span>
-
-                <input
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      name:
-                        event.target.value
-                    })
-                  }
-                  className="app-input"
-                  placeholder="Trainer name"
-                  required
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Email
-                </span>
-
-                <input
-                  value={form.email}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      email:
-                        event.target.value
-                    })
-                  }
-                  className="app-input"
-                  placeholder="name@example.com"
-                  type="email"
-                  required
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Role
-                </span>
-
-                <select
-                  value={form.role}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      role:
-                        event.target
-                          .value as UserRole
-                    })
-                  }
-                  className="app-input"
-                >
-                  <option value="trainer">
-                    Trainer
-                  </option>
-
-                  <option value="admin">
-                    Admin
-                  </option>
-                </select>
-              </label>
-
-              <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-800">
-                <div className="flex gap-3">
-                  <KeyRound className="mt-0.5 h-5 w-5 shrink-0" />
-
-                  <p>
-                    The password will not be shown to the administrator. It will be sent directly to the registered email.
-                  </p>
-                </div>
-              </div>
-            </div>
-{saving ? (
-  <div className="mt-5 flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-800">
-    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-    Creating the account and sending the temporary password...
-  </div>
-) : null}
-            
-
-            <div className="mt-7 grid grid-cols-2 gap-3">
-              <button
-  type="submit"
-  disabled={saving}
-  className="app-button-primary justify-center disabled:cursor-not-allowed disabled:opacity-60"
->
-  {saving ? (
-    <Loader2 className="h-4 w-4 animate-spin" />
-  ) : (
-    <Plus className="h-4 w-4" />
-  )}
-
-  {saving
-    ? "Creating and emailing..."
-    : "Create User"}
-</button>
-
-              <button
-                type="submit"
-                className="app-button-primary justify-center"
-              >
-                <Plus className="h-4 w-4" />
-                Create User
-              </button>
-            </div>
-          </form>
+      {createOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full rounded-t-xl bg-white shadow-2xl sm:max-w-lg sm:rounded-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h2 className="text-lg font-semibold text-slate-950">Add User</h2><p className="mt-0.5 text-sm text-slate-500">A temporary password will be emailed automatically.</p></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
+            <form onSubmit={createUser} className="space-y-4 p-5">
+              <FormInput label="Full name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Trainer name" />
+              <FormInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="name@example.com" type="email" />
+              <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
+              <div className="grid grid-cols-2 gap-3 pt-2"><button type="button" onClick={() => setCreateOpen(false)} className="app-button-secondary justify-center">Cancel</button><button type="submit" className="app-button-primary justify-center"><Plus size={16} /> Create</button></div>
+            </form>
+          </div>
         </div>
       ) : null}
     </AppShell>
   );
 }
 
-function Stat({
-  label,
-  value
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">
-        {label}
-      </p>
-
-      <p className="mt-2 text-3xl font-bold text-slate-950">
-        {value}
-      </p>
-    </div>
-  );
+function Metric({ label, value, icon, color }: { label: string; value: number; icon: ReactNode; color: string }) {
+  return <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><div><p className="text-sm text-slate-500">{label}</p><p className="mt-1 text-2xl font-semibold text-slate-950">{value}</p></div><div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>{icon}</div></div>;
 }
 
-function UserIdentity({
-  user
-}: {
-  user: SecureManagedUser;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-        <UserRound className="h-5 w-5" />
-      </div>
-
-      <div className="min-w-0">
-        <p className="truncate font-bold text-slate-950">
-          {user.name}
-        </p>
-
-        <p className="truncate text-sm text-slate-500">
-          {user.email}
-        </p>
-      </div>
-    </div>
-  );
+function StatusBadge({ status }: { status: "active" | "inactive" }) {
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{status === "active" ? "Active" : "Inactive"}</span>;
 }
 
-function Header({
-  children
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <th className="px-5 py-3 text-left text-xs font-bold uppercase text-slate-500">
-      {children}
-    </th>
-  );
+function IconButton({ label, children, onClick, danger = false, active = false }: { label: string; children: ReactNode; onClick: () => void; danger?: boolean; active?: boolean }) {
+  const color = danger ? "border-rose-200 text-rose-600 hover:bg-rose-50" : active ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-slate-200 text-slate-600 hover:bg-slate-100";
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className={`inline-flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${color}`}>{children}</button>;
 }
 
-function RoleLabel({
-  role
-}: {
-  role: UserRole;
-}) {
-  return (
-    <span className="inline-flex rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold uppercase text-slate-700">
-      {role}
-    </span>
-  );
-}
-
-function StatusLabel({
-  status
-}: {
-  status: AccountStatus;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold capitalize ${
-        status === "active"
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-slate-100 text-slate-600"
-      }`}
-    >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${
-          status === "active"
-            ? "bg-emerald-500"
-            : "bg-slate-400"
-        }`}
-      />
-
-      {status}
-    </span>
-  );
-}
-
-function PasswordLabel({
-  changed
-}: {
-  changed: boolean;
-}) {
-  return (
-    <span
-      className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold ${
-        changed
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-amber-50 text-amber-700"
-      }`}
-    >
-      {changed
-        ? "Changed"
-        : "Temporary"}
-    </span>
-  );
-}
-
-function IconButton({
-  label,
-  danger = false,
-  onClick,
-  children
-}: {
-  label: string;
-  danger?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={`flex h-9 w-9 items-center justify-center rounded-lg border transition ${
-        danger
-          ? "border-red-200 text-red-600 hover:bg-red-50"
-          : "border-slate-200 text-slate-600 hover:bg-slate-100"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function UserCard({
-  user,
-  onReset,
-  onStatus,
-  onDelete
-}: {
-  user: SecureManagedUser;
-  onReset: () => void;
-  onStatus: () => void;
-  onDelete: () => void;
-}) {
-  const status =
-    user.accountStatus ||
-    "active";
-
-  return (
-    <article className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <UserIdentity user={user} />
-        <StatusLabel status={status} />
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3">
-        <div>
-          <p className="text-xs text-slate-500">
-            Role
-          </p>
-
-          <div className="mt-1">
-            <RoleLabel
-              role={user.role}
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-xs text-slate-500">
-            Password
-          </p>
-
-          <div className="mt-1">
-            <PasswordLabel
-              changed={Boolean(
-                user.passwordChangedAt
-              )}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex justify-end gap-2">
-        <IconButton
-          label="Reset password"
-          onClick={onReset}
-        >
-          <RefreshCcw className="h-4 w-4" />
-        </IconButton>
-
-        <IconButton
-          label={
-            status === "active"
-              ? "Deactivate user"
-              : "Activate user"
-          }
-          onClick={onStatus}
-        >
-          {status === "active" ? (
-            <CircleOff className="h-4 w-4" />
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
-        </IconButton>
-
-        <IconButton
-          label="Delete user"
-          danger
-          onClick={onDelete}
-        >
-          <Trash2 className="h-4 w-4" />
-        </IconButton>
-      </div>
-    </article>
-  );
+function FormInput({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string }) {
+  return <label className="block"><span className="text-sm font-medium text-slate-700">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="app-input mt-2" placeholder={placeholder} required /></label>;
 }
