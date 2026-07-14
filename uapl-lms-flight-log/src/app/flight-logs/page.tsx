@@ -7,6 +7,7 @@ import { sessionKey } from "@/lib/demo-auth";
 import {
   fetchGoogleMasterData,
   saveGoogleRecord,
+  validateGoogleFlightRecord,
 } from "@/lib/google-api";
 import {
   createFlightLogRecord,
@@ -328,7 +329,7 @@ export default function FlightLogsPage() {
     setActiveSuggestField(null);
   }
 
-  function saveFlightEntry() {
+  async function saveFlightEntry() {
     const entryToSave: FlightLogRow =
       editingIndex === null
         ? {
@@ -340,6 +341,32 @@ export default function FlightLogsPage() {
             ...flightForm,
             pilotInCommand: student.studentName,
           };
+
+    const validation = validateFlightEntry(
+      entryToSave,
+      masterData,
+      rows,
+      editingIndex
+    );
+
+    if (validation.errors.length) {
+      notify({
+        type: "error",
+        title: "Flight entry is not valid",
+        message: validation.errors.join(" "),
+      });
+      return;
+    }
+
+    if (validation.warnings.length) {
+      const proceed = await confirm({
+        title: "Battery overlap detected",
+        message: validation.warnings.join(" "),
+        confirmLabel: "Add anyway",
+      });
+
+      if (!proceed) return;
+    }
 
     if (editingIndex === null) {
       setRows((current) => [...current, entryToSave]);
@@ -462,6 +489,37 @@ export default function FlightLogsPage() {
     });
 
     try {
+      const validation = await validateGoogleFlightRecord(record);
+
+      if (validation.errors.length) {
+        throw new Error(validation.errors.join(" "));
+      }
+
+      if (validation.warnings.length) {
+        clearMessage();
+
+        const proceed = await confirm({
+          title: "Battery overlap detected",
+          message: validation.warnings.join(" "),
+          confirmLabel: "Save anyway",
+        });
+
+        if (!proceed) {
+          notify({
+            type: "info",
+            title: "Save cancelled",
+            message: "Review the battery allocation before saving.",
+          });
+          return;
+        }
+
+        notify({
+          type: "loading",
+          title: "Saving flight log...",
+          message: "Battery warning acknowledged. Syncing with Google Sheets.",
+        });
+      }
+
       const savedRecord = await saveGoogleRecord(record);
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
@@ -485,16 +543,15 @@ export default function FlightLogsPage() {
         title: "Record saved",
         message: "Flight log record saved to Google Sheets.",
       });
-    } catch {
-      saveFlightLogRecord(student, rows);
-      saveDraft();
-      setSignatureLocked(true);
-
+    } catch (error) {
       clearMessage();
       notify({
         type: "error",
-        title: "Google Sheets save failed",
-        message: "The record was saved locally on this device.",
+        title: "Flight log was not saved",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Check the flight details and try again.",
       });
     } finally {
       setSaving(false);
@@ -1165,4 +1222,121 @@ export default function FlightLogsPage() {
       ) : null}
     </AppShell>
   );
+}
+
+function normalizeEntryValue(value: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function entryStartMinutes(value: string) {
+  const match = String(value || "")
+    .trim()
+    .match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function entryDuplicateKey(row: FlightLogRow) {
+  return [
+    row.date,
+    normalizeEntryValue(row.location),
+    row.startTime,
+    normalizeEntryValue(row.uaModel),
+    normalizeEntryValue(row.batterySn),
+  ].join("|");
+}
+
+function entriesOverlap(first: FlightLogRow, second: FlightLogRow) {
+  const firstStart = entryStartMinutes(first.startTime);
+  const secondStart = entryStartMinutes(second.startTime);
+  const firstDuration = Number(first.duration);
+  const secondDuration = Number(second.duration);
+
+  if (
+    firstStart === null ||
+    secondStart === null ||
+    !Number.isInteger(firstDuration) ||
+    !Number.isInteger(secondDuration)
+  ) {
+    return false;
+  }
+
+  return (
+    firstStart < secondStart + secondDuration &&
+    secondStart < firstStart + firstDuration
+  );
+}
+
+function validateFlightEntry(
+  row: FlightLogRow,
+  masterData: MasterData | null,
+  existingRows: FlightLogRow[],
+  editingIndex: number | null
+) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const duration = Number(row.duration);
+  const today = new Date();
+  const localToday = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  if (!row.date) errors.push("Date is required.");
+  else if (row.date > localToday) {
+    errors.push("Future flight dates are not allowed.");
+  }
+
+  if (entryStartMinutes(row.startTime) === null) {
+    errors.push("Start time must use HH:MM in 24-hour format.");
+  }
+
+  if (!Number.isInteger(duration) || duration <= 0 || duration > 1440) {
+    errors.push("Duration must be a whole number from 1 to 1440 minutes.");
+  }
+
+  if (!row.location.trim()) errors.push("Location is required.");
+  if (!row.uaCategory.trim()) errors.push("UA Category is required.");
+  if (!row.pilotInCommand.trim()) errors.push("Pilot in Command is required.");
+  if (!row.instructorInCommand.trim()) {
+    errors.push("AFE / Instructor is required.");
+  }
+
+  const activeModels = (masterData?.uaModels || []).map(normalizeEntryValue);
+  const activeBatteries = (masterData?.batterySerialNumbers || []).map(
+    normalizeEntryValue
+  );
+
+  if (!activeModels.includes(normalizeEntryValue(row.uaModel))) {
+    errors.push("Select an active UA Model from Master Data.");
+  }
+  if (!activeBatteries.includes(normalizeEntryValue(row.batterySn))) {
+    errors.push("Select an active Battery S/N from Master Data.");
+  }
+
+  existingRows.forEach((existingRow, index) => {
+    if (editingIndex === index) return;
+
+    if (entryDuplicateKey(existingRow) === entryDuplicateKey(row)) {
+      errors.push("This flight entry already exists in the current record.");
+    }
+
+    if (
+      existingRow.date === row.date &&
+      normalizeEntryValue(existingRow.batterySn) ===
+        normalizeEntryValue(row.batterySn) &&
+      entriesOverlap(existingRow, row)
+    ) {
+      warnings.push(
+        `Battery ${row.batterySn} overlaps another flight in this record.`
+      );
+    }
+  });
+
+  return {
+    errors: Array.from(new Set(errors)),
+    warnings: Array.from(new Set(warnings)),
+  };
 }
