@@ -395,8 +395,9 @@ export async function saveGeneratedReportPdf(
   });
 }
 
-// Add this exported function near the bottom of src/lib/google-api.ts.
-export async function deleteGoogleRecord(recordId: string) {
+export async function deleteGoogleRecord(
+  recordId: string
+) {
   const data = await postToGoogle<{
     recordId: string;
     message?: string;
@@ -409,20 +410,39 @@ export async function deleteGoogleRecord(recordId: string) {
 }
 
 
-// Add this exported type and function to src/lib/google-api.ts.
 export type FlightRecordValidation = {
   valid: boolean;
   errors: string[];
   warnings: string[];
 };
 
-export async function validateGoogleFlightRecord(record: FlightLogRecord) {
-  const data = await postToGoogle<{
-    validation: FlightRecordValidation;
-  }>({
-    action: "validateFlightRecord",
-    record,
-  });
+export async function validateGoogleFlightRecord(
+  record: FlightLogRecord
+) {
+  const data =
+    await postToGoogle<{
+      validation: FlightRecordValidation;
+    }>({
+      action: "validateFlightRecord",
+      record
+    });
 
   return data.validation;
+}
+
+export async function checkGoogleStudentLastFour(
+  payload: {
+    lastFourCharacters: string;
+    recordId?: string;
+  }
+) {
+  return postToGoogle<{
+    available: boolean;
+    message: string;
+    conflictingRecordId?: string;
+    conflictingStudentName?: string;
+  }>({
+    action: "checkStudentLastFour",
+    ...payload
+  });
 }
