@@ -407,3 +407,22 @@ export async function deleteGoogleRecord(recordId: string) {
 
   return data;
 }
+
+
+// Add this exported type and function to src/lib/google-api.ts.
+export type FlightRecordValidation = {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+};
+
+export async function validateGoogleFlightRecord(record: FlightLogRecord) {
+  const data = await postToGoogle<{
+    validation: FlightRecordValidation;
+  }>({
+    action: "validateFlightRecord",
+    record,
+  });
+
+  return data.validation;
+}
