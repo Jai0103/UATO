@@ -11,7 +11,6 @@ import {
   type FlightLogRecordSummary,
 } from "@/lib/google-api";
 import {
-  AlertTriangle,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -57,7 +56,7 @@ function formatDate(value: string) {
 
 export default function RecordsPage() {
   const router = useRouter();
-  const { notify } = useAppMessage();
+  const { notify, confirm } = useAppMessage();
   const [records, setRecords] = useState<FlightLogRecordSummary[]>([]);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -70,7 +69,6 @@ export default function RecordsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<FlightLogRecord | null>(null);
-  const [recordToDelete, setRecordToDelete] = useState<FlightLogRecordSummary | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const yearOptions = useMemo(() => {
@@ -171,26 +169,32 @@ export default function RecordsPage() {
     router.push("/flight-logs");
   }
 
-  async function confirmDelete() {
-    if (!recordToDelete) return;
+  async function requestDelete(record: FlightLogRecordSummary) {
+    const confirmed = await confirm({
+      title: "Delete flight record?",
+      message: `${record.student.studentName} and all associated flight entries will be permanently removed.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
 
     setDeleting(true);
 
     try {
-      await deleteGoogleRecord(recordToDelete.id);
+      await deleteGoogleRecord(record.id);
 
-      if (selectedRecord?.id === recordToDelete.id) {
+      if (selectedRecord?.id === record.id) {
         setSelectedRecord(null);
       }
 
       notify({
         type: "success",
         title: "Flight record deleted",
-        message: `${recordToDelete.student.studentName} was removed and recorded in Audit History.`,
+        message: `${record.student.studentName} was removed and recorded in Audit History.`,
       });
 
       const shouldReturnToPreviousPage = records.length === 1 && page > 1;
-      setRecordToDelete(null);
 
       if (shouldReturnToPreviousPage) {
         setPage((current) => Math.max(1, current - 1));
@@ -337,7 +341,7 @@ export default function RecordsPage() {
                   <ActionButton label="Continue record" primary onClick={() => void continueRecord(record.id)}>
                     <FilePenLine size={17} />
                   </ActionButton>
-                  <ActionButton label="Delete record" danger onClick={() => setRecordToDelete(record)}>
+                  <ActionButton label="Delete record" danger onClick={() => void requestDelete(record)}>
                     <Trash2 size={17} />
                   </ActionButton>
                 </div>
@@ -373,7 +377,7 @@ export default function RecordsPage() {
                       <div className="flex justify-end gap-2">
                         <ActionButton label="View record" onClick={() => void viewRecord(record.id)}><Eye size={16} /></ActionButton>
                         <ActionButton label="Continue record" primary onClick={() => void continueRecord(record.id)}><FilePenLine size={16} /></ActionButton>
-                        <ActionButton label="Delete record" danger onClick={() => setRecordToDelete(record)}><Trash2 size={16} /></ActionButton>
+                        <ActionButton label="Delete record" danger onClick={() => void requestDelete(record)}><Trash2 size={16} /></ActionButton>
                       </div>
                     </td>
                   </tr>
@@ -416,25 +420,6 @@ export default function RecordsPage() {
         <RecordDetailModal record={selectedRecord} onClose={() => setSelectedRecord(null)} onContinue={() => void continueRecord(selectedRecord.id)} />
       ) : null}
 
-      {recordToDelete ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full rounded-t-xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-xl sm:p-6">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
-              <AlertTriangle size={22} />
-            </div>
-            <h2 className="mt-4 text-xl font-semibold text-slate-950">Delete flight record?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              <span className="font-semibold text-slate-900">{recordToDelete.student.studentName}</span> and all associated flight entries will be permanently removed.
-            </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => setRecordToDelete(null)} disabled={deleting} className="app-button-secondary justify-center">Cancel</button>
-              <button type="button" onClick={() => void confirmDelete()} disabled={deleting} className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
-                <Trash2 size={16} /> Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </AppShell>
   );
 }
