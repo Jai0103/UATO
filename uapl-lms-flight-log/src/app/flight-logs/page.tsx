@@ -5,6 +5,7 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { sessionKey } from "@/lib/demo-auth";
 import {
+  checkGoogleStudentLastFour,
   fetchGoogleMasterData,
   saveGoogleRecord,
   validateGoogleFlightRecord,
@@ -100,6 +101,8 @@ export default function FlightLogsPage() {
   const [isSigning, setIsSigning] = useState(false);
   const [signatureLocked, setSignatureLocked] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingStudent, setCheckingStudent] = useState(false);
+  const [validatedLastFour, setValidatedLastFour] = useState("");
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
   const [activeSuggestField, setActiveSuggestField] =
@@ -181,19 +184,71 @@ export default function FlightLogsPage() {
 
   function updateStudent(field: keyof StudentDetails, value: string) {
     setStudent((current) => ({ ...current, [field]: value }));
+
+    if (field === "lastFourCharacters") {
+      setValidatedLastFour("");
+    }
   }
 
   function updateFlightForm(field: keyof FlightLogRow, value: string) {
     setFlightForm((current) => ({ ...current, [field]: value }));
   }
 
-  function goNext() {
-    if (activeStep === "details" && !detailsDone) {
+  async function validateStudentIdentity() {
+    if (!detailsDone) {
       notify({
         type: "warning",
         title: "Complete student details",
         message: "Enter student name, company, and last 4 characters.",
       });
+      return false;
+    }
+
+    const validationKey = [
+      activeRecordId,
+      student.lastFourCharacters.trim().toLowerCase(),
+    ].join("|");
+
+    if (validatedLastFour === validationKey) return true;
+
+    setCheckingStudent(true);
+
+    try {
+      const result = await checkGoogleStudentLastFour({
+        lastFourCharacters: student.lastFourCharacters,
+        recordId: activeRecordId || undefined,
+      });
+
+      if (!result.available) {
+        setActiveStep("details");
+        notify({
+          type: "error",
+          title: "Last 4 characters already exist",
+          message: result.message,
+        });
+        return false;
+      }
+
+      setValidatedLastFour(validationKey);
+      return true;
+    } catch (error) {
+      setActiveStep("details");
+      notify({
+        type: "error",
+        title: "Unable to verify student",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Check your connection and try again.",
+      });
+      return false;
+    } finally {
+      setCheckingStudent(false);
+    }
+  }
+
+  async function goNext() {
+    if (activeStep === "details" && !(await validateStudentIdentity())) {
       return;
     }
 
@@ -217,6 +272,40 @@ export default function FlightLogsPage() {
 
     const index = steps.findIndex((step) => step.key === activeStep);
     setActiveStep(steps[Math.min(index + 1, steps.length - 1)].key);
+  }
+
+  async function selectStep(step: StepKey) {
+    const currentIndex = steps.findIndex((item) => item.key === activeStep);
+    const targetIndex = steps.findIndex((item) => item.key === step);
+
+    if (targetIndex <= currentIndex) {
+      setActiveStep(step);
+      return;
+    }
+
+    if (!(await validateStudentIdentity())) return;
+
+    if (targetIndex >= 2 && !signatureDone) {
+      setActiveStep("signature");
+      notify({
+        type: "warning",
+        title: "Signature required",
+        message: "Capture the student signature before continuing.",
+      });
+      return;
+    }
+
+    if (targetIndex >= 3 && !flightsDone) {
+      setActiveStep("flights");
+      notify({
+        type: "warning",
+        title: "Flight entry required",
+        message: "Add at least one flight entry before review.",
+      });
+      return;
+    }
+
+    setActiveStep(step);
   }
 
   function goBack() {
@@ -430,6 +519,7 @@ export default function FlightLogsPage() {
     setRows([]);
     setActiveRecordId("");
     setActiveCreatedAt("");
+    setValidatedLastFour("");
     setSignatureLocked(false);
     setActiveStep("details");
 
@@ -969,10 +1059,6 @@ export default function FlightLogsPage() {
           </div>
         </div>
 
-        <button onClick={saveRecord} className="app-button-primary mt-5 w-full justify-center sm:w-auto">
-          <ShieldCheck size={16} />
-          Save Record
-        </button>
       </section>
     );
   }
@@ -980,6 +1066,9 @@ export default function FlightLogsPage() {
   return (
     <AppShell>
       {saving ? <LoadingOverlay label="Saving flight log..." /> : null}
+      {checkingStudent ? (
+        <LoadingOverlay label="Checking student details..." />
+      ) : null}
 
       <div className="app-page pb-28 md:pb-0">
         <section className="app-card overflow-hidden">
@@ -1024,7 +1113,7 @@ export default function FlightLogsPage() {
                 <button
                   key={step.key}
                   type="button"
-                  onClick={() => setActiveStep(step.key)}
+                  onClick={() => void selectStep(step.key)}
                   className={`min-w-0 rounded-lg border px-1.5 py-2.5 text-center text-[11px] font-bold sm:px-3 sm:text-sm ${
                     isActive
                       ? "border-slate-950 bg-slate-950 text-white"
@@ -1060,7 +1149,7 @@ export default function FlightLogsPage() {
                   <button
                     key={step.key}
                     type="button"
-                    onClick={() => setActiveStep(step.key)}
+                    onClick={() => void selectStep(step.key)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${
                       isActive
                         ? "bg-slate-950 text-white"
@@ -1121,7 +1210,10 @@ export default function FlightLogsPage() {
                     Save Record
                   </button>
                 ) : (
-                  <button onClick={goNext} className="app-button-primary">
+                  <button
+                    onClick={() => void goNext()}
+                    className="app-button-primary"
+                  >
                     Next
                     <ChevronRight size={16} />
                   </button>
@@ -1161,7 +1253,7 @@ export default function FlightLogsPage() {
             </button>
           ) : (
             <button
-              onClick={goNext}
+              onClick={() => void goNext()}
               className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
             >
               Next
