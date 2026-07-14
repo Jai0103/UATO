@@ -394,3 +394,16 @@ export async function saveGeneratedReportPdf(
     ...payload
   });
 }
+
+// Add this exported function near the bottom of src/lib/google-api.ts.
+export async function deleteGoogleRecord(recordId: string) {
+  const data = await postToGoogle<{
+    recordId: string;
+    message?: string;
+  }>({
+    action: "deleteRecord",
+    recordId,
+  });
+
+  return data;
+}
