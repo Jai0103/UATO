@@ -234,7 +234,7 @@ export default function UsersPage() {
 
     try {
       await postToGoogle<{ userId: string; status: string; message?: string }>({
-        action: "setUserAccountStatus",
+        action: "setUserAccountStatusWithAudit",
         userId: user.id,
         status: nextStatus,
       });
