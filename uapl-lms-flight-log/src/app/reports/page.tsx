@@ -93,7 +93,7 @@ function reportFileName(
     return `${studentName} - FLIGHT LOG - ${date}.pdf`;
   }
 
-  return `UAPL LMS - COMBINED FLIGHT LOG - ${date}.pdf`;
+  return `STUDENTS - COMBINED FLIGHT LOG - ${date}.pdf`;
 }
 
 function createReportDocument(
