@@ -107,6 +107,7 @@ export default function FlightLogsPage() {
   const [savedUnavailableBatteries, setSavedUnavailableBatteries] =
     useState<string[]>([]);
   const [checkingBatteries, setCheckingBatteries] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
   const [activeSuggestField, setActiveSuggestField] =
@@ -147,7 +148,10 @@ export default function FlightLogsPage() {
     }
 
     const savedDraft = localStorage.getItem(flightLogDraftKey);
-    if (!savedDraft) return;
+    if (!savedDraft) {
+      setDraftHydrated(true);
+      return;
+    }
 
     try {
       const parsedDraft = JSON.parse(savedDraft) as FlightLogDraft;
@@ -168,8 +172,45 @@ export default function FlightLogsPage() {
       });
     } catch {
       localStorage.removeItem(flightLogDraftKey);
+    } finally {
+      setDraftHydrated(true);
     }
   }, [notify]);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+
+    const hasDraftContent =
+      Boolean(
+        student.studentName.trim() ||
+          student.company.trim() ||
+          student.lastFourCharacters.trim() ||
+          student.studentSignatureDataUrl
+      ) || rows.length > 0;
+
+    if (!hasDraftContent) return;
+
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(
+        flightLogDraftKey,
+        JSON.stringify({
+          recordId: activeRecordId,
+          createdAt: activeCreatedAt,
+          student,
+          rows,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeCreatedAt,
+    activeRecordId,
+    draftHydrated,
+    rows,
+    student,
+  ]);
 
   useEffect(() => {
     if (!student.studentSignatureDataUrl) return;
@@ -626,6 +667,17 @@ export default function FlightLogsPage() {
         type: "warning",
         title: "Flight entry required",
         message: "Add at least one flight entry before saving.",
+      });
+      return;
+    }
+
+    if (!navigator.onLine) {
+      saveDraft();
+      notify({
+        type: "warning",
+        title: "Internet connection required",
+        message:
+          "Your draft is safe on this device. Reconnect before submitting it to Google Sheets.",
       });
       return;
     }
