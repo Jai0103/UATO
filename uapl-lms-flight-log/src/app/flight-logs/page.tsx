@@ -305,7 +305,7 @@ export default function FlightLogsPage() {
       notify({
         type: "warning",
         title: "Complete student details",
-        message: "Enter student name, company, and last 4 characters.",
+        message: "Enter student name, company, and last 4 characters NRIC/FIN.",
       });
       return false;
     }
@@ -329,7 +329,7 @@ export default function FlightLogsPage() {
         setActiveStep("details");
         notify({
           type: "error",
-          title: "Last 4 characters already exist",
+          title: "Last 4 characters NRIC/FIN already exist",
           message: result.message,
         });
         return false;
@@ -951,7 +951,7 @@ export default function FlightLogsPage() {
 
             <label>
               <span className="text-sm font-medium text-slate-700">
-                Last 4 Characters
+                Last 4 Characters NRIC/FIN
               </span>
               <input
                 value={student.lastFourCharacters}
