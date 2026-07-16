@@ -92,7 +92,7 @@ function hasStudentDetails(student: StudentDetails) {
 }
 
 function flightRowIdentity(row: FlightLogRow) {
-  const rowId = String(row.id || "").trim();
+  const rowId = flightRowLegacyId(row);
   if (rowId) return `id:${rowId}`;
 
   return [
@@ -109,6 +109,12 @@ function flightRowIdentity(row: FlightLogRow) {
   ]
     .map((value) => String(value || "").trim().toLowerCase())
     .join("|");
+}
+
+function flightRowLegacyId(row: FlightLogRow) {
+  return String(
+    (row as FlightLogRow & { id?: string }).id || ""
+  ).trim();
 }
 
 function formatRecordUpdatedAt(value: string) {
@@ -832,11 +838,11 @@ export default function FlightLogsPage() {
           );
           const latestIds = new Set(
             latestRecord.rows
-              .map((row) => String(row.id || "").trim())
+              .map(flightRowLegacyId)
               .filter(Boolean)
           );
           const unsavedRows = rows.filter((row) => {
-            const rowId = String(row.id || "").trim();
+            const rowId = flightRowLegacyId(row);
             if (rowId && latestIds.has(rowId)) return false;
             return !latestKeys.has(flightRowIdentity(row));
           });
