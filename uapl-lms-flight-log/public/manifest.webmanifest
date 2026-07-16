@@ -12,13 +12,13 @@
   "categories": ["business", "productivity", "education"],
   "icons": [
     {
-      "src": "/UATO/apollo-global-academy-logo.png",
+      "src": "/UATO/AGA_Logo_fullcolor_Horizontal (1).png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/UATO/apollo-global-academy-logo.png",
+      "src": "/UATO/AGA_Logo_fullcolor_Horizontal (1).png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
