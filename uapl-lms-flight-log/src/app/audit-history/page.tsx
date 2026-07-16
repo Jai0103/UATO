@@ -443,14 +443,84 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
 }
 
+const auditMonthNumbers: Record<string, string> = {
+  Jan: "01",
+  Feb: "02",
+  Mar: "03",
+  Apr: "04",
+  May: "05",
+  Jun: "06",
+  Jul: "07",
+  Aug: "08",
+  Sep: "09",
+  Oct: "10",
+  Nov: "11",
+  Dec: "12",
+};
+
+function cleanLegacyAuditDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const match = value.match(
+    /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{4})\b/
+  );
+
+  if (!match) return value;
+
+  return `${match[3]}-${auditMonthNumbers[match[1]] || "01"}-${match[2].padStart(2, "0")}`;
+}
+
+function cleanLegacyAuditTime(value: string) {
+  if (/^\d{2}:\d{2}$/.test(value)) return value;
+
+  const longDateTime = value.match(/\b(\d{1,2}):(\d{2}):\d{2}\s+GMT/);
+  if (longDateTime) {
+    return `${longDateTime[1].padStart(2, "0")}:${longDateTime[2]}`;
+  }
+
+  const simpleTime = value.match(/^(\d{1,2}):(\d{2})/);
+  return simpleTime
+    ? `${simpleTime[1].padStart(2, "0")}:${simpleTime[2]}`
+    : value;
+}
+
+function cleanAuditDisplayValue(
+  value: AuditValue,
+  key = ""
+): AuditValue {
+  if (value === null || value === undefined) return null;
+
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      cleanAuditDisplayValue(item as AuditValue)
+    );
+  }
+
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        cleanAuditDisplayValue(childValue as AuditValue, childKey),
+      ])
+    );
+  }
+
+  if (typeof value !== "string") return value;
+  if (key === "date") return cleanLegacyAuditDate(value);
+  if (key === "startTime") return cleanLegacyAuditTime(value);
+
+  return value;
+}
+
 function JsonPanel({ title, value, emptyLabel }: { title: string; value: AuditValue; emptyLabel: string }) {
   const hasValue = value !== null && value !== undefined && value !== "";
+  const displayValue = cleanAuditDisplayValue(value);
 
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200">
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-3"><h3 className="text-sm font-semibold text-slate-900">{title}</h3></div>
       {hasValue ? (
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-6 text-slate-700">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-6 text-slate-700">{typeof displayValue === "string" ? displayValue : JSON.stringify(displayValue, null, 2)}</pre>
       ) : (
         <p className="p-4 text-sm text-slate-500">{emptyLabel}</p>
       )}
