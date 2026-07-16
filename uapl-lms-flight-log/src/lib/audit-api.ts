@@ -62,5 +62,15 @@ export async function fetchAuditHistoryDetail(auditId: string) {
     auditId,
   });
 
+  if (!data.record) {
+    throw new Error("The Audit History detail was not returned.");
+  }
+
+  if (data.record.detailsLoaded !== true) {
+    throw new Error(
+      "The Apps Script deployment is still using the old Audit History API. Deploy a new Apps Script version, then try again."
+    );
+  }
+
   return data.record;
 }
