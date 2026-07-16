@@ -7,7 +7,7 @@ const CORE_ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/manifest.webmanifest`,
   `${BASE_PATH}/offline.html`,
-  `${BASE_PATH}/AGA_Logo_fullcolor_Horizontal (1).png`
+  `${BASE_PATH}/AGA_Logo_Square (1).jpg`
 ];
 
 self.addEventListener("install", (event) => {
