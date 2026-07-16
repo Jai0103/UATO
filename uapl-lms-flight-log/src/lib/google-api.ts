@@ -446,3 +446,18 @@ export async function checkGoogleStudentLastFour(
     ...payload
   });
 }
+
+export async function fetchUnavailableBatteriesForDate(
+  payload: {
+    date: string;
+    recordId?: string;
+  }
+) {
+  return postToGoogle<{
+    date: string;
+    unavailableBatteries: string[];
+  }>({
+    action: "getUnavailableBatteriesForDate",
+    ...payload
+  });
+}
