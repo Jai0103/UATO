@@ -1,0 +1,39 @@
+{
+  "id": "/UATO/",
+  "name": "Apollo Flight Management System",
+  "short_name": "Flight Manager",
+  "description": "Mobile flight log management for Apollo Global Academy trainers.",
+  "start_url": "/UATO/",
+  "scope": "/UATO/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f3f6fb",
+  "theme_color": "#0f172a",
+  "categories": ["business", "productivity", "education"],
+  "icons": [
+    {
+      "src": "/UATO/apollo-global-academy-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/UATO/apollo-global-academy-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Flight Log",
+      "short_name": "New Flight",
+      "url": "/UATO/flight-logs/"
+    },
+    {
+      "name": "Flight Records",
+      "short_name": "Records",
+      "url": "/UATO/records/"
+    }
+  ]
+}
