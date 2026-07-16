@@ -7,7 +7,7 @@ const CORE_ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/manifest.webmanifest`,
   `${BASE_PATH}/offline.html`,
-  `${BASE_PATH}/apollo-global-academy-logo.png`
+  `${BASE_PATH}/AGA_Logo_fullcolor_Horizontal (1).png`
 ];
 
 self.addEventListener("install", (event) => {
