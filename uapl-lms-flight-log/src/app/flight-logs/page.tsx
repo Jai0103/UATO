@@ -7,6 +7,7 @@ import { sessionKey } from "@/lib/demo-auth";
 import {
   checkGoogleStudentLastFour,
   fetchGoogleMasterData,
+  fetchUnavailableBatteriesForDate,
   saveGoogleRecord,
   validateGoogleFlightRecord,
 } from "@/lib/google-api";
@@ -103,6 +104,9 @@ export default function FlightLogsPage() {
   const [saving, setSaving] = useState(false);
   const [checkingStudent, setCheckingStudent] = useState(false);
   const [validatedLastFour, setValidatedLastFour] = useState("");
+  const [savedUnavailableBatteries, setSavedUnavailableBatteries] =
+    useState<string[]>([]);
+  const [checkingBatteries, setCheckingBatteries] = useState(false);
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
   const [activeSuggestField, setActiveSuggestField] =
@@ -181,6 +185,67 @@ export default function FlightLogsPage() {
     };
     image.src = student.studentSignatureDataUrl;
   }, [student.studentSignatureDataUrl, activeStep]);
+
+  useEffect(() => {
+    if (!modalOpen || !flightForm.date) {
+      setSavedUnavailableBatteries([]);
+      return;
+    }
+
+    let active = true;
+    setCheckingBatteries(true);
+
+    fetchUnavailableBatteriesForDate({
+      date: flightForm.date,
+      recordId: activeRecordId || undefined,
+    })
+      .then((result) => {
+        if (active) {
+          setSavedUnavailableBatteries(result.unavailableBatteries || []);
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+
+        setSavedUnavailableBatteries([]);
+        notify({
+          type: "error",
+          title: "Battery availability could not be loaded",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Please check your connection and try again.",
+        });
+      })
+      .finally(() => {
+        if (active) setCheckingBatteries(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeRecordId, flightForm.date, modalOpen, notify]);
+
+  const availableBatteryOptions = (masterData?.batterySerialNumbers || []).filter(
+    (battery) => {
+      const normalizedBattery = normalizeEntryValue(battery);
+      const usedInSavedRecord = savedUnavailableBatteries.some(
+        (usedBattery) =>
+          normalizeEntryValue(usedBattery) === normalizedBattery
+      );
+
+      const usedInCurrentDraft = rows.some((row, index) => {
+        if (editingIndex === index) return false;
+
+        return (
+          row.date === flightForm.date &&
+          normalizeEntryValue(row.batterySn) === normalizedBattery
+        );
+      });
+
+      return !usedInSavedRecord && !usedInCurrentDraft;
+    }
+  );
 
   function updateStudent(field: keyof StudentDetails, value: string) {
     setStudent((current) => ({ ...current, [field]: value }));
@@ -399,6 +464,7 @@ export default function FlightLogsPage() {
       pilotInCommand: student.studentName,
       instructorInCommand: accountName,
     });
+    setSavedUnavailableBatteries([]);
     setModalOpen(true);
   }
 
@@ -408,6 +474,7 @@ export default function FlightLogsPage() {
       ...rows[index],
       pilotInCommand: student.studentName,
     });
+    setSavedUnavailableBatteries([]);
     setModalOpen(true);
   }
 
@@ -415,6 +482,7 @@ export default function FlightLogsPage() {
     setModalOpen(false);
     setEditingIndex(null);
     setFlightForm({ ...emptyRow });
+    setSavedUnavailableBatteries([]);
     setActiveSuggestField(null);
   }
 
@@ -435,7 +503,8 @@ export default function FlightLogsPage() {
       entryToSave,
       masterData,
       rows,
-      editingIndex
+      editingIndex,
+      savedUnavailableBatteries
     );
 
     if (validation.errors.length) {
@@ -772,7 +841,7 @@ export default function FlightLogsPage() {
     if (field.key === "batterySn") {
       return renderSmartSuggestionField(
         "batterySn",
-        masterData?.batterySerialNumbers ?? []
+        availableBatteryOptions
       );
     }
 
@@ -1069,6 +1138,9 @@ export default function FlightLogsPage() {
       {checkingStudent ? (
         <LoadingOverlay label="Checking student details..." />
       ) : null}
+      {checkingBatteries ? (
+        <LoadingOverlay label="Checking battery availability..." />
+      ) : null}
 
       <div className="app-page pb-28 md:pb-0">
         <section className="app-card overflow-hidden">
@@ -1224,57 +1296,44 @@ export default function FlightLogsPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur md:hidden">
-  <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-2">
-    <button
-      type="button"
-      onClick={goBack}
-      disabled={activeStep === "details"}
-      className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-700 disabled:opacity-40"
-    >
-      <ChevronLeft size={15} />
-      <span>Back</span>
-    </button>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={goBack}
+            disabled={activeStep === "details"}
+            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 disabled:opacity-50"
+          >
+            <ChevronLeft size={15} />
+            Back
+          </button>
 
-    <button
-      type="button"
-      onClick={clearDraft}
-      className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-rose-200 bg-rose-50 text-[11px] font-semibold text-rose-700"
-    >
-      <RotateCcw size={15} />
-      <span>Clear</span>
-    </button>
+          <button
+            onClick={saveDraft}
+            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
+          >
+            <Save size={15} />
+            Draft
+          </button>
 
-    <button
-      type="button"
-      onClick={saveDraft}
-      className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-700"
-    >
-      <Save size={15} />
-      <span>Draft</span>
-    </button>
-
-    {activeStep === "review" ? (
-      <button
-        type="button"
-        onClick={saveRecord}
-        className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy text-[11px] font-semibold text-white"
-      >
-        <ShieldCheck size={15} />
-        <span>Save</span>
-      </button>
-    ) : (
-      <button
-        type="button"
-        onClick={() => void goNext()}
-        className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy text-[11px] font-semibold text-white"
-      >
-        <ChevronRight size={15} />
-        <span>Next</span>
-      </button>
-    )}
-  </div>
-</div>
+          {activeStep === "review" ? (
+            <button
+              onClick={saveRecord}
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+            >
+              <ShieldCheck size={15} />
+              Save
+            </button>
+          ) : (
+            <button
+              onClick={() => void goNext()}
+              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+            >
+              Next
+              <ChevronRight size={15} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
@@ -1377,7 +1436,8 @@ function validateFlightEntry(
   row: FlightLogRow,
   masterData: MasterData | null,
   existingRows: FlightLogRow[],
-  editingIndex: number | null
+  editingIndex: number | null,
+  savedUnavailableBatteries: string[]
 ) {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -1421,6 +1481,17 @@ function validateFlightEntry(
     errors.push("Select an active Battery S/N from Master Data.");
   }
 
+  if (
+    savedUnavailableBatteries.some(
+      (battery) =>
+        normalizeEntryValue(battery) === normalizeEntryValue(row.batterySn)
+    )
+  ) {
+    errors.push(
+      `Battery ${row.batterySn} is already used on ${row.date}. Select another battery.`
+    );
+  }
+
   existingRows.forEach((existingRow, index) => {
     if (editingIndex === index) return;
 
@@ -1431,11 +1502,10 @@ function validateFlightEntry(
     if (
       existingRow.date === row.date &&
       normalizeEntryValue(existingRow.batterySn) ===
-        normalizeEntryValue(row.batterySn) &&
-      entriesOverlap(existingRow, row)
+        normalizeEntryValue(row.batterySn)
     ) {
-      warnings.push(
-        `Battery ${row.batterySn} overlaps another flight in this record.`
+      errors.push(
+        `Battery ${row.batterySn} is already used on ${row.date}.`
       );
     }
   });
