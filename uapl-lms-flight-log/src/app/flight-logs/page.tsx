@@ -6,8 +6,10 @@ import { useAppMessage } from "@/components/message-provider";
 import { sessionKey } from "@/lib/demo-auth";
 import {
   checkGoogleStudentLastFour,
+  fetchGoogleRecordById,
   fetchGoogleMasterData,
   fetchUnavailableBatteriesForDate,
+  GoogleApiError,
   saveGoogleRecord,
   validateGoogleFlightRecord,
 } from "@/lib/google-api";
@@ -51,6 +53,7 @@ type StepKey = "details" | "signature" | "flights" | "review";
 type FlightLogDraft = {
   recordId?: string;
   createdAt?: string;
+  recordUpdatedAt?: string;
   student: StudentDetails;
   rows: FlightLogRow[];
   updatedAt: string;
@@ -88,6 +91,38 @@ function hasStudentDetails(student: StudentDetails) {
   );
 }
 
+function flightRowIdentity(row: FlightLogRow) {
+  const rowId = String(row.id || "").trim();
+  if (rowId) return `id:${rowId}`;
+
+  return [
+    row.date,
+    row.location,
+    row.startTime,
+    row.duration,
+    row.uaModel,
+    row.uaCategory,
+    row.batterySn,
+    row.pilotInCommand,
+    row.instructorInCommand,
+    row.remarks,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join("|");
+}
+
+function formatRecordUpdatedAt(value: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-SG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export default function FlightLogsPage() {
   const { notify, confirm, clearMessage } = useAppMessage();
 
@@ -110,6 +145,7 @@ export default function FlightLogsPage() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [activeRecordId, setActiveRecordId] = useState("");
   const [activeCreatedAt, setActiveCreatedAt] = useState("");
+  const [activeUpdatedAt, setActiveUpdatedAt] = useState("");
   const [activeSuggestField, setActiveSuggestField] =
     useState<keyof FlightLogRow | null>(null);
 
@@ -159,6 +195,7 @@ export default function FlightLogsPage() {
       setRows(parsedDraft.rows);
       setActiveRecordId(parsedDraft.recordId ?? "");
       setActiveCreatedAt(parsedDraft.createdAt ?? "");
+      setActiveUpdatedAt(parsedDraft.recordUpdatedAt ?? "");
       setSignatureLocked(
         Boolean(parsedDraft.recordId && parsedDraft.student.studentSignatureDataUrl)
       );
@@ -196,6 +233,7 @@ export default function FlightLogsPage() {
         JSON.stringify({
           recordId: activeRecordId,
           createdAt: activeCreatedAt,
+          recordUpdatedAt: activeUpdatedAt,
           student,
           rows,
           updatedAt: new Date().toISOString(),
@@ -207,6 +245,7 @@ export default function FlightLogsPage() {
   }, [
     activeCreatedAt,
     activeRecordId,
+    activeUpdatedAt,
     draftHydrated,
     rows,
     student,
@@ -305,7 +344,7 @@ export default function FlightLogsPage() {
       notify({
         type: "warning",
         title: "Complete student details",
-        message: "Enter student name, company, and last 4 characters NRIC/FIN.",
+        message: "Enter student name, company, and last 4 characters.",
       });
       return false;
     }
@@ -329,7 +368,7 @@ export default function FlightLogsPage() {
         setActiveStep("details");
         notify({
           type: "error",
-          title: "Last 4 characters NRIC/FIN already exist",
+          title: "Last 4 characters already exist",
           message: result.message,
         });
         return false;
@@ -600,6 +639,7 @@ export default function FlightLogsPage() {
       JSON.stringify({
         recordId: activeRecordId,
         createdAt: activeCreatedAt,
+        recordUpdatedAt: activeUpdatedAt,
         student,
         rows,
         updatedAt: new Date().toISOString(),
@@ -629,6 +669,7 @@ export default function FlightLogsPage() {
     setRows([]);
     setActiveRecordId("");
     setActiveCreatedAt("");
+    setActiveUpdatedAt("");
     setValidatedLastFour("");
     setSignatureLocked(false);
     setActiveStep("details");
@@ -641,6 +682,8 @@ export default function FlightLogsPage() {
   }
 
   async function saveRecord() {
+    if (saving) return;
+
     if (!detailsDone) {
       setActiveStep("details");
       notify({
@@ -688,6 +731,7 @@ export default function FlightLogsPage() {
           ...newRecord,
           id: activeRecordId,
           createdAt: activeCreatedAt || newRecord.createdAt,
+          updatedAt: activeUpdatedAt,
         }
       : newRecord;
 
@@ -735,6 +779,7 @@ export default function FlightLogsPage() {
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
       setActiveCreatedAt(savedRecord.createdAt);
+      setActiveUpdatedAt(savedRecord.updatedAt);
       setSignatureLocked(true);
 
       localStorage.setItem(
@@ -742,6 +787,7 @@ export default function FlightLogsPage() {
         JSON.stringify({
           recordId: savedRecord.id,
           createdAt: savedRecord.createdAt,
+          recordUpdatedAt: savedRecord.updatedAt,
           student: savedRecord.student,
           rows: savedRecord.rows,
           updatedAt: new Date().toISOString(),
@@ -756,6 +802,88 @@ export default function FlightLogsPage() {
       });
     } catch (error) {
       clearMessage();
+
+      if (
+        error instanceof GoogleApiError &&
+        error.code === "RECORD_CONFLICT" &&
+        activeRecordId
+      ) {
+        try {
+          const latestRecord = await fetchGoogleRecordById(activeRecordId);
+          const shouldMerge = await confirm({
+            title: "Record updated by another trainer",
+            message:
+              "A newer version is already saved. Load it now and keep any new flight entries you added on this device?",
+            confirmLabel: "Load and merge",
+          });
+
+          if (!shouldMerge) {
+            notify({
+              type: "warning",
+              title: "Save stopped",
+              message:
+                "Your local draft remains on this device. Reload the latest record before trying again.",
+            });
+            return;
+          }
+
+          const latestKeys = new Set(
+            latestRecord.rows.map(flightRowIdentity)
+          );
+          const latestIds = new Set(
+            latestRecord.rows
+              .map((row) => String(row.id || "").trim())
+              .filter(Boolean)
+          );
+          const unsavedRows = rows.filter((row) => {
+            const rowId = String(row.id || "").trim();
+            if (rowId && latestIds.has(rowId)) return false;
+            return !latestKeys.has(flightRowIdentity(row));
+          });
+          const mergedRows = [...latestRecord.rows, ...unsavedRows];
+
+          setStudent(latestRecord.student);
+          setRows(mergedRows);
+          setActiveCreatedAt(latestRecord.createdAt);
+          setActiveUpdatedAt(latestRecord.updatedAt);
+          setSignatureLocked(true);
+          setActiveStep("review");
+
+          localStorage.setItem(
+            flightLogDraftKey,
+            JSON.stringify({
+              recordId: latestRecord.id,
+              createdAt: latestRecord.createdAt,
+              recordUpdatedAt: latestRecord.updatedAt,
+              student: latestRecord.student,
+              rows: mergedRows,
+              updatedAt: new Date().toISOString(),
+            })
+          );
+
+          notify({
+            type: "warning",
+            title: "Latest record loaded",
+            message: unsavedRows.length
+              ? `${unsavedRows.length} unsaved ${
+                  unsavedRows.length === 1 ? "flight was" : "flights were"
+                } kept. Review the record, then save again.`
+              : "No unsaved new flights were found. Review the latest record before continuing.",
+          });
+          return;
+        } catch (mergeError) {
+          notify({
+            type: "error",
+            title: "Latest record could not be loaded",
+            message:
+              mergeError instanceof Error
+                ? mergeError.message
+                : "Your local draft remains safe on this device.",
+          });
+          return;
+        }
+      }
+
       notify({
         type: "error",
         title: "Flight log was not saved",
@@ -951,7 +1079,7 @@ export default function FlightLogsPage() {
 
             <label>
               <span className="text-sm font-medium text-slate-700">
-                Last 4 Characters NRIC/FIN
+                Last 4 Characters
               </span>
               <input
                 value={student.lastFourCharacters}
@@ -1210,6 +1338,11 @@ export default function FlightLogsPage() {
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                 Complete the student profile, capture the signature, add flights, and review before saving.
               </p>
+              {activeRecordId && activeUpdatedAt ? (
+                <p className="mt-2 text-xs font-medium text-slate-500">
+                  Server version updated {formatRecordUpdatedAt(activeUpdatedAt)}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:min-w-[300px]">
@@ -1329,7 +1462,11 @@ export default function FlightLogsPage() {
                 </button>
 
                 {activeStep === "review" ? (
-                  <button onClick={saveRecord} className="app-button-primary">
+                  <button
+                    onClick={saveRecord}
+                    disabled={saving}
+                    className="app-button-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  >
                     <ShieldCheck size={16} />
                     Save Record
                   </button>
@@ -1382,7 +1519,8 @@ export default function FlightLogsPage() {
             <button
               type="button"
               onClick={saveRecord}
-              className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy px-1 text-[10px] font-semibold text-white"
+              disabled={saving}
+              className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy px-1 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShieldCheck size={15} />
               <span className="leading-none">Save</span>
