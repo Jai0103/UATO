@@ -1,48 +1,44 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import type { ReactNode } from "react";
 import { MessageProvider } from "@/components/message-provider";
-import "./globals.css";
 import { PwaManager } from "@/components/pwa-manager";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "UAPL LMS Flight Log",
-  description: "Flight log management system for UAPL trainers and administrators"
-};
-
-export const metadata = {
   title: "Apollo Flight Management System",
-  description: "Mobile flight log management for Apollo Global Academy.",
+  description:
+    "Mobile flight log management system for Apollo Global Academy.",
   manifest: "/UATO/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Flight Manager"
+    title: "Flight Manager",
   },
   icons: {
     icon: "/UATO/apollo-global-academy-logo.png",
-    apple: "/UATO/apollo-global-academy-logo.png"
-  }
+    apple: "/UATO/apollo-global-academy-logo.png",
+  },
 };
 
-export const viewport = {
-  themeColor: "#0f172a",
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  viewportFit: "cover"
+  viewportFit: "cover",
+  themeColor: "#0f172a",
 };
 
-export default function RootLayout({
-  children
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+type RootLayoutProps = Readonly<{
+  children: ReactNode;
+}>;
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <body>
-      
-        <MessageProvider>{children} <MessageProvider>
-  {children}
-  <PwaManager />
-</MessageProvide</MessageProvider>
+        <MessageProvider>
+          {children}
+          <PwaManager />
+        </MessageProvider>
       </body>
     </html>
   );
