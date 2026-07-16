@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import {
+  fetchAuditHistoryDetail,
   fetchAuditHistoryPage,
   type AuditRecord,
   type AuditValue,
@@ -95,6 +96,7 @@ export default function AuditHistoryPage() {
   const [entityTypeOptions, setEntityTypeOptions] = useState<string[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<AuditRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -175,9 +177,32 @@ export default function AuditHistoryPage() {
     setPage(1);
   }
 
+  async function openAuditDetail(record: AuditRecord) {
+    setLoadingDetail(true);
+
+    try {
+      const detailedRecord = await fetchAuditHistoryDetail(record.id);
+      setSelectedRecord(detailedRecord);
+    } catch (error) {
+      notify({
+        type: "error",
+        title: "Audit details could not be loaded",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Please try opening this activity again.",
+      });
+    } finally {
+      setLoadingDetail(false);
+    }
+  }
+
   return (
     <AppShell>
       {loading ? <LoadingOverlay label="Loading Audit History..." /> : null}
+      {loadingDetail ? (
+        <LoadingOverlay label="Loading activity details..." />
+      ) : null}
 
       <div className="app-page">
         <section className="app-card">
@@ -262,7 +287,7 @@ export default function AuditHistoryPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setSelectedRecord(record)}
+                    onClick={() => void openAuditDetail(record)}
                     className="app-icon-button shrink-0"
                     aria-label="View audit details"
                     title="View details"
@@ -319,7 +344,7 @@ export default function AuditHistoryPage() {
                     <td className="px-5 py-4 text-right">
                       <button
                         type="button"
-                        onClick={() => setSelectedRecord(record)}
+                        onClick={() => void openAuditDetail(record)}
                         className="app-icon-button"
                         aria-label="View audit details"
                         title="View details"
