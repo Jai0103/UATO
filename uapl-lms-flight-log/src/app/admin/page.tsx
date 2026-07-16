@@ -317,7 +317,7 @@ export default function AdminPage() {
               </h1>
 
               <p className="mt-1 text-sm text-slate-500">
-                Lightweight operational statistics calculated securely in Google Sheets.
+            
               </p>
             </div>
 
