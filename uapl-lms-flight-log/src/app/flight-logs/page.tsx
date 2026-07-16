@@ -1224,44 +1224,57 @@ export default function FlightLogsPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={goBack}
-            disabled={activeStep === "details"}
-            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 disabled:opacity-50"
-          >
-            <ChevronLeft size={15} />
-            Back
-          </button>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur md:hidden">
+  <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-2">
+    <button
+      type="button"
+      onClick={goBack}
+      disabled={activeStep === "details"}
+      className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-700 disabled:opacity-40"
+    >
+      <ChevronLeft size={15} />
+      <span>Back</span>
+    </button>
 
-          <button
-            onClick={saveDraft}
-            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
-          >
-            <Save size={15} />
-            Draft
-          </button>
+    <button
+      type="button"
+      onClick={clearDraft}
+      className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-rose-200 bg-rose-50 text-[11px] font-semibold text-rose-700"
+    >
+      <RotateCcw size={15} />
+      <span>Clear</span>
+    </button>
 
-          {activeStep === "review" ? (
-            <button
-              onClick={saveRecord}
-              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
-            >
-              <ShieldCheck size={15} />
-              Save
-            </button>
-          ) : (
-            <button
-              onClick={() => void goNext()}
-              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
-            >
-              Next
-              <ChevronRight size={15} />
-            </button>
-          )}
-        </div>
-      </div>
+    <button
+      type="button"
+      onClick={saveDraft}
+      className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-700"
+    >
+      <Save size={15} />
+      <span>Draft</span>
+    </button>
+
+    {activeStep === "review" ? (
+      <button
+        type="button"
+        onClick={saveRecord}
+        className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy text-[11px] font-semibold text-white"
+      >
+        <ShieldCheck size={15} />
+        <span>Save</span>
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={() => void goNext()}
+        className="inline-flex h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy text-[11px] font-semibold text-white"
+      >
+        <ChevronRight size={15} />
+        <span>Next</span>
+      </button>
+    )}
+  </div>
+</div>
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
