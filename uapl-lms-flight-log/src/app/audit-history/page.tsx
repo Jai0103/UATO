@@ -405,6 +405,10 @@ function DateFilter({ label, value, onChange }: { label: string; value: string; 
 }
 
 function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: () => void }) {
+  const isFlightRecord =
+    record.entityType.toLowerCase() === "flightlog" ||
+    record.entityType.toLowerCase() === "flightLog".toLowerCase();
+
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div className="flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-2xl sm:max-w-5xl sm:rounded-xl">
@@ -425,13 +429,32 @@ function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: (
             <InfoItem label="Category" value={humanize(record.entityType)} />
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <JsonPanel title="Previous value" value={record.previousValue} emptyLabel="No previous value" />
-            <JsonPanel title="Updated value" value={record.updatedValue} emptyLabel="No updated value" />
-          </div>
+          {isFlightRecord ? (
+            <FlightAuditComparison
+              previousValue={record.previousValue}
+              updatedValue={record.updatedValue}
+            />
+          ) : (
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <ReadableAuditPanel
+                title="Previous value"
+                value={record.previousValue}
+                emptyLabel="No previous value"
+              />
+              <ReadableAuditPanel
+                title="Updated value"
+                value={record.updatedValue}
+                emptyLabel="No updated value"
+              />
+            </div>
+          )}
 
           <div className="mt-4">
-            <JsonPanel title="Additional details" value={record.details} emptyLabel="No additional details" />
+            <ReadableAuditPanel
+              title="Additional details"
+              value={record.details}
+              emptyLabel="No additional details"
+            />
           </div>
         </div>
       </div>
@@ -441,6 +464,225 @@ function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: (
 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
+}
+
+type FlightAuditRow = {
+  id?: string;
+  date?: string;
+  location?: string;
+  startTime?: string;
+  duration?: string | number;
+  uaModel?: string;
+  uaCategory?: string;
+  batterySn?: string;
+  pilotInCommand?: string;
+  instructorInCommand?: string;
+  remarks?: string;
+};
+
+type FlightAuditValue = {
+  student?: {
+    studentName?: string;
+    company?: string;
+    lastFourCharacters?: string;
+  };
+  rows?: FlightAuditRow[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+function asFlightAuditValue(value: AuditValue): FlightAuditValue | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as FlightAuditValue;
+}
+
+function flightRowKey(row: FlightAuditRow) {
+  return row.id || [
+    row.date,
+    row.startTime,
+    row.location,
+    row.uaModel,
+    row.batterySn,
+  ].join("|");
+}
+
+function FlightAuditComparison({
+  previousValue,
+  updatedValue,
+}: {
+  previousValue: AuditValue;
+  updatedValue: AuditValue;
+}) {
+  const previous = asFlightAuditValue(previousValue);
+  const updated = asFlightAuditValue(updatedValue);
+  const student = updated?.student || previous?.student;
+  const previousRows = previous?.rows || [];
+  const updatedRows = updated?.rows || [];
+  const previousKeys = new Set(previousRows.map(flightRowKey));
+  const updatedKeys = new Set(updatedRows.map(flightRowKey));
+
+  return (
+    <div className="mt-5 space-y-4">
+      {student ? (
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <h3 className="text-sm font-semibold text-slate-950">
+            Student record
+          </h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <DetailValue
+              label="Student"
+              value={student.studentName || "-"}
+            />
+            <DetailValue
+              label="Company"
+              value={student.company || "-"}
+            />
+            <DetailValue
+              label="Last 4 characters"
+              value={student.lastFourCharacters || "-"}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <FlightRowsPanel
+          title="Before update"
+          rows={previousRows}
+          comparisonKeys={updatedKeys}
+          emptyLabel="This was a newly created record."
+          changeLabel="Removed"
+          changeStyle="bg-rose-50 text-rose-700 ring-rose-200"
+        />
+        <FlightRowsPanel
+          title="After update"
+          rows={updatedRows}
+          comparisonKeys={previousKeys}
+          emptyLabel="No flight entries remain."
+          changeLabel="Added"
+          changeStyle="bg-emerald-50 text-emerald-700 ring-emerald-200"
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DetailValue
+          label="Previous flight count"
+          value={String(previousRows.length)}
+        />
+        <DetailValue
+          label="Updated flight count"
+          value={String(updatedRows.length)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function FlightRowsPanel({
+  title,
+  rows,
+  comparisonKeys,
+  emptyLabel,
+  changeLabel,
+  changeStyle,
+}: {
+  title: string;
+  rows: FlightAuditRow[];
+  comparisonKeys: Set<string>;
+  emptyLabel: string;
+  changeLabel: string;
+  changeStyle: string;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-slate-200">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+          <span className="text-xs font-medium text-slate-500">
+            {rows.length} {rows.length === 1 ? "flight" : "flights"}
+          </span>
+        </div>
+      </div>
+
+      {rows.length ? (
+        <div className="divide-y divide-slate-200">
+          {rows.map((row, index) => {
+            const changed = !comparisonKeys.has(flightRowKey(row));
+
+            return (
+              <article key={`${flightRowKey(row)}-${index}`} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">
+                      Flight {index + 1}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {cleanLegacyAuditDate(String(row.date || "-"))}
+                      {" at "}
+                      {cleanLegacyAuditTime(String(row.startTime || "-"))}
+                    </p>
+                  </div>
+                  {changed ? (
+                    <span
+                      className={`rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ${changeStyle}`}
+                    >
+                      {changeLabel}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                      Unchanged
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                  <DetailValue label="Location" value={row.location || "-"} />
+                  <DetailValue
+                    label="Duration"
+                    value={`${row.duration || "0"} minutes`}
+                  />
+                  <DetailValue label="UA model" value={row.uaModel || "-"} />
+                  <DetailValue
+                    label="UA category"
+                    value={row.uaCategory || "-"}
+                  />
+                  <DetailValue
+                    label="Battery S/N"
+                    value={row.batterySn || "-"}
+                  />
+                  <DetailValue
+                    label="Pilot in Command"
+                    value={row.pilotInCommand || "-"}
+                  />
+                  <DetailValue
+                    label="AFE / Instructor"
+                    value={row.instructorInCommand || "-"}
+                  />
+                  <DetailValue label="Remarks" value={row.remarks || "-"} />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="p-4 text-sm text-slate-500">{emptyLabel}</p>
+      )}
+    </section>
+  );
+}
+
+function DetailValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-slate-900">
+        {value || "-"}
+      </p>
+    </div>
+  );
 }
 
 const auditMonthNumbers: Record<string, string> = {
@@ -512,15 +754,74 @@ function cleanAuditDisplayValue(
   return value;
 }
 
-function JsonPanel({ title, value, emptyLabel }: { title: string; value: AuditValue; emptyLabel: string }) {
+function readableAuditLabel(value: string) {
+  return value
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function readableAuditValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return "";
+}
+
+function flattenAuditValue(
+  value: unknown,
+  parentLabel = ""
+): Array<{ label: string; value: string }> {
+  if (value === null || value === undefined || value === "") return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      flattenAuditValue(
+        item,
+        `${parentLabel || "Item"} ${index + 1}`
+      )
+    );
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(
+      ([key, childValue]) => {
+        const label = parentLabel
+          ? `${parentLabel} - ${readableAuditLabel(key)}`
+          : readableAuditLabel(key);
+
+        return flattenAuditValue(childValue, label);
+      }
+    );
+  }
+
+  return [
+    {
+      label: parentLabel || "Value",
+      value: readableAuditValue(value),
+    },
+  ];
+}
+
+function ReadableAuditPanel({ title, value, emptyLabel }: { title: string; value: AuditValue; emptyLabel: string }) {
   const hasValue = value !== null && value !== undefined && value !== "";
   const displayValue = cleanAuditDisplayValue(value);
+  const entries = flattenAuditValue(displayValue);
 
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200">
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-3"><h3 className="text-sm font-semibold text-slate-900">{title}</h3></div>
-      {hasValue ? (
-        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-6 text-slate-700">{typeof displayValue === "string" ? displayValue : JSON.stringify(displayValue, null, 2)}</pre>
+      {hasValue && entries.length ? (
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
+          {entries.map((entry, index) => (
+            <DetailValue
+              key={`${entry.label}-${index}`}
+              label={entry.label}
+              value={entry.value}
+            />
+          ))}
+        </div>
       ) : (
         <p className="p-4 text-sm text-slate-500">{emptyLabel}</p>
       )}
