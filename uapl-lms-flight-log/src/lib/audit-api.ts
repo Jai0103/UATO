@@ -22,6 +22,7 @@ export type AuditRecord = {
   previousValue: AuditValue;
   updatedValue: AuditValue;
   details: AuditValue;
+  detailsLoaded?: boolean;
 };
 
 export type AuditHistoryRequest = {
@@ -53,4 +54,13 @@ export async function fetchAuditHistoryPage(
     action: "getAuditHistoryPage",
     ...request,
   });
+}
+
+export async function fetchAuditHistoryDetail(auditId: string) {
+  const data = await postToGoogle<{ record: AuditRecord }>({
+    action: "getAuditHistoryDetail",
+    auditId,
+  });
+
+  return data.record;
 }
