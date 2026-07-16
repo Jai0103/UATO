@@ -182,6 +182,18 @@ export default function AuditHistoryPage() {
 
     try {
       const detailedRecord = await fetchAuditHistoryDetail(record.id);
+
+      const hasAuditValues =
+        detailedRecord.previousValue !== null ||
+        detailedRecord.updatedValue !== null ||
+        detailedRecord.details !== null;
+
+      if (!hasAuditValues) {
+        throw new Error(
+          "This AuditLog row has no saved detail values. Check columns K, L, and M in the AuditLog sheet."
+        );
+      }
+
       setSelectedRecord(detailedRecord);
     } catch (error) {
       notify({
@@ -405,9 +417,13 @@ function DateFilter({ label, value, onChange }: { label: string; value: string; 
 }
 
 function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: () => void }) {
+  const normalizedEntityType = record.entityType
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
   const isFlightRecord =
-    record.entityType.toLowerCase() === "flightlog" ||
-    record.entityType.toLowerCase() === "flightLog".toLowerCase();
+    normalizedEntityType === "flightlog" ||
+    record.action.trim().toUpperCase().startsWith("FLIGHT_");
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
