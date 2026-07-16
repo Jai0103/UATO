@@ -1296,40 +1296,53 @@ export default function FlightLogsPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur md:hidden">
-        <div className="grid grid-cols-3 gap-2">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-2.5 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur md:hidden">
+        <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-1.5">
           <button
+            type="button"
             onClick={goBack}
             disabled={activeStep === "details"}
-            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 disabled:opacity-50"
+            className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-700 disabled:opacity-40"
           >
             <ChevronLeft size={15} />
-            Back
+            <span className="leading-none">Back</span>
           </button>
 
           <button
+            type="button"
+            onClick={clearDraft}
+            className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-rose-200 bg-rose-50 px-1 text-[10px] font-semibold text-rose-700"
+          >
+            <RotateCcw size={15} />
+            <span className="leading-none">Clear</span>
+          </button>
+
+          <button
+            type="button"
             onClick={saveDraft}
-            className="inline-flex h-11 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
+            className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-700"
           >
             <Save size={15} />
-            Draft
+            <span className="leading-none">Draft</span>
           </button>
 
           {activeStep === "review" ? (
             <button
+              type="button"
               onClick={saveRecord}
-              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+              className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy px-1 text-[10px] font-semibold text-white"
             >
               <ShieldCheck size={15} />
-              Save
+              <span className="leading-none">Save</span>
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => void goNext()}
-              className="inline-flex h-11 items-center justify-center gap-1 rounded-lg bg-brand-navy text-xs font-semibold text-white"
+              className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy px-1 text-[10px] font-semibold text-white"
             >
-              Next
               <ChevronRight size={15} />
+              <span className="leading-none">Next</span>
             </button>
           )}
         </div>
