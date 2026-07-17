@@ -21,6 +21,7 @@ import {
   Shield,
   UserCircle,
   UserCog,
+  Wrench,
   X
 } from "lucide-react";
 import {
@@ -57,7 +58,8 @@ const adminOnlyPages = [
   "/master-data",
   "/users",
   "/audit-history",
-  "/staff-training"
+  "/staff-training",
+  "/ua-maintenance"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -83,6 +85,10 @@ const adminLinks: NavigationItem[] = [
       {
         href: "/staff-training/records",
         label: "Staff Training Records"
+      },
+      {
+        href: "/ua-maintenance/records",
+        label: "UA Maintenance Records"
       }
     ]
   },
@@ -98,6 +104,12 @@ const adminLinks: NavigationItem[] = [
     exact: true
   },
   {
+    href: "/ua-maintenance",
+    label: "UA Maintenance",
+    icon: Wrench,
+    exact: true
+  },
+  {
     href: "/master-data",
     label: "Master Data",
     icon: Database,
@@ -109,6 +121,10 @@ const adminLinks: NavigationItem[] = [
       {
         href: "/staff-training/master-data",
         label: "Staff Training Data"
+      },
+      {
+        href: "/ua-maintenance/master-data",
+        label: "UA Maintenance Data"
       }
     ]
   },
