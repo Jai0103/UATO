@@ -4,6 +4,7 @@ export type StaffTrainingType =
   | "upgrade";
 
 export type StaffTrainingItemStatus =
+  | ""
   | "not_completed"
   | "in_progress"
   | "completed";
@@ -153,7 +154,7 @@ export function createStaffTrainingEntries(
         trainingType: description.trainingType,
         description: saved?.description || description.description,
         sortOrder: description.sortOrder,
-        status: saved?.status || "not_completed",
+        status: saved?.status ?? "",
         dateCompleted: saved?.dateCompleted || "",
         remarks: saved?.remarks || ""
       } satisfies StaffTrainingEntry;
