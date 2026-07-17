@@ -64,7 +64,7 @@ const statusOptions: Array<{ value: UaMaintenanceStatus; label: string }> = [
 ];
 
 const sectionLabels: Record<UaMaintenanceMasterSection, string> = {
-  uaModels: "UA Brand / Model",
+  uaModels: "UA Aircraft",
   uaIds: "UA ID No.",
   descriptions: "Checklist Description"
 };
@@ -124,6 +124,7 @@ export default function UaMaintenancePage() {
   const [masterSection, setMasterSection] =
     useState<UaMaintenanceMasterSection>("uaModels");
   const [newMasterValue, setNewMasterValue] = useState("");
+  const [newMasterUaId, setNewMasterUaId] = useState("");
 
   const yearOptions = useMemo(() => {
     const year = new Date().getFullYear();
@@ -380,11 +381,25 @@ export default function UaMaintenancePage() {
 
   function addMasterItem() {
     const value = newMasterValue.trim();
+    const linkedUaId = newMasterUaId.trim();
     if (!value) return;
+    if (masterSection === "uaModels" && !linkedUaId) {
+      message.warning("UA ID No. is required", "Enter the UA ID linked to this Brand / Model.");
+      return;
+    }
     if (masterData[masterSection].some((item) =>
       item.value.toLowerCase() === value.toLowerCase()
     )) {
       message.warning("Duplicate value", "This value already exists in the selected section.");
+      return;
+    }
+    if (
+      masterSection === "uaModels" &&
+      masterData.uaModels.some(
+        (item) => (item.linkedUaId || "").toLowerCase() === linkedUaId.toLowerCase()
+      )
+    ) {
+      message.warning("Duplicate UA ID No.", "This UA ID is already linked to another aircraft.");
       return;
     }
     const sortOrder = Math.max(
@@ -395,10 +410,17 @@ export default function UaMaintenancePage() {
       ...current,
       [masterSection]: [
         ...current[masterSection],
-        { id: crypto.randomUUID(), value, sortOrder, status: "active" }
+        {
+          id: crypto.randomUUID(),
+          value,
+          linkedUaId: masterSection === "uaModels" ? linkedUaId : "",
+          sortOrder,
+          status: "active"
+        }
       ]
     }));
     setNewMasterValue("");
+    setNewMasterUaId("");
   }
 
   function updateMasterItem(
@@ -453,7 +475,6 @@ export default function UaMaintenancePage() {
   }
 
   const activeModels = masterData.uaModels.filter((item) => item.status === "active");
-  const activeIds = masterData.uaIds.filter((item) => item.status === "active");
 
   if (loading || !record) {
     return <AppShell><div className="flex min-h-[60vh] items-center justify-center"><div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-lg"><Loader2 className="h-5 w-5 animate-spin text-sky-700" /><span className="text-sm font-semibold text-slate-700">Loading UA Maintenance...</span></div></div></AppShell>;
@@ -474,8 +495,8 @@ export default function UaMaintenancePage() {
         {mode === "checklist" ? (
           <>
             <section className="grid gap-4 border-b border-slate-200 pb-5 md:grid-cols-3">
-              <Field label="UA Brand / Model"><select className={inputClass} value={record.uaModel} onChange={(event) => updateRecord({ uaModel: event.target.value })}><option value="">Select UA model</option>{activeModels.map((item) => <option key={item.id} value={item.value}>{item.value}</option>)}</select></Field>
-              <Field label="UA ID No."><select className={inputClass} value={record.uaId} onChange={(event) => updateRecord({ uaId: event.target.value })}><option value="">Select UA ID</option>{activeIds.map((item) => <option key={item.id} value={item.value}>{item.value}</option>)}</select></Field>
+              <Field label="UA Brand / Model"><select className={inputClass} value={record.uaModel} onChange={(event) => { const selected = activeModels.find((item) => item.value === event.target.value); updateRecord({ uaModel: event.target.value, uaId: selected?.linkedUaId || "" }); }}><option value="">Select UA model</option>{activeModels.map((item) => <option key={item.id} value={item.value}>{item.value}</option>)}</select></Field>
+              <Field label="UA ID No."><input className={`${inputClass} cursor-not-allowed bg-slate-100 text-slate-600`} value={record.uaId} readOnly placeholder="Filled automatically" /></Field>
               <Field label="Maintenance date"><input type="date" className={inputClass} value={record.inspectionDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => updateRecord({ inspectionDate: event.target.value })} /></Field>
             </section>
 
@@ -512,9 +533,9 @@ export default function UaMaintenancePage() {
         {mode === "masterData" ? (
           <section>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="text-xl font-bold text-slate-950">UA Maintenance master data</h2><p className="text-sm text-slate-500">Inactive values remain in saved records but are hidden from new checks.</p></div><button type="button" onClick={() => void saveMasterData()} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white"><Save className="h-4 w-4" /> Save master data</button></div>
-            <div className="mt-5 grid grid-cols-3 gap-2">{(["uaModels", "uaIds", "descriptions"] as UaMaintenanceMasterSection[]).map((section) => <button key={section} type="button" onClick={() => setMasterSection(section)} className={`min-w-0 rounded-lg border px-3 py-3 text-sm font-semibold ${masterSection === section ? "border-sky-700 bg-sky-50 text-sky-900 ring-1 ring-sky-700" : "border-slate-200 bg-white text-slate-600"}`}><span className="block truncate">{sectionLabels[section]}</span><span className="mt-1 block text-xs font-normal">{masterData[section].length} values</span></button>)}</div>
-            <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto]"><textarea className="min-h-12 rounded-lg border border-slate-300 p-3 text-sm" value={newMasterValue} onChange={(event) => setNewMasterValue(event.target.value)} placeholder={`Add ${sectionLabels[masterSection]}`} /><button type="button" onClick={addMasterItem} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add value</button></div>
-            <div className="mt-4 space-y-2">{masterData[masterSection].sort((a, b) => a.sortOrder - b.sortOrder).map((item, index) => <div key={item.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[40px_minmax(0,1fr)_120px_auto] sm:items-center"><span className="text-sm font-bold text-slate-400">{index + 1}</span>{masterSection === "descriptions" ? <textarea className="min-h-20 rounded-lg border border-slate-300 p-3 text-sm" value={item.value} onChange={(event) => updateMasterItem(masterSection, item.id, { value: event.target.value })} /> : <input className="h-11 rounded-lg border border-slate-300 px-3 text-sm" value={item.value} onChange={(event) => updateMasterItem(masterSection, item.id, { value: event.target.value })} />}<button type="button" onClick={() => updateMasterItem(masterSection, item.id, { status: item.status === "active" ? "inactive" : "active" })} className={`h-10 rounded-lg border px-3 text-xs font-bold ${item.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>{item.status === "active" ? "Active" : "Inactive"}</button><IconButton label="Delete value" icon={Trash2} danger onClick={() => void removeMasterItem(masterSection, item)} /></div>)}</div>
+            <div className="mt-5 grid grid-cols-2 gap-2">{(["uaModels", "descriptions"] as UaMaintenanceMasterSection[]).map((section) => <button key={section} type="button" onClick={() => setMasterSection(section)} className={`min-w-0 rounded-lg border px-3 py-3 text-sm font-semibold ${masterSection === section ? "border-sky-700 bg-sky-50 text-sky-900 ring-1 ring-sky-700" : "border-slate-200 bg-white text-slate-600"}`}><span className="block truncate">{sectionLabels[section]}</span><span className="mt-1 block text-xs font-normal">{masterData[section].length} values</span></button>)}</div>
+            <div className={`mt-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 ${masterSection === "uaModels" ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}><input className="h-12 rounded-lg border border-slate-300 px-3 text-sm" value={newMasterValue} onChange={(event) => setNewMasterValue(event.target.value)} placeholder={masterSection === "uaModels" ? "UA Brand / Model" : "Checklist description"} />{masterSection === "uaModels" ? <input className="h-12 rounded-lg border border-slate-300 px-3 text-sm" value={newMasterUaId} onChange={(event) => setNewMasterUaId(event.target.value)} placeholder="UA ID No." /> : null}<button type="button" onClick={addMasterItem} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Add value</button></div>
+            <div className="mt-4 space-y-2">{masterData[masterSection].slice().sort((a, b) => a.sortOrder - b.sortOrder).map((item, index) => <div key={item.id} className={`grid gap-3 rounded-lg border border-slate-200 bg-white p-3 ${masterSection === "uaModels" ? "sm:grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_120px_auto]" : "sm:grid-cols-[40px_minmax(0,1fr)_120px_auto]"} sm:items-center`}><span className="text-sm font-bold text-slate-400">{index + 1}</span>{masterSection === "descriptions" ? <textarea className="min-h-20 rounded-lg border border-slate-300 p-3 text-sm" value={item.value} onChange={(event) => updateMasterItem(masterSection, item.id, { value: event.target.value })} /> : <><input className="h-11 rounded-lg border border-slate-300 px-3 text-sm" value={item.value} onChange={(event) => updateMasterItem(masterSection, item.id, { value: event.target.value })} /><input className="h-11 rounded-lg border border-slate-300 px-3 text-sm" value={item.linkedUaId || ""} onChange={(event) => updateMasterItem(masterSection, item.id, { linkedUaId: event.target.value })} placeholder="UA ID No." /></>}<button type="button" onClick={() => updateMasterItem(masterSection, item.id, { status: item.status === "active" ? "inactive" : "active" })} className={`h-10 rounded-lg border px-3 text-xs font-bold ${item.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>{item.status === "active" ? "Active" : "Inactive"}</button><IconButton label="Delete value" icon={Trash2} danger onClick={() => void removeMasterItem(masterSection, item)} /></div>)}</div>
           </section>
         ) : null}
       </div>
