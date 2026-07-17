@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Database,
   FileText,
+  GraduationCap,
   History,
   Loader2,
   LogOut,
@@ -73,6 +74,11 @@ const adminLinks: NavigationItem[] = [
     icon: FileText
   },
   {
+    href: "/staff-training",
+    label: "Staff Training",
+    icon: GraduationCap
+  },
+  {
     href: "/master-data",
     label: "Master Data",
     icon: Database
@@ -104,6 +110,11 @@ const trainerLinks: NavigationItem[] = [
     href: "/reports",
     label: "Reports",
     icon: FileText
+  },
+  {
+    href: "/staff-training",
+    label: "Staff Training",
+    icon: GraduationCap
   }
 ];
 
