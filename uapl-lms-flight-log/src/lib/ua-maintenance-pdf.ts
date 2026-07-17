@@ -248,19 +248,18 @@ export async function createUaMaintenancePdf(record: UaMaintenanceRecord) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text("Checked by (Name / Signature):", MARGIN + 2.5, y + 6);
+  const checkedByLabel = "Checked by (Name / Signature):";
+  const checkedByLabelX = MARGIN + 2.5;
+  doc.text(checkedByLabel, checkedByLabelX, y + 6);
+
+  const signatureAreaX =
+    checkedByLabelX + doc.getTextWidth(checkedByLabel) + 7;
+  const signatureAreaWidth = 54;
+  const signatureAreaHeight = 11;
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.text(record.checkedByName || "-", MARGIN + 2.5, y + 14);
-
-  const signatureAreaX = 111;
-  const signatureAreaWidth = 76;
-  const signatureAreaHeight = 11;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Signature", signatureAreaX, y + 5);
 
   if (record.signatureDataUrl) {
     const signature = await loadImage(record.signatureDataUrl);
@@ -273,8 +272,8 @@ export async function createUaMaintenancePdf(record: UaMaintenanceRecord) {
       doc.addImage(
         signature,
         "PNG",
-        signatureAreaX + (signatureAreaWidth - size.width) / 2,
-        y + 6 + (signatureAreaHeight - size.height) / 2,
+        signatureAreaX,
+        y + 1.5 + (signatureAreaHeight - size.height) / 2,
         size.width,
         size.height
       );
@@ -282,9 +281,9 @@ export async function createUaMaintenancePdf(record: UaMaintenanceRecord) {
   }
   doc.line(
     signatureAreaX,
-    y + 18,
+    y + 14.5,
     signatureAreaX + signatureAreaWidth,
-    y + 18
+    y + 14.5
   );
   y += 20;
   drawField(doc, "ID No.:", record.checkedByIdNo, MARGIN, y, CONTENT_WIDTH, 10);
