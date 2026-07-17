@@ -49,13 +49,15 @@ export async function fetchStaffTrainingRecordsPage(
     page?: number;
     pageSize?: number;
     query?: string;
+    year?: string;
   } = {}
 ) {
   const data = await postToGoogle<StaffTrainingRecordsPage>({
     action: "getStaffTrainingRecordsPage",
     page: request.page || 1,
     pageSize: request.pageSize || 10,
-    query: request.query?.trim() || ""
+    query: request.query?.trim() || "",
+    year: request.year || ""
   });
 
   return {
