@@ -24,6 +24,7 @@ function formatDate(value: string) {
 }
 
 function statusLabel(value: StaffTrainingEntry["status"]) {
+  if (!value) return "";
   if (value === "completed") return "Completed";
   if (value === "in_progress") return "In Progress";
   return "Not Completed";
