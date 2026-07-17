@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CheckCheck,
   ChevronRight,
   ClipboardCheck,
   Download,
@@ -58,6 +59,7 @@ const statusOptions: Array<{
   value: StaffTrainingItemStatus;
   label: string;
 }> = [
+  { value: "", label: "Select status" },
   { value: "not_completed", label: "Not Completed" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" }
@@ -199,6 +201,43 @@ export default function StaffTrainingPage() {
           ? item.dateCompleted || new Date().toISOString().slice(0, 10)
           : ""
     });
+  }
+
+  async function markSectionCompleted() {
+    if (!record) return;
+
+    const sectionLabel = STAFF_TRAINING_LABELS[activeType];
+    const confirmed = await message.confirm({
+      title: `Complete ${sectionLabel}?`,
+      message:
+        "Every item in this section will be marked Completed. Blank completion dates will use today's date.",
+      confirmLabel: "Mark all completed"
+    });
+
+    if (!confirmed) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    setRecord((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.trainingType === activeType
+            ? {
+                ...item,
+                status: "completed",
+                dateCompleted: item.dateCompleted || today
+              }
+            : item
+        )
+      };
+    });
+
+    message.success(
+      `${sectionLabel} completed`,
+      "Review the dates and remarks, then save the checklist."
+    );
   }
 
   function startNewRecord() {
@@ -506,11 +545,19 @@ export default function StaffTrainingPage() {
             </div>
 
             <section>
-              <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-950">{STAFF_TRAINING_LABELS[activeType]}</h2>
                   <p className="text-sm text-slate-500">Update status, completion date, and remarks for each requirement.</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => void markSectionCompleted()}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 sm:w-auto"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  Mark section completed
+                </button>
               </div>
 
               <div className="hidden overflow-hidden rounded-lg border border-slate-200 bg-white xl:block">
