@@ -8,6 +8,8 @@ import {
 import {
   Archive,
   BarChart3,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   Database,
   FileText,
@@ -37,6 +39,11 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: typeof BarChart3;
+  exact?: boolean;
+  children?: Array<{
+    href: string;
+    label: string;
+  }>;
 };
 
 const LOGO_PATH =
@@ -49,7 +56,8 @@ const adminOnlyPages = [
   "/admin",
   "/master-data",
   "/users",
-  "/audit-history"
+  "/audit-history",
+  "/staff-training"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -66,7 +74,17 @@ const adminLinks: NavigationItem[] = [
   {
     href: "/records",
     label: "Records",
-    icon: Archive
+    icon: Archive,
+    children: [
+      {
+        href: "/records",
+        label: "Flight Log Records"
+      },
+      {
+        href: "/staff-training/records",
+        label: "Staff Training Records"
+      }
+    ]
   },
   {
     href: "/reports",
@@ -76,12 +94,23 @@ const adminLinks: NavigationItem[] = [
   {
     href: "/staff-training",
     label: "Staff Training",
-    icon: GraduationCap
+    icon: GraduationCap,
+    exact: true
   },
   {
     href: "/master-data",
     label: "Master Data",
-    icon: Database
+    icon: Database,
+    children: [
+      {
+        href: "/master-data",
+        label: "Flight Log Data"
+      },
+      {
+        href: "/staff-training/master-data",
+        label: "Staff Training Data"
+      }
+    ]
   },
   {
     href: "/users",
@@ -111,11 +140,6 @@ const trainerLinks: NavigationItem[] = [
     label: "Reports",
     icon: FileText
   },
-  {
-    href: "/staff-training",
-    label: "Staff Training",
-    icon: GraduationCap
-  }
 ];
 
 function BrandLogo({
@@ -178,6 +202,9 @@ export function AppShell({
 
   const [signingOut, setSigningOut] =
     useState(false);
+
+  const [expandedGroups, setExpandedGroups] =
+    useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let active = true;
@@ -343,6 +370,23 @@ export function AppShell({
   }, [pathname]);
 
   useEffect(() => {
+    adminLinks.forEach((item) => {
+      if (
+        item.children?.some(
+          (child) =>
+            pathname === child.href ||
+            pathname.startsWith(`${child.href}/`)
+        )
+      ) {
+        setExpandedGroups((current) => ({
+          ...current,
+          [item.href]: true
+        }));
+      }
+    });
+  }, [pathname]);
+
+  useEffect(() => {
     if (!mobileMenuOpen) {
       document.body.style.overflow = "";
       return;
@@ -428,11 +472,113 @@ export function AppShell({
         {links.map((item) => {
           const Icon = item.icon;
 
+          const childActive = Boolean(
+            item.children?.some(
+              (child) =>
+                pathname === child.href ||
+                pathname.startsWith(
+                  `${child.href}/`
+                )
+            )
+          );
+
           const active =
-            pathname === item.href ||
-            pathname.startsWith(
-              `${item.href}/`
+            item.exact
+              ? pathname === item.href
+              : childActive ||
+                pathname === item.href ||
+                (!item.children &&
+                  pathname.startsWith(
+                    `${item.href}/`
+                  ));
+
+          if (item.children) {
+            const expanded =
+              expandedGroups[item.href] ??
+              childActive;
+
+            return (
+              <div key={item.href}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedGroups(
+                      (current) => ({
+                        ...current,
+                        [item.href]:
+                          !(
+                            current[
+                              item.href
+                            ] ??
+                            childActive
+                          )
+                      })
+                    )
+                  }
+                  className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
+                    active
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  }`}
+                  aria-expanded={expanded}
+                >
+                  <Icon
+                    className={`h-[18px] w-[18px] shrink-0 ${
+                      active
+                        ? "text-sky-300"
+                        : "text-slate-500"
+                    }`}
+                  />
+
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {item.label}
+                  </span>
+
+                  {expanded ? (
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 shrink-0" />
+                  )}
+                </button>
+
+                {expanded ? (
+                  <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                    {item.children.map(
+                      (child) => {
+                        const selected =
+                          pathname ===
+                            child.href ||
+                          pathname.startsWith(
+                            `${child.href}/`
+                          );
+
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() =>
+                              setMobileMenuOpen(
+                                false
+                              )
+                            }
+                            className={`flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
+                              selected
+                                ? "bg-sky-50 text-sky-800"
+                                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            }`}
+                          >
+                            <span className="truncate">
+                              {child.label}
+                            </span>
+                          </Link>
+                        );
+                      }
+                    )}
+                  </div>
+                ) : null}
+              </div>
             );
+          }
 
           return (
             <Link
