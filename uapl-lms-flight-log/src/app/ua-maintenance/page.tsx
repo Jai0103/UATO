@@ -63,6 +63,11 @@ const statusOptions: Array<{ value: UaMaintenanceStatus; label: string }> = [
   { value: "na", label: "N/A" }
 ];
 
+const monthOptions = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
 const sectionLabels: Record<UaMaintenanceMasterSection, string> = {
   uaModels: "UA Aircraft",
   uaIds: "UA ID No.",
@@ -121,6 +126,7 @@ export default function UaMaintenancePage() {
   const [working, setWorking] = useState("");
   const [search, setSearch] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("");
   const [masterSection, setMasterSection] =
     useState<UaMaintenanceMasterSection>("uaModels");
   const [newMasterValue, setNewMasterValue] = useState("");
@@ -164,11 +170,11 @@ export default function UaMaintenancePage() {
   useEffect(() => {
     if (loading || routeMode !== "records") return;
     const timer = window.setTimeout(() => {
-      void loadRecordsPage(1, search, selectedYear);
+      void loadRecordsPage(1, search, selectedYear, selectedMonth);
     }, 350);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, selectedYear, routeMode, loading]);
+  }, [search, selectedYear, selectedMonth, routeMode, loading]);
 
   useEffect(() => {
     if (!viewingRecord) return;
@@ -180,12 +186,13 @@ export default function UaMaintenancePage() {
   async function loadRecordsPage(
     page: number,
     query = search,
-    year = selectedYear
+    year = selectedYear,
+    month = selectedMonth
   ) {
     setRecordsLoading(true);
     try {
       const result = await fetchUaMaintenanceRecordsPage({
-        page, pageSize: 10, query, year
+        page, pageSize: 10, query, year, month
       });
       setRecords(result.records);
       setRecordsPage(result);
@@ -243,7 +250,7 @@ export default function UaMaintenancePage() {
         updatedAt: new Date().toISOString()
       });
       setRecord(saved);
-      await loadRecordsPage(recordsPage.page, search, selectedYear);
+      await loadRecordsPage(recordsPage.page, search, selectedYear, selectedMonth);
       message.success("UA Maintenance Check saved");
     } catch (error) {
       message.error(
@@ -299,7 +306,7 @@ export default function UaMaintenancePage() {
       const nextPage = records.length === 1 && recordsPage.page > 1
         ? recordsPage.page - 1
         : recordsPage.page;
-      await loadRecordsPage(nextPage, search, selectedYear);
+      await loadRecordsPage(nextPage, search, selectedYear, selectedMonth);
       message.success("Maintenance record deleted");
     } catch (error) {
       message.error(
@@ -340,26 +347,19 @@ export default function UaMaintenancePage() {
     }
   }
 
-  async function printRecord(recordId: string) {
-    const printWindow = window.open("", "_blank");
-    setWorking("Preparing maintenance print view...");
+  async function downloadRecord(recordId: string) {
+    setWorking("Preparing maintenance PDF...");
     try {
       const saved = await fetchUaMaintenanceRecord(recordId);
       if (!saved.signatureDataUrl) {
-        printWindow?.close();
         message.warning("Report is not ready", "Upload the checker signature first.");
         return;
       }
       const doc = await createUaMaintenancePdf(saved);
-      doc.autoPrint();
-      const url = URL.createObjectURL(doc.output("blob"));
-      if (printWindow) printWindow.location.href = url;
-      else window.open(url, "_blank");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      doc.save(uaMaintenancePdfFileName(saved));
     } catch (error) {
-      printWindow?.close();
       message.error(
-        "Maintenance print view could not be opened",
+        "Maintenance PDF could not be downloaded",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
@@ -520,10 +520,10 @@ export default function UaMaintenancePage() {
 
         {mode === "records" ? (
           <section>
-            <div className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_150px_auto]"><label className="relative"><span className="sr-only">Search maintenance records</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search model, UA ID, or checker" /></label><select className={`${inputClass} mt-0`} value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}><option value="">All years</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select><button type="button" onClick={() => { setSearch(""); setSelectedYear(""); }} disabled={!search && !selectedYear} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button></div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_150px_auto]"><label className="relative sm:col-span-2 xl:col-span-1"><span className="sr-only">Search maintenance records</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search model, UA ID, or checker" /></label><select className={`${inputClass} mt-0`} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="">All months</option>{monthOptions.map((month, index) => <option key={month} value={String(index + 1).padStart(2, "0")}>{month}</option>)}</select><select className={`${inputClass} mt-0`} value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}><option value="">All years</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select><button type="button" onClick={() => { setSearch(""); setSelectedMonth(""); setSelectedYear(""); }} disabled={!search && !selectedMonth && !selectedYear} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button></div>
             <div className="relative mt-4 min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="divide-y divide-slate-200 lg:hidden">{records.map((item) => <article key={item.id} className="p-4"><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.uaModel}</p><p className="truncate text-sm text-slate-500">{item.uaId}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.inspectionDate)}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} fail` : `${item.passCount}/${item.totalCount}`}</span></div><div className="mt-4 flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Print record" icon={Printer} onClick={() => void printRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></article>)}{!records.length && !recordsLoading ? <div className="px-5 py-14 text-center text-sm text-slate-500">No maintenance records found.</div> : null}</div>
-              <div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">UA Brand / Model</th><th className="px-5 py-3 font-semibold">UA ID No.</th><th className="px-5 py-3 font-semibold">Date</th><th className="px-5 py-3 font-semibold">Checked by</th><th className="px-5 py-3 font-semibold">Result</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody>{records.map((item) => <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><span className="font-semibold text-slate-950">{item.uaModel || "-"}</span></div></td><td className="px-5 py-4 text-slate-700">{item.uaId || "-"}</td><td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(item.inspectionDate)}</td><td className="px-5 py-4 text-slate-700">{item.checkedByName || "-"}</td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} failed` : `${item.passCount} passed`}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Print record" icon={Printer} onClick={() => void printRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></td></tr>)}{!records.length && !recordsLoading ? <tr><td colSpan={6} className="px-5 py-14 text-center text-slate-500">No maintenance records found.</td></tr> : null}</tbody></table></div>
+              <div className="divide-y divide-slate-200 lg:hidden">{records.map((item) => <article key={item.id} className="p-4"><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.uaModel}</p><p className="truncate text-sm text-slate-500">{item.uaId}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.inspectionDate)}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} fail` : `${item.passCount}/${item.totalCount}`}</span></div><div className="mt-4 flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Download PDF" icon={Download} onClick={() => void downloadRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></article>)}{!records.length && !recordsLoading ? <div className="px-5 py-14 text-center text-sm text-slate-500">No maintenance records found.</div> : null}</div>
+              <div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">UA Brand / Model</th><th className="px-5 py-3 font-semibold">UA ID No.</th><th className="px-5 py-3 font-semibold">Date</th><th className="px-5 py-3 font-semibold">Checked by</th><th className="px-5 py-3 font-semibold">Result</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody>{records.map((item) => <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><span className="font-semibold text-slate-950">{item.uaModel || "-"}</span></div></td><td className="px-5 py-4 text-slate-700">{item.uaId || "-"}</td><td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(item.inspectionDate)}</td><td className="px-5 py-4 text-slate-700">{item.checkedByName || "-"}</td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} failed` : `${item.passCount} passed`}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Download PDF" icon={Download} onClick={() => void downloadRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></td></tr>)}{!records.length && !recordsLoading ? <tr><td colSpan={6} className="px-5 py-14 text-center text-slate-500">No maintenance records found.</td></tr> : null}</tbody></table></div>
               {recordsLoading ? <div className="absolute inset-0 flex items-center justify-center bg-white/80"><div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg"><Loader2 className="h-4 w-4 animate-spin text-sky-700" /> Loading records...</div></div> : null}
               <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Showing {records.length} of {recordsPage.totalRecords} records / Page {recordsPage.page} of {recordsPage.totalPages}</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!recordsPage.hasPreviousPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button><button type="button" disabled={!recordsPage.hasNextPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button></div></div>
             </div>
@@ -567,3 +567,4 @@ function MaintenanceModal({ record, onClose, onDownload, onPrint }: { record: Ua
 function Detail({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[11px] font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
 }
+
