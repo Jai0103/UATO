@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  usePathname,
-  useRouter
-} from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Archive,
   BarChart3,
@@ -13,7 +10,6 @@ import {
   ClipboardList,
   Database,
   FileText,
-  GraduationCap,
   History,
   Loader2,
   LogOut,
@@ -21,13 +17,9 @@ import {
   Shield,
   UserCircle,
   UserCog,
-  Wrench,
   X
 } from "lucide-react";
-import {
-  useEffect,
-  useState
-} from "react";
+import { useEffect, useState } from "react";
 import {
   getSecureSession,
   isSessionExpired,
@@ -36,22 +28,22 @@ import {
   verifySecureSession
 } from "@/lib/auth-api";
 
+type NavigationChild = {
+  href: string;
+  label: string;
+  exact?: boolean;
+};
+
 type NavigationItem = {
   href: string;
   label: string;
   icon: typeof BarChart3;
   exact?: boolean;
-  children?: Array<{
-    href: string;
-    label: string;
-  }>;
+  children?: NavigationChild[];
 };
 
-const LOGO_PATH =
-  "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
-
-const PASSWORD_PAGE =
-  "/change-password";
+const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
+const PASSWORD_PAGE = "/change-password";
 
 const adminOnlyPages = [
   "/admin",
@@ -69,26 +61,48 @@ const adminLinks: NavigationItem[] = [
     icon: BarChart3
   },
   {
-    href: "/flight-logs",
-    label: "Flight Logs",
-    icon: ClipboardList
+    href: "/operations",
+    label: "Operations",
+    icon: ClipboardList,
+    children: [
+      { href: "/flight-logs", label: "Flight Logs", exact: true },
+      { href: "/staff-training", label: "Staff Training", exact: true },
+      { href: "/ua-maintenance", label: "UA Maintenance", exact: true }
+    ]
   },
   {
     href: "/records",
     label: "Records",
     icon: Archive,
     children: [
-      {
-        href: "/records",
-        label: "Flight Log Records"
-      },
+      { href: "/records", label: "Flight Log Records", exact: true },
       {
         href: "/staff-training/records",
-        label: "Staff Training Records"
+        label: "Staff Training Records",
+        exact: true
       },
       {
         href: "/ua-maintenance/records",
-        label: "UA Maintenance Records"
+        label: "UA Maintenance Records",
+        exact: true
+      }
+    ]
+  },
+  {
+    href: "/master-data",
+    label: "Master Data",
+    icon: Database,
+    children: [
+      { href: "/master-data", label: "Flight Log Data", exact: true },
+      {
+        href: "/staff-training/master-data",
+        label: "Staff Training Data",
+        exact: true
+      },
+      {
+        href: "/ua-maintenance/master-data",
+        label: "UA Maintenance Data",
+        exact: true
       }
     ]
   },
@@ -96,37 +110,6 @@ const adminLinks: NavigationItem[] = [
     href: "/reports",
     label: "Reports",
     icon: FileText
-  },
-  {
-    href: "/staff-training",
-    label: "Staff Training",
-    icon: GraduationCap,
-    exact: true
-  },
-  {
-    href: "/ua-maintenance",
-    label: "UA Maintenance",
-    icon: Wrench,
-    exact: true
-  },
-  {
-    href: "/master-data",
-    label: "Master Data",
-    icon: Database,
-    children: [
-      {
-        href: "/master-data",
-        label: "Flight Log Data"
-      },
-      {
-        href: "/staff-training/master-data",
-        label: "Staff Training Data"
-      },
-      {
-        href: "/ua-maintenance/master-data",
-        label: "UA Maintenance Data"
-      }
-    ]
   },
   {
     href: "/users",
@@ -155,14 +138,16 @@ const trainerLinks: NavigationItem[] = [
     href: "/reports",
     label: "Reports",
     icon: FileText
-  },
+  }
 ];
 
-function BrandLogo({
-  mobile = false
-}: {
-  mobile?: boolean;
-}) {
+function pathMatches(pathname: string, href: string, exact = false) {
+  return exact
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function BrandLogo({ mobile = false }: { mobile?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <img
@@ -174,7 +159,6 @@ function BrandLogo({
             : "max-h-12 w-auto max-w-[116px] shrink-0 object-contain"
         }
       />
-
       <div className="min-w-0 border-l border-slate-200 pl-3">
         <p
           className={
@@ -184,81 +168,49 @@ function BrandLogo({
           }
         >
           Flight Management
-          <span className="block">
-            System
-          </span>
+          <span className="block">System</span>
         </p>
       </div>
     </div>
   );
 }
 
-export function AppShell({
-  children
-}: {
-  children: React.ReactNode;
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-
-  const [session, setSession] =
-    useState<SecureSession | null>(
-      null
-    );
-
-  const [
-    checkingSession,
-    setCheckingSession
-  ] = useState(true);
-
-  const [
-    mobileMenuOpen,
-    setMobileMenuOpen
-  ] = useState(false);
-
-  const [signingOut, setSigningOut] =
-    useState(false);
-
-  const [expandedGroups, setExpandedGroups] =
-    useState<Record<string, boolean>>({});
+  const [session, setSession] = useState<SecureSession | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+    {}
+  );
 
   useEffect(() => {
     let active = true;
 
     async function initializeSession() {
-      const storedSession =
-        getSecureSession();
-
+      const storedSession = getSecureSession();
       if (!storedSession) {
-        if (active) {
-          setCheckingSession(false);
-        }
-
+        if (active) setCheckingSession(false);
         router.replace("/");
         return;
       }
 
       try {
-        const verified =
-          await verifySecureSession(
-            storedSession
-          );
-
+        const verified = await verifySecureSession(storedSession);
         if (!active) return;
-
         setSession(verified);
         setCheckingSession(false);
       } catch {
         if (!active) return;
-
         setSession(null);
         setCheckingSession(false);
         router.replace("/");
       }
     }
 
-    initializeSession();
-
+    void initializeSession();
     return () => {
       active = false;
     };
@@ -267,23 +219,15 @@ export function AppShell({
   useEffect(() => {
     if (!session) return;
 
-    if (
-      session.mustChangePassword &&
-      pathname !== PASSWORD_PAGE
-    ) {
+    if (session.mustChangePassword && pathname !== PASSWORD_PAGE) {
       router.replace(PASSWORD_PAGE);
       return;
     }
 
-    const adminOnly =
-      adminOnlyPages.some((page) =>
-        pathname.startsWith(page)
-      );
-
-    if (
-      session.role !== "admin" &&
-      adminOnly
-    ) {
+    const adminOnly = adminOnlyPages.some((page) =>
+      pathname.startsWith(page)
+    );
+    if (session.role !== "admin" && adminOnly) {
       router.replace("/flight-logs");
     }
   }, [pathname, router, session]);
@@ -292,92 +236,51 @@ export function AppShell({
     if (!session) return;
 
     const checkExpiration = () => {
-      if (!isSessionExpired(session)) {
-        return;
-      }
-
+      if (!isSessionExpired(session)) return;
       setSession(null);
       router.replace("/");
     };
 
     checkExpiration();
-
-    const interval =
-      window.setInterval(
-        checkExpiration,
-        60_000
-      );
-
-    return () => {
-      window.clearInterval(interval);
-    };
+    const interval = window.setInterval(checkExpiration, 60_000);
+    return () => window.clearInterval(interval);
   }, [router, session]);
 
   useEffect(() => {
     if (!session) return;
-
     let active = true;
 
-    const verifyWithServer =
-      async () => {
-        const storedSession =
-          getSecureSession();
-
-        if (!storedSession) {
-          if (active) {
-            setSession(null);
-            router.replace("/");
-          }
-
-          return;
+    const verifyWithServer = async () => {
+      const storedSession = getSecureSession();
+      if (!storedSession) {
+        if (active) {
+          setSession(null);
+          router.replace("/");
         }
+        return;
+      }
 
-        try {
-          const verified =
-            await verifySecureSession(
-              storedSession
-            );
-
-          if (active) {
-            setSession(verified);
-          }
-        } catch {
-          if (active) {
-            setSession(null);
-            router.replace("/");
-          }
+      try {
+        const verified = await verifySecureSession(storedSession);
+        if (active) setSession(verified);
+      } catch {
+        if (active) {
+          setSession(null);
+          router.replace("/");
         }
-      };
-
-    const interval =
-      window.setInterval(
-        verifyWithServer,
-        5 * 60_000
-      );
-
-    const handleVisibility = () => {
-      if (
-        document.visibilityState ===
-        "visible"
-      ) {
-        verifyWithServer();
       }
     };
 
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibility
-    );
+    const interval = window.setInterval(verifyWithServer, 5 * 60_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void verifyWithServer();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       active = false;
-
       window.clearInterval(interval);
-
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibility
-      );
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [router, session]);
 
@@ -387,13 +290,10 @@ export function AppShell({
 
   useEffect(() => {
     adminLinks.forEach((item) => {
-      if (
-        item.children?.some(
-          (child) =>
-            pathname === child.href ||
-            pathname.startsWith(`${child.href}/`)
-        )
-      ) {
+      const childActive = item.children?.some((child) =>
+        pathMatches(pathname, child.href, child.exact)
+      );
+      if (childActive) {
         setExpandedGroups((current) => ({
           ...current,
           [item.href]: true
@@ -407,10 +307,7 @@ export function AppShell({
       document.body.style.overflow = "";
       return;
     }
-
-    document.body.style.overflow =
-      "hidden";
-
+    document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
@@ -418,30 +315,22 @@ export function AppShell({
 
   async function logout() {
     if (signingOut) return;
-
     setSigningOut(true);
     setMobileMenuOpen(false);
-
     await logoutSecurely();
-
     setSession(null);
     router.replace("/");
   }
 
-  if (
-    checkingSession ||
-    !session
-  ) {
+  if (checkingSession || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4">
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-lg shadow-slate-200/60">
           <Loader2 className="h-5 w-5 animate-spin text-sky-700" />
-
           <div>
             <p className="text-sm font-semibold text-slate-900">
               Verifying session
             </p>
-
             <p className="text-xs text-slate-500">
               Checking your secure access...
             </p>
@@ -451,10 +340,7 @@ export function AppShell({
     );
   }
 
-  const links =
-    session.role === "admin"
-      ? adminLinks
-      : trainerLinks;
+  const links = session.role === "admin" ? adminLinks : trainerLinks;
 
   const navigation = (
     <>
@@ -471,12 +357,10 @@ export function AppShell({
               <UserCircle className="h-5 w-5" />
             )}
           </div>
-
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-950">
               {session.name}
             </p>
-
             <p className="truncate text-xs capitalize text-slate-500">
               {session.role}
             </p>
@@ -487,49 +371,26 @@ export function AppShell({
       <nav className="space-y-1">
         {links.map((item) => {
           const Icon = item.icon;
-
           const childActive = Boolean(
-            item.children?.some(
-              (child) =>
-                pathname === child.href ||
-                pathname.startsWith(
-                  `${child.href}/`
-                )
+            item.children?.some((child) =>
+              pathMatches(pathname, child.href, child.exact)
             )
           );
-
-          const active =
-            item.exact
-              ? pathname === item.href
-              : childActive ||
-                pathname === item.href ||
-                (!item.children &&
-                  pathname.startsWith(
-                    `${item.href}/`
-                  ));
+          const active = item.children
+            ? childActive
+            : pathMatches(pathname, item.href, item.exact);
 
           if (item.children) {
-            const expanded =
-              expandedGroups[item.href] ??
-              childActive;
-
+            const expanded = expandedGroups[item.href] ?? childActive;
             return (
               <div key={item.href}>
                 <button
                   type="button"
                   onClick={() =>
-                    setExpandedGroups(
-                      (current) => ({
-                        ...current,
-                        [item.href]:
-                          !(
-                            current[
-                              item.href
-                            ] ??
-                            childActive
-                          )
-                      })
-                    )
+                    setExpandedGroups((current) => ({
+                      ...current,
+                      [item.href]: !(current[item.href] ?? childActive)
+                    }))
                   }
                   className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                     active
@@ -540,16 +401,12 @@ export function AppShell({
                 >
                   <Icon
                     className={`h-[18px] w-[18px] shrink-0 ${
-                      active
-                        ? "text-sky-300"
-                        : "text-slate-500"
+                      active ? "text-sky-300" : "text-slate-500"
                     }`}
                   />
-
                   <span className="min-w-0 flex-1 truncate text-left">
                     {item.label}
                   </span>
-
                   {expanded ? (
                     <ChevronDown className="h-4 w-4 shrink-0" />
                   ) : (
@@ -559,37 +416,27 @@ export function AppShell({
 
                 {expanded ? (
                   <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">
-                    {item.children.map(
-                      (child) => {
-                        const selected =
-                          pathname ===
-                            child.href ||
-                          pathname.startsWith(
-                            `${child.href}/`
-                          );
-
-                        return (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            onClick={() =>
-                              setMobileMenuOpen(
-                                false
-                              )
-                            }
-                            className={`flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
-                              selected
-                                ? "bg-sky-50 text-sky-800"
-                                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                            }`}
-                          >
-                            <span className="truncate">
-                              {child.label}
-                            </span>
-                          </Link>
-                        );
-                      }
-                    )}
+                    {item.children.map((child) => {
+                      const selected = pathMatches(
+                        pathname,
+                        child.href,
+                        child.exact
+                      );
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
+                            selected
+                              ? "bg-sky-50 text-sky-800"
+                              : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                          }`}
+                        >
+                          <span className="truncate">{child.label}</span>
+                        </Link>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -600,9 +447,7 @@ export function AppShell({
             <Link
               key={item.href}
               href={item.href}
-              onClick={() =>
-                setMobileMenuOpen(false)
-              }
+              onClick={() => setMobileMenuOpen(false)}
               className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                 active
                   ? "bg-slate-950 text-white shadow-sm"
@@ -611,15 +456,10 @@ export function AppShell({
             >
               <Icon
                 className={`h-[18px] w-[18px] shrink-0 ${
-                  active
-                    ? "text-sky-300"
-                    : "text-slate-500"
+                  active ? "text-sky-300" : "text-slate-500"
                 }`}
               />
-
-              <span className="truncate">
-                {item.label}
-              </span>
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
@@ -637,10 +477,7 @@ export function AppShell({
           ) : (
             <LogOut className="h-[18px] w-[18px]" />
           )}
-
-          {signingOut
-            ? "Signing out..."
-            : "Sign out"}
+          {signingOut ? "Signing out..." : "Sign out"}
         </button>
       </div>
     </>
@@ -651,12 +488,9 @@ export function AppShell({
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
-
           <button
             type="button"
-            onClick={() =>
-              setMobileMenuOpen(true)
-            }
+            onClick={() => setMobileMenuOpen(true)}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
             aria-label="Open navigation menu"
             aria-expanded={mobileMenuOpen}
@@ -671,26 +505,20 @@ export function AppShell({
           <button
             type="button"
             className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
-            onClick={() =>
-              setMobileMenuOpen(false)
-            }
+            onClick={() => setMobileMenuOpen(false)}
             aria-label="Close navigation menu"
           />
-
           <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-y-auto bg-white p-5 shadow-2xl">
             <div className="mb-4 flex justify-end">
               <button
                 type="button"
-                onClick={() =>
-                  setMobileMenuOpen(false)
-                }
+                onClick={() => setMobileMenuOpen(false)}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50"
                 aria-label="Close navigation menu"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-
             {navigation}
           </aside>
         </div>
