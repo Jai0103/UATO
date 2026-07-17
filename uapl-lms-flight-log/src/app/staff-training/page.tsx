@@ -132,9 +132,15 @@ export default function StaffTrainingPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
   const [search, setSearch] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newDescriptionType, setNewDescriptionType] =
     useState<StaffTrainingType>("induction");
+
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 12 }, (_, index) => currentYear - index);
+  }, []);
 
   async function loadPage() {
     setLoading(true);
@@ -189,13 +195,13 @@ export default function StaffTrainingPage() {
     if (loading || routeMode !== "records") return;
 
     const timer = window.setTimeout(() => {
-      void loadRecordsPage(1, search);
+      void loadRecordsPage(1, search, selectedYear);
     }, 350);
 
     return () => window.clearTimeout(timer);
     // Search is intentionally debounced before requesting Google Sheets.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, routeMode, loading]);
+  }, [search, selectedYear, routeMode, loading]);
 
   const visibleItems = useMemo(
     () =>
@@ -217,13 +223,18 @@ export default function StaffTrainingPage() {
     };
   }, [record]);
 
-  async function loadRecordsPage(page: number, query = search) {
+  async function loadRecordsPage(
+    page: number,
+    query = search,
+    year = selectedYear
+  ) {
     setRecordsLoading(true);
     try {
       const result = await fetchStaffTrainingRecordsPage({
         page,
         pageSize: 10,
-        query
+        query,
+        year
       });
       setRecords(result.records);
       setRecordsPage(result);
@@ -745,24 +756,66 @@ export default function StaffTrainingPage() {
 
         {mode === "records" ? (
           <section>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div><h2 className="text-xl font-bold text-slate-950">Saved staff records</h2><p className="text-sm text-slate-500">View reports or continue updating a checklist.</p></div>
-              <div className="relative w-full sm:w-80"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search staff" /></div>
+              <div className="grid w-full gap-3 sm:grid-cols-[minmax(220px,1fr)_150px_auto] lg:max-w-2xl">
+                <label className="relative block">
+                  <span className="sr-only">Search staff records</span>
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search staff" />
+                </label>
+                <label>
+                  <span className="sr-only">Filter by year</span>
+                  <select className={`${inputClass} mt-0`} value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}>
+                    <option value="">All years</option>
+                    {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={() => { setSearch(""); setSelectedYear(""); }} disabled={!search && !selectedYear} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button>
+              </div>
             </div>
-            <div className="relative mt-4 min-h-40">
-              <div className="grid gap-3 xl:grid-cols-2">
-              {records.map((item) => (
-                <article key={item.id} className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><UserRound className="h-5 w-5" /></div>
-                  <div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.staffName}</p><p className="truncate text-sm text-slate-500">{item.designation || item.staffEmail}</p><p className="mt-1 text-xs font-semibold text-emerald-700">{item.completedCount} of {item.totalCount} completed</p></div>
-                  <div className="flex justify-end gap-2">
-                    <IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} />
-                    <IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} />
-                    <IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger />
-                  </div>
-                </article>
-              ))}
-              {!records.length && !recordsLoading ? <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 xl:col-span-2">No staff training records found.</div> : null}
+
+            <div className="relative mt-4 min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="divide-y divide-slate-200 lg:hidden">
+                {records.map((item) => (
+                  <article key={item.id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><UserRound className="h-5 w-5" /></div>
+                      <div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.staffName}</p><p className="truncate text-sm text-slate-500">{item.designation || "-"}</p><p className="mt-1 truncate text-xs text-slate-500">{item.staffEmail || "-"}</p></div>
+                      <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{item.completedCount}/{item.totalCount}</span>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"><div><p className="text-xs text-slate-500">Updated</p><p className="mt-1 text-sm font-medium text-slate-800">{formatRecordDate(item.updatedAt)}</p></div><div className="flex gap-2"><IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} /><IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} /><IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger /></div></div>
+                  </article>
+                ))}
+                {!records.length && !recordsLoading ? <div className="px-5 py-14 text-center text-sm text-slate-500">No staff training records found.</div> : null}
+              </div>
+
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[940px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                      <th className="px-5 py-3 font-semibold">Staff</th>
+                      <th className="px-5 py-3 font-semibold">Designation</th>
+                      <th className="px-5 py-3 font-semibold">Email</th>
+                      <th className="px-5 py-3 font-semibold">Progress</th>
+                      <th className="px-5 py-3 font-semibold">Updated</th>
+                      <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records.map((item) => (
+                      <tr key={item.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/70">
+                        <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><UserRound className="h-5 w-5" /></div><span className="font-semibold text-slate-950">{item.staffName || "-"}</span></div></td>
+                        <td className="px-5 py-4 text-slate-700">{item.designation || "-"}</td>
+                        <td className="max-w-[240px] truncate px-5 py-4 text-slate-700" title={item.staffEmail}>{item.staffEmail || "-"}</td>
+                        <td className="px-5 py-4"><span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{item.completedCount} of {item.totalCount}</span></td>
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatRecordDate(item.updatedAt)}</td>
+                        <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} /><IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} /><IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger /></div></td>
+                      </tr>
+                    ))}
+                    {!records.length && !recordsLoading ? <tr><td colSpan={6} className="px-5 py-14 text-center text-slate-500">No staff training records found.</td></tr> : null}
+                  </tbody>
+                </table>
               </div>
 
               {recordsLoading ? (
@@ -772,15 +825,14 @@ export default function StaffTrainingPage() {
                   </div>
                 </div>
               ) : null}
-            </div>
-
-            <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-500">
-                Page <span className="font-semibold text-slate-900">{recordsPage.page}</span> of <span className="font-semibold text-slate-900">{recordsPage.totalPages}</span> / {recordsPage.totalRecords} records
+                Showing {records.length} of {recordsPage.totalRecords} records / Page <span className="font-semibold text-slate-900">{recordsPage.page}</span> of <span className="font-semibold text-slate-900">{recordsPage.totalPages}</span>
               </p>
               <div className="grid grid-cols-2 gap-2 sm:flex">
                 <button type="button" disabled={!recordsPage.hasPreviousPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button>
                 <button type="button" disabled={!recordsPage.hasNextPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button>
+              </div>
               </div>
             </div>
           </section>
