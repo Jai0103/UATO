@@ -11,12 +11,12 @@ import {
   Plus,
   Save,
   Search,
-  Settings2,
   Trash2,
   Upload,
   UserRound,
   X
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import {
   useEffect,
   useMemo,
@@ -96,9 +96,17 @@ function statusColor(status: StaffTrainingItemStatus) {
 
 export default function StaffTrainingPage() {
   const message = useAppMessage();
+  const pathname = usePathname();
   const session = getSecureSession();
   const isAdmin = session?.role === "admin";
-  const [mode, setMode] = useState<PageMode>("checklist");
+  const routeMode: PageMode = pathname.includes(
+    "/master-data"
+  )
+    ? "descriptions"
+    : pathname.includes("/records")
+      ? "records"
+      : "checklist";
+  const [mode, setMode] = useState<PageMode>(routeMode);
   const [activeType, setActiveType] =
     useState<StaffTrainingType>("induction");
   const [descriptions, setDescriptions] = useState<
@@ -145,6 +153,10 @@ export default function StaffTrainingPage() {
     // The secure session is stable for this page visit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setMode(routeMode);
+  }, [routeMode]);
 
   const visibleItems = useMemo(
     () =>
@@ -480,8 +492,20 @@ export default function StaffTrainingPage() {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase text-sky-700">
               <ClipboardCheck className="h-4 w-4" /> ADA-UATO-3-1B
             </div>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">Staff Internal Training</h1>
-            <p className="mt-1 text-sm text-slate-600">Complete, maintain, and report staff training checklists.</p>
+            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
+              {mode === "records"
+                ? "Staff Training Records"
+                : mode === "descriptions"
+                  ? "Staff Training Data"
+                  : "Staff Internal Training"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {mode === "records"
+                ? "Review, continue, or delete saved staff training records."
+                : mode === "descriptions"
+                  ? "Manage the descriptions used by Staff Internal Training checklists."
+                  : "Complete, maintain, and report staff training checklists."}
+            </p>
           </div>
           <button
             type="button"
@@ -491,14 +515,6 @@ export default function StaffTrainingPage() {
             <Plus className="h-4 w-4" /> New checklist
           </button>
         </header>
-
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white p-1 sm:flex sm:w-fit">
-          <ModeButton active={mode === "checklist"} onClick={() => setMode("checklist")} icon={ClipboardCheck} label="Checklist" />
-          <ModeButton active={mode === "records"} onClick={() => setMode("records")} icon={UserRound} label="Records" />
-          {isAdmin ? (
-            <ModeButton active={mode === "descriptions"} onClick={() => setMode("descriptions")} icon={Settings2} label="Descriptions" />
-          ) : null}
-        </div>
 
         {mode === "checklist" ? (
           <>
@@ -702,10 +718,6 @@ export default function StaffTrainingPage() {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-sm font-semibold text-slate-800">{label}{children}</label>;
-}
-
-function ModeButton({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof ClipboardCheck; label: string }) {
-  return <button type="button" onClick={onClick} className={`inline-flex h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-semibold transition ${active ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{label}</button>;
 }
 
 function IconButton({ label, onClick, icon: Icon, danger = false }: { label: string; onClick: () => void; icon: typeof Edit3; danger?: boolean }) {
