@@ -2,6 +2,7 @@
 
 import {
   CheckCheck,
+  ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   Download,
@@ -30,9 +31,10 @@ import {
   deleteStaffTrainingRecord,
   fetchStaffTrainingDescriptions,
   fetchStaffTrainingRecord,
-  fetchStaffTrainingRecords,
+  fetchStaffTrainingRecordsPage,
   saveStaffTrainingDescriptions,
-  saveStaffTrainingRecord
+  saveStaffTrainingRecord,
+  type StaffTrainingRecordsPage
 } from "@/lib/staff-training-api";
 import {
   createStaffTrainingEntries,
@@ -113,6 +115,19 @@ export default function StaffTrainingPage() {
     StaffTrainingDescription[]
   >([]);
   const [records, setRecords] = useState<StaffTrainingRecordSummary[]>([]);
+  const [recordsPage, setRecordsPage] =
+    useState<StaffTrainingRecordsPage>({
+      records: [],
+      page: 1,
+      pageSize: 10,
+      totalRecords: 0,
+      totalPages: 1,
+      hasPreviousPage: false,
+      hasNextPage: false
+    });
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [viewingRecord, setViewingRecord] =
+    useState<StaffTrainingRecord | null>(null);
   const [record, setRecord] = useState<StaffTrainingRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
@@ -124,12 +139,13 @@ export default function StaffTrainingPage() {
   async function loadPage() {
     setLoading(true);
     try {
-      const [nextDescriptions, nextRecords] = await Promise.all([
+      const [nextDescriptions, nextRecordsPage] = await Promise.all([
         fetchStaffTrainingDescriptions(),
-        fetchStaffTrainingRecords()
+        fetchStaffTrainingRecordsPage({ page: 1, pageSize: 10 })
       ]);
       setDescriptions(nextDescriptions);
-      setRecords(nextRecords);
+      setRecords(nextRecordsPage.records);
+      setRecordsPage(nextRecordsPage);
       setRecord((current) =>
         current ||
         emptyRecord(
@@ -158,6 +174,29 @@ export default function StaffTrainingPage() {
     setMode(routeMode);
   }, [routeMode]);
 
+  useEffect(() => {
+    if (!viewingRecord) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [viewingRecord]);
+
+  useEffect(() => {
+    if (loading || routeMode !== "records") return;
+
+    const timer = window.setTimeout(() => {
+      void loadRecordsPage(1, search);
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+    // Search is intentionally debounced before requesting Google Sheets.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, routeMode, loading]);
+
   const visibleItems = useMemo(
     () =>
       (record?.items || [])
@@ -178,16 +217,25 @@ export default function StaffTrainingPage() {
     };
   }, [record]);
 
-  const filteredRecords = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return records;
-    return records.filter((item) =>
-      [item.staffName, item.staffEmail, item.designation]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [records, search]);
+  async function loadRecordsPage(page: number, query = search) {
+    setRecordsLoading(true);
+    try {
+      const result = await fetchStaffTrainingRecordsPage({
+        page,
+        pageSize: 10,
+        query
+      });
+      setRecords(result.records);
+      setRecordsPage(result);
+    } catch (error) {
+      message.error(
+        "Staff training records could not be loaded",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setRecordsLoading(false);
+    }
+  }
 
   function updateRecord(patch: Partial<StaffTrainingRecord>) {
     setRecord((current) => (current ? { ...current, ...patch } : current));
@@ -317,7 +365,7 @@ export default function StaffTrainingPage() {
         updatedAt: new Date().toISOString()
       });
       setRecord(saved);
-      setRecords(await fetchStaffTrainingRecords());
+      await loadRecordsPage(recordsPage.page, search);
       message.success(
         "Staff training saved",
         `${saved.staffName}'s checklist is now stored in Google Sheets.`
@@ -343,12 +391,54 @@ export default function StaffTrainingPage() {
     setWorking("Deleting staff training record...");
     try {
       await deleteStaffTrainingRecord(summary.id);
-      setRecords((current) => current.filter((item) => item.id !== summary.id));
+      const nextPage =
+        records.length === 1 && recordsPage.page > 1
+          ? recordsPage.page - 1
+          : recordsPage.page;
+      await loadRecordsPage(nextPage, search);
       if (record?.id === summary.id) startNewRecord();
       message.success("Record deleted");
     } catch (error) {
       message.error(
         "Record was not deleted",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function viewSavedRecord(recordId: string) {
+    setWorking("Loading staff training details...");
+    try {
+      const saved = await fetchStaffTrainingRecord(recordId);
+      setViewingRecord(saved);
+    } catch (error) {
+      message.error(
+        "Record details could not be loaded",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function downloadSavedRecordPdf(target: StaffTrainingRecord) {
+    if (!target.signatureDataUrl) {
+      message.warning(
+        "Report is not ready",
+        "Upload the Head of Training signature before downloading the PDF."
+      );
+      return;
+    }
+
+    setWorking("Preparing staff training PDF...");
+    try {
+      const doc = await createStaffTrainingPdf(target);
+      doc.save(staffTrainingPdfFileName(target));
+    } catch (error) {
+      message.error(
+        "PDF could not be generated",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
@@ -656,21 +746,42 @@ export default function StaffTrainingPage() {
         {mode === "records" ? (
           <section>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div><h2 className="text-xl font-bold text-slate-950">Saved staff records</h2><p className="text-sm text-slate-500">Open a checklist to continue updating it.</p></div>
+              <div><h2 className="text-xl font-bold text-slate-950">Saved staff records</h2><p className="text-sm text-slate-500">View reports or continue updating a checklist.</p></div>
               <div className="relative w-full sm:w-80"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search staff" /></div>
             </div>
-            <div className="mt-4 grid gap-3 xl:grid-cols-2">
-              {filteredRecords.map((item) => (
+            <div className="relative mt-4 min-h-40">
+              <div className="grid gap-3 xl:grid-cols-2">
+              {records.map((item) => (
                 <article key={item.id} className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><UserRound className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.staffName}</p><p className="truncate text-sm text-slate-500">{item.designation || item.staffEmail}</p><p className="mt-1 text-xs font-semibold text-emerald-700">{item.completedCount} of {item.totalCount} completed</p></div>
                   <div className="flex justify-end gap-2">
-                    <IconButton label="Open record" onClick={() => void openRecord(item.id)} icon={ChevronRight} />
+                    <IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} />
+                    <IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} />
                     <IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger />
                   </div>
                 </article>
               ))}
-              {!filteredRecords.length ? <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 xl:col-span-2">No staff training records found.</div> : null}
+              {!records.length && !recordsLoading ? <div className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500 xl:col-span-2">No staff training records found.</div> : null}
+              </div>
+
+              {recordsLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-[#f3f6fb]/80 backdrop-blur-[1px]">
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-lg">
+                    <Loader2 className="h-4 w-4 animate-spin text-sky-700" /> Loading records...
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-500">
+                Page <span className="font-semibold text-slate-900">{recordsPage.page}</span> of <span className="font-semibold text-slate-900">{recordsPage.totalPages}</span> / {recordsPage.totalRecords} records
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <button type="button" disabled={!recordsPage.hasPreviousPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button>
+                <button type="button" disabled={!recordsPage.hasNextPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button>
+              </div>
             </div>
           </section>
         ) : null}
@@ -707,6 +818,69 @@ export default function StaffTrainingPage() {
         ) : null}
       </div>
 
+      {viewingRecord ? (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+            onClick={() => setViewingRecord(null)}
+            aria-label="Close staff training record"
+          />
+
+          <div className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-lg">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase text-sky-700">ADA-UATO-3-1B</p>
+                <h2 className="mt-1 truncate text-xl font-bold text-slate-950">{viewingRecord.staffName}</h2>
+                <p className="mt-1 truncate text-sm text-slate-500">{viewingRecord.designation} / {viewingRecord.staffEmail}</p>
+              </div>
+              <button type="button" onClick={() => setViewingRecord(null)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" aria-label="Close record"><X className="h-4 w-4" /></button>
+            </header>
+
+            <div className="overflow-y-auto px-4 py-5 sm:px-6">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <DetailValue label="Head of Training" value={viewingRecord.headOfTrainingName} />
+                <DetailValue label="Signature" value={viewingRecord.signatureDataUrl ? "Captured" : "Not captured"} />
+                <DetailValue label="Last updated" value={formatRecordDate(viewingRecord.updatedAt)} />
+              </div>
+
+              <div className="mt-6 space-y-6">
+                {STAFF_TRAINING_TYPES.map((type) => {
+                  const items = viewingRecord.items
+                    .filter((item) => item.trainingType === type)
+                    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+                  return (
+                    <section key={type}>
+                      <h3 className="mb-2 text-sm font-bold text-slate-950">{STAFF_TRAINING_LABELS[type]}</h3>
+                      <div className="overflow-hidden rounded-lg border border-slate-200">
+                        <div className="hidden grid-cols-[44px_minmax(220px,1fr)_140px_130px_minmax(160px,0.8fr)] bg-slate-100 px-3 py-2 text-xs font-bold uppercase text-slate-600 lg:grid">
+                          <span>S/N</span><span>Description</span><span>Status</span><span>Date</span><span>Remarks</span>
+                        </div>
+                        {items.map((item, index) => (
+                          <div key={item.itemId} className="border-t border-slate-200 p-3 first:border-t-0 lg:grid lg:grid-cols-[44px_minmax(220px,1fr)_140px_130px_minmax(160px,0.8fr)] lg:items-center">
+                            <span className="hidden text-sm font-bold text-slate-400 lg:block">{index + 1}</span>
+                            <div className="flex items-start gap-3 lg:block"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-500 lg:hidden">{index + 1}</span><p className="text-sm font-medium leading-5 text-slate-900">{item.description}</p></div>
+                            <div className="mt-3 lg:mt-0"><span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-bold ${statusColor(item.status)}`}>{statusOptions.find((option) => option.value === item.status)?.label || "Not selected"}</span></div>
+                            <p className="mt-2 text-sm text-slate-600 lg:mt-0">{item.dateCompleted || "-"}</p>
+                            <p className="mt-2 break-words text-sm text-slate-600 lg:mt-0">{item.remarks || "-"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </div>
+
+            <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:flex sm:justify-end">
+              <button type="button" onClick={() => setViewingRecord(null)} className="inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 sm:h-11">Close</button>
+              <button type="button" onClick={() => void downloadSavedRecordPdf(viewingRecord)} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 sm:h-11"><Download className="h-4 w-4" /> Download PDF</button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
       {working ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
           <div className="flex w-full max-w-sm items-center gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-2xl"><Loader2 className="h-5 w-5 animate-spin text-sky-700" /><div><p className="text-sm font-semibold text-slate-950">Please wait</p><p className="text-sm text-slate-500">{working}</p></div></div>
@@ -718,6 +892,17 @@ export default function StaffTrainingPage() {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-sm font-semibold text-slate-800">{label}{children}</label>;
+}
+
+function DetailValue({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[11px] font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
+}
+
+function formatRecordDate(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleString("en-SG", { dateStyle: "medium", timeStyle: "short" })
+    : value || "-";
 }
 
 function IconButton({ label, onClick, icon: Icon, danger = false }: { label: string; onClick: () => void; icon: typeof Edit3; danger?: boolean }) {
