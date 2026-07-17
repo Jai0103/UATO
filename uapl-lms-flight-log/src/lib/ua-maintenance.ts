@@ -1,6 +1,12 @@
-export type UaMaintenanceStatus = "" | "pass" | "fail" | "na";
+export type UaMaintenanceStatus =
+  | ""
+  | "pass"
+  | "fail"
+  | "na";
 
-export type UaMaintenanceMasterStatus = "active" | "inactive";
+export type UaMaintenanceMasterStatus =
+  | "active"
+  | "inactive";
 
 export type UaMaintenanceMasterSection =
   | "uaModels"
@@ -10,6 +16,7 @@ export type UaMaintenanceMasterSection =
 export type UaMaintenanceMasterItem = {
   id: string;
   value: string;
+  linkedUaId?: string;
   sortOrder: number;
   status: UaMaintenanceMasterStatus;
 };
@@ -69,38 +76,63 @@ export function createUaMaintenanceEntries(
   existing: UaMaintenanceEntry[] = []
 ) {
   const savedById = new Map(
-    existing.map((item) => [item.itemId, item])
+    existing.map((item) => [
+      item.itemId,
+      item
+    ])
   );
 
   const active = descriptions
-    .filter((item) => item.status === "active")
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .filter(
+      (item) =>
+        item.status === "active"
+    )
+    .sort(
+      (first, second) =>
+        first.sortOrder -
+        second.sortOrder
+    )
     .map((description) => {
-      const saved = savedById.get(description.id);
+      const saved = savedById.get(
+        description.id
+      );
 
       return {
         itemId: description.id,
-        description: saved?.description || description.value,
-        sortOrder: description.sortOrder,
+        description:
+          saved?.description ||
+          description.value,
+        sortOrder:
+          description.sortOrder,
         status: saved?.status ?? "",
-        remarks: saved?.remarks || ""
+        remarks:
+          saved?.remarks || ""
       } satisfies UaMaintenanceEntry;
     });
 
   const activeIds = new Set(
-    active.map((item) => item.itemId)
+    active.map(
+      (item) => item.itemId
+    )
   );
 
   const historical = existing.filter(
-    (item) => !activeIds.has(item.itemId)
+    (item) =>
+      !activeIds.has(item.itemId)
   );
 
-  return [...active, ...historical].sort(
-    (a, b) => a.sortOrder - b.sortOrder
+  return [
+    ...active,
+    ...historical
+  ].sort(
+    (first, second) =>
+      first.sortOrder -
+      second.sortOrder
   );
 }
 
-export function emptyUaMaintenanceMasterData(): UaMaintenanceMasterData {
+export function emptyUaMaintenanceMasterData():
+  UaMaintenanceMasterData {
   return {
     uaModels: [],
     uaIds: [],
