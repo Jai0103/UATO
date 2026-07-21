@@ -338,15 +338,14 @@ export default function UsersPage() {
       {operationLabel ? <LoadingOverlay label={operationLabel} /> : null}
 
       <div className="app-page mx-auto w-full max-w-[1600px]">
-        <section className="app-card relative overflow-hidden">
-          <div className="absolute inset-y-0 left-0 w-1 bg-indigo-600" />
+        <section className="app-page-header">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-semibold text-[#075f8f] ring-1 ring-[#d5e9f1]">
                 <ShieldCheck size={14} /> Administrator Access
               </div>
-              <h1 className="mt-3 text-2xl font-semibold text-slate-950">Users</h1>
-              <p className="mt-1 text-sm leading-6 text-slate-500">Manage access, roles, account status, and password delivery for {users.length} registered accounts.</p>
+              <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">Users</h1>
+              <p className="mt-1 text-sm leading-6 text-[#6b7d92]">Manage access, roles, account status, and password delivery for {users.length} registered accounts.</p>
             </div>
 
             <button type="button" onClick={() => setCreateOpen(true)} className="app-button-primary justify-center">
@@ -362,40 +361,40 @@ export default function UsersPage() {
           <Metric label="Administrators" value={adminCount} icon={<ShieldCheck size={19} />} color="text-indigo-700 bg-indigo-50" />
         </section>
 
-        <section className="app-card">
+        <section className="app-toolbar block">
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_190px_auto] md:items-end">
             <label className="block">
-              <span className="text-sm font-medium text-slate-700">Search users</span>
-              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
-                <Search size={17} className="text-slate-400" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 md:text-sm" placeholder="Name, email, role, or status" />
+              <span className="text-sm font-medium text-[#405168]">Search users</span>
+              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-[#c3cfdd] bg-white px-3 shadow-sm transition focus-within:border-[#075f8f] focus-within:ring-2 focus-within:ring-[#d9edf5]">
+                <Search size={17} className="text-[#7e8fa3]" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-[#16263c] outline-none placeholder:text-[#95a4b7] md:text-sm" placeholder="Name, email, role, or status" />
               </div>
             </label>
-            <label className="block"><span className="text-sm font-medium text-slate-700">Account status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "active" | "inactive")} className="app-input mt-2"><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+            <label className="block"><span className="text-sm font-medium text-[#405168]">Account status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "active" | "inactive")} className="app-input mt-2"><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
             <button type="button" disabled={!query && statusFilter === "all"} onClick={() => { setQuery(""); setStatusFilter("all"); }} className="app-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-40"><X size={16} /> Clear</button>
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="divide-y divide-slate-200 lg:hidden">
+        <section className="app-table-shell">
+          <div className="divide-y divide-[#e4eaf1] lg:hidden">
             {filteredUsers.map((user) => (
-              <article key={user.id} className={`p-4 ${accountStatus(user) === "inactive" ? "bg-slate-50/70" : "bg-white"}`}>
+              <article key={user.id} className={`border-l-[3px] p-4 ${accountStatus(user) === "inactive" ? "border-l-[#aab7c5] bg-[#f7f9fb]" : "border-l-[#1686b1] bg-white"}`}>
                 <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><UserRound size={19} /></div>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#edf5f8] text-[#075f8f]"><UserRound size={19} /></div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-slate-950">{user.name}</p>
-                    <p className="mt-0.5 truncate text-sm text-slate-500">{user.email}</p>
+                    <p className="truncate font-semibold text-[#16263c]">{user.name}</p>
+                    <p className="mt-0.5 truncate text-sm text-[#6b7d92]">{user.email}</p>
                   </div>
                   <StatusBadge status={accountStatus(user)} />
                 </div>
 
-                <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="capitalize text-slate-600">{user.role}</span>
-                  <span className="text-slate-500">{formatDate(user.createdAt)}</span>
+                <div className="mt-4 flex items-center justify-between rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3 text-sm">
+                  <span className="capitalize text-[#405168]">{user.role}</span>
+                  <span className="text-[#718096]">{formatDate(user.createdAt)}</span>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                  <span className="text-xs font-medium text-slate-500">Account actions</span>
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#e5ebf2] pt-3">
+                  <span className="text-xs font-medium text-[#718096]">Account actions</span>
                   <div className="flex gap-2">
                   <IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={17} /></IconButton>
                   <IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={17} /></IconButton>
@@ -410,14 +409,14 @@ export default function UsersPage() {
 
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">User</th><th className="px-5 py-3 font-semibold">Role</th><th className="px-5 py-3 font-semibold">Status</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
+              <thead><tr className="app-table-header"><th className="px-5 py-3 font-semibold">User</th><th className="px-5 py-3 font-semibold">Role</th><th className="px-5 py-3 font-semibold">Status</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
               <tbody>
                 {filteredUsers.map((user) => (
-                  <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50/70">
-                    <td className="px-5 py-4"><p className="font-semibold text-slate-950">{user.name}</p><p className="mt-0.5 text-xs text-slate-500">{user.email}</p></td>
-                    <td className="px-5 py-4 capitalize text-slate-700">{user.role}</td>
+                  <tr key={user.id} className="border-b border-[#e7edf3] hover:bg-[#f7fafc]">
+                    <td className="px-5 py-4"><p className="font-semibold text-[#16263c]">{user.name}</p><p className="mt-0.5 text-xs text-[#718096]">{user.email}</p></td>
+                    <td className="px-5 py-4 capitalize text-[#506278]">{user.role}</td>
                     <td className="px-5 py-4"><StatusBadge status={accountStatus(user)} /></td>
-                    <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(user.createdAt)}</td>
+                    <td className="whitespace-nowrap px-5 py-4 text-[#506278]">{formatDate(user.createdAt)}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={16} /></IconButton><IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={16} /></IconButton><IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={16} /></IconButton></div></td>
                   </tr>
                 ))}
@@ -429,11 +428,11 @@ export default function UsersPage() {
       </div>
 
       {createOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-w-lg sm:rounded-lg">
-            <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><UserRound size={19} /></div><div><h2 className="text-lg font-semibold text-slate-950">Add User</h2><p className="mt-0.5 text-sm text-slate-500">Create a secure administrator or trainer account.</p></div></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
+        <div className="app-overlay-enter fixed inset-0 z-[90] flex items-end justify-center bg-[#102a43]/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="app-panel-enter w-full overflow-hidden rounded-t-lg border border-[#d7e0ea] bg-white shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:max-w-lg sm:rounded-lg">
+            <div className="flex items-start justify-between border-b border-[#dbe6ed] bg-[#f1f7fa] px-5 py-4"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8]"><UserRound size={19} /></div><div><h2 className="text-lg font-semibold text-[#16263c]">Add User</h2><p className="mt-0.5 text-sm text-[#6b7d92]">Create a secure administrator or trainer account.</p></div></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
             <form onSubmit={createUser} className="space-y-4 p-5">
-              <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><Mail size={18} className="mt-0.5 shrink-0 text-sky-700" /><p>A temporary password and sign-in link will be emailed automatically after the account is created.</p></div>
+              <div className="flex items-start gap-3 rounded-lg border border-[#d2e6ee] bg-[#f0f7fa] p-3 text-sm text-[#405168]"><Mail size={18} className="mt-0.5 shrink-0 text-[#075f8f]" /><p>A temporary password and sign-in link will be emailed automatically after the account is created.</p></div>
               <FormInput label="Full name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Trainer name" />
               <FormInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="name@example.com" type="email" />
               <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
@@ -447,18 +446,18 @@ export default function UsersPage() {
 }
 
 function Metric({ label, value, icon, color }: { label: string; value: number; icon: ReactNode; color: string }) {
-  return <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><div><p className="text-sm text-slate-500">{label}</p><p className="mt-1 text-2xl font-semibold text-slate-950">{value}</p></div><div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>{icon}</div></div>;
+  return <div className="flex items-center justify-between rounded-lg border border-[#d7e0ea] bg-white p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_7px_20px_rgba(16,42,67,0.05)]"><div><p className="text-sm text-[#6b7d92]">{label}</p><p className="mt-1 text-2xl font-semibold text-[#16263c]">{value}</p></div><div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>{icon}</div></div>;
 }
 
 function StatusBadge({ status }: { status: "active" | "inactive" }) {
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{status === "active" ? "Active" : "Inactive"}</span>;
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[#d7e0ea] bg-[#eef2f6] text-[#607389]"}`}>{status === "active" ? "Active" : "Inactive"}</span>;
 }
 
 function IconButton({ label, children, onClick, danger = false, active = false }: { label: string; children: ReactNode; onClick: () => void; danger?: boolean; active?: boolean }) {
-  const color = danger ? "border-rose-200 text-rose-600 hover:bg-rose-50" : active ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-slate-200 text-slate-600 hover:bg-slate-100";
-  return <button type="button" onClick={onClick} title={label} aria-label={label} className={`inline-flex h-10 w-10 items-center justify-center rounded-md border transition-colors ${color}`}>{children}</button>;
+  const color = danger ? "border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50" : active ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50" : "border-[#d7e0ea] text-[#607389] hover:border-[#9ec3d7] hover:bg-[#f1f8fb] hover:text-[#075f8f]";
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className={`inline-flex h-10 w-10 items-center justify-center rounded-lg border bg-white shadow-sm transition-colors ${color}`}>{children}</button>;
 }
 
 function FormInput({ label, value, onChange, placeholder, type = "text" }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; type?: string }) {
-  return <label className="block"><span className="text-sm font-medium text-slate-700">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="app-input mt-2" placeholder={placeholder} required /></label>;
+  return <label className="block"><span className="text-sm font-medium text-[#405168]">{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="app-input mt-2" placeholder={placeholder} required /></label>;
 }
