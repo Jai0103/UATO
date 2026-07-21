@@ -25,7 +25,7 @@ import { createCombinedUaMaintenancePdf } from "@/lib/ua-maintenance-pdf";
 type ReportType = "flight" | "staff" | "maintenance";
 
 const fieldClass =
-  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
+  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -166,15 +166,15 @@ export default function ReportsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <header className="border-b border-slate-200 pb-5">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase text-sky-700">
+      <div className="app-page">
+        <header className="rounded-lg border border-slate-200 border-t-4 border-t-sky-600 bg-white p-4 shadow-sm sm:p-5">
+          <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold uppercase text-sky-700 ring-1 ring-sky-100">
             <CalendarRange className="h-4 w-4" /> Report Centre
           </div>
-          <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
+          <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">
             Combined Reports
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
             Generate operational report batches for the selected reporting period.
           </p>
         </header>
@@ -208,6 +208,7 @@ export default function ReportsPage() {
               </Field>
             </div>
             <GenerateButton
+              accent="sky"
               busy={working === "flight"}
               disabled={working !== null}
               label="Download combined PDF"
@@ -255,6 +256,7 @@ export default function ReportsPage() {
                 </Field>
               </div>
               <GenerateButton
+                accent="emerald"
                 busy={working === "staff"}
                 disabled={working !== null}
                 label="Download combined PDF"
@@ -292,6 +294,7 @@ export default function ReportsPage() {
                 </Field>
               </div>
               <GenerateButton
+                accent="amber"
                 busy={working === "maintenance"}
                 disabled={working !== null}
                 label="Download combined PDF"
@@ -307,7 +310,7 @@ export default function ReportsPage() {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block text-sm font-semibold text-slate-800">
+    <label className="block text-sm font-semibold text-slate-600">
       {label}
       {children}
     </label>
@@ -334,34 +337,43 @@ function ReportCard({
   }[accent];
 
   return (
-    <section className="flex min-h-[360px] flex-col rounded-lg border border-t-4 border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <section className={`flex min-w-0 flex-col rounded-lg border border-t-4 border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md sm:p-6 xl:min-h-[390px] ${colors.split(" ")[0]}`}>
       <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${colors}`}>
         {icon}
       </div>
-      <h2 className="mt-4 text-xl font-bold text-slate-950">{title}</h2>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
+      <h2 className="mt-4 text-xl font-bold text-slate-800">{title}</h2>
+      <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
+      <div className="mt-4 h-px bg-slate-100" />
       <div className="mt-5 flex flex-1 flex-col gap-4">{children}</div>
     </section>
   );
 }
 
 function GenerateButton({
+  accent,
   busy,
   disabled,
   label,
   onClick
 }: {
+  accent: "sky" | "emerald" | "amber";
   busy: boolean;
   disabled: boolean;
   label: string;
   onClick: () => void;
 }) {
+  const buttonColor = {
+    sky: "bg-sky-700 hover:bg-sky-800 focus-visible:ring-sky-200",
+    emerald: "bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-200",
+    amber: "bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-200"
+  }[accent];
+
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+      className={`mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold text-white shadow-sm transition focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${buttonColor}`}
     >
       {busy ? (
         <Loader2 className="h-4 w-4 animate-spin" />
