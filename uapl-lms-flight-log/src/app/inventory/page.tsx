@@ -476,16 +476,16 @@ export default function InventoryPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="app-page">
+        <header className="app-page-header flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase text-sky-700">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#075f8f]">
               <Box className="h-4 w-4" /> Equipment Control
             </div>
-            <h1 className="mt-2 text-2xl font-bold text-slate-800 sm:text-3xl">
+            <h1 className="mt-2 text-2xl font-bold text-[#16263c] sm:text-3xl">
               {mode === "activity" ? "Inventory Activity" : mode === "masterData" ? "Inventory Data" : "Inventory"}
             </h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm leading-6 text-[#6b7d92]">
               {mode === "activity"
                 ? "Review equipment movements, defects, inspections, and maintenance."
                 : mode === "masterData"
@@ -494,7 +494,7 @@ export default function InventoryPage() {
             </p>
           </div>
           {mode === "assets" ? (
-            <button type="button" onClick={openNewAsset} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800 lg:h-11">
+            <button type="button" onClick={openNewAsset} className="app-button-primary h-12 lg:h-11">
               <Plus className="h-4 w-4" /> Add asset
             </button>
           ) : null}
@@ -595,11 +595,65 @@ function AssetRegister({ page, loading, onPage, onView, onEdit, onMove, onMainte
 }
 
 function ActivityRegister({ page, loading, query, setQuery, year, setYear, years, onPage, onViewAsset }: { page: InventoryActivityPage; loading: boolean; query: string; setQuery: (value: string) => void; year: string; setYear: (value: string) => void; years: number[]; onPage: (page: number) => Promise<void>; onViewAsset: (id: string) => void }) {
-  return <section><div className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_160px_auto]"><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search asset, action, or person" /></label><select className={`${inputClass} mt-0`} value={year} onChange={(event) => setYear(event.target.value)}><option value="">All years</option>{years.map((item) => <option key={item}>{item}</option>)}</select><button type="button" onClick={() => { setQuery(""); setYear(""); }} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 md:h-11"><X className="h-4 w-4" /> Clear</button></div><div className="relative mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><Th>Asset</Th><Th>Activity</Th><Th>Type</Th><Th>Status</Th><Th>Performed By</Th><Th>Date</Th><Th right>Action</Th></tr></thead><tbody>{page.activities.map((item) => <ActivityRow key={`${item.activityType}-${item.id}`} item={item} onView={() => onViewAsset(item.assetId)} />)}{!page.activities.length && !loading ? <tr><td colSpan={7}><EmptyState label="No inventory activity found." /></td></tr> : null}</tbody></table></div>{loading ? <TableLoading label="Loading activity..." /> : null}<Pagination page={page.page} totalPages={page.totalPages} totalRecords={page.totalRecords} count={page.activities.length} previous={page.hasPreviousPage} next={page.hasNextPage} loading={loading} onPage={onPage} /></div></section>;
+  return (
+    <section className="space-y-4">
+      <div className="app-toolbar grid gap-3 sm:grid-cols-[minmax(220px,1fr)_160px_auto]">
+        <label className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
+          <input className={`${inputClass} mt-0 pl-10`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search asset, action, or person" />
+        </label>
+        <select className={`${inputClass} mt-0`} value={year} onChange={(event) => setYear(event.target.value)}>
+          <option value="">All years</option>
+          {years.map((item) => <option key={item}>{item}</option>)}
+        </select>
+        <button type="button" onClick={() => { setQuery(""); setYear(""); }} className="app-button-secondary h-12 md:h-11">
+          <X className="h-4 w-4" /> Clear
+        </button>
+      </div>
+
+      <div className="app-table-shell relative">
+        <div className="divide-y divide-[#e4eaf1] lg:hidden">
+          {page.activities.map((item) => (
+            <article key={`${item.activityType}-${item.id}`} className="border-l-[3px] border-l-[#1686b1] p-4 transition hover:bg-[#f7fafc]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-[#16263c]">{item.assetTag}</p>
+                  <p className="mt-1 break-words text-sm font-medium text-[#405168]">{item.title}</p>
+                </div>
+                <StatusBadge value={item.status} label={item.status.replace(/_/g, " ")} />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3 text-sm">
+                <div><p className="text-xs text-[#718096]">Type</p><p className="mt-1 capitalize text-[#405168]">{item.activityType}</p></div>
+                <div><p className="text-xs text-[#718096]">Performed by</p><p className="mt-1 break-words text-[#405168]">{item.performedBy || "-"}</p></div>
+                <div className="col-span-2"><p className="text-xs text-[#718096]">Date</p><p className="mt-1 text-[#405168]">{formatDateTime(item.activityDate)}</p></div>
+                {item.remarks ? <div className="col-span-2"><p className="text-xs text-[#718096]">Remarks</p><p className="mt-1 break-words text-[#405168]">{item.remarks}</p></div> : null}
+              </div>
+              <div className="mt-3 flex justify-end border-t border-[#e5ebf2] pt-3">
+                <IconButton label="View asset" icon={Eye} onClick={() => onViewAsset(item.assetId)} />
+              </div>
+            </article>
+          ))}
+          {!page.activities.length && !loading ? <EmptyState label="No inventory activity found." /> : null}
+        </div>
+
+        <div className="hidden overflow-x-auto lg:block">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead><tr className="app-table-header"><Th>Asset</Th><Th>Activity</Th><Th>Type</Th><Th>Status</Th><Th>Performed By</Th><Th>Date</Th><Th right>Action</Th></tr></thead>
+            <tbody>
+              {page.activities.map((item) => <ActivityRow key={`${item.activityType}-${item.id}`} item={item} onView={() => onViewAsset(item.assetId)} />)}
+              {!page.activities.length && !loading ? <tr><td colSpan={7}><EmptyState label="No inventory activity found." /></td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+        {loading ? <TableLoading label="Loading activity..." /> : null}
+        <Pagination page={page.page} totalPages={page.totalPages} totalRecords={page.totalRecords} count={page.activities.length} previous={page.hasPreviousPage} next={page.hasNextPage} loading={loading} onPage={onPage} />
+      </div>
+    </section>
+  );
 }
 
 function ActivityRow({ item, onView }: { item: InventoryActivity; onView: () => void }) {
-  return <tr className="border-b border-slate-100"><Td><span className="font-bold text-slate-950">{item.assetTag}</span></Td><Td><p className="max-w-sm truncate font-medium">{item.title}</p><p className="max-w-sm truncate text-xs text-slate-500">{item.remarks}</p></Td><Td><span className="capitalize">{item.activityType}</span></Td><Td><StatusBadge value={item.status} label={item.status.replace(/_/g, " ")} /></Td><Td>{item.performedBy || "-"}</Td><Td>{formatDateTime(item.activityDate)}</Td><Td><div className="flex justify-end"><IconButton label="View asset" icon={Eye} onClick={onView} /></div></Td></tr>;
+  return <tr className="border-b border-[#e7edf3] transition hover:bg-[#f7fafc]"><Td><span className="font-bold text-[#16263c]">{item.assetTag}</span></Td><Td><p className="max-w-sm truncate font-medium text-[#405168]">{item.title}</p><p className="max-w-sm truncate text-xs text-[#718096]">{item.remarks}</p></Td><Td><span className="capitalize">{item.activityType}</span></Td><Td><StatusBadge value={item.status} label={item.status.replace(/_/g, " ")} /></Td><Td>{item.performedBy || "-"}</Td><Td>{formatDateTime(item.activityDate)}</Td><Td><div className="flex justify-end"><IconButton label="View asset" icon={Eye} onClick={onView} /></div></Td></tr>;
 }
 
 function MasterDataPanel({ data, section, setSection, newValue, setNewValue, onAdd, onUpdate, onRemove, onSave }: { data: InventoryMasterData; section: InventoryMasterSection; setSection: (section: InventoryMasterSection) => void; newValue: string; setNewValue: (value: string) => void; onAdd: () => void; onUpdate: (id: string, patch: Partial<InventoryMasterItem>) => void; onRemove: (item: InventoryMasterItem) => void; onSave: () => void }) {
@@ -632,22 +686,22 @@ function HistorySection({ title, empty, items }: { title: string; empty: string;
 }
 
 function Modal({ title, subtitle, onClose, children, footer, small = false }: { title: string; subtitle: string; onClose: () => void; children: ReactNode; footer: ReactNode; small?: boolean }) {
-  return <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5"><button type="button" className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" onClick={onClose} aria-label="Close dialog" /><div className={`relative flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:rounded-lg ${small ? "sm:max-w-3xl" : "sm:max-w-6xl"}`}><header className="flex items-start justify-between gap-4 border-b border-sky-100 bg-sky-50 p-4 sm:px-6"><div className="min-w-0"><p className="text-xs font-bold uppercase text-sky-700">{subtitle}</p><h2 className="mt-1 truncate text-xl font-bold text-slate-800">{title}</h2></div><IconButton label="Close" icon={X} onClick={onClose} /></header><div className="overflow-y-auto p-4 text-slate-700 sm:p-6">{children}</div><footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:flex sm:justify-end">{footer}</footer></div></div>;
+  return <div className="app-overlay-enter fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5"><button type="button" className="absolute inset-0 bg-[#102a43]/60 backdrop-blur-[2px]" onClick={onClose} aria-label="Close dialog" /><div className={`app-panel-enter relative flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-[#d7e0ea] bg-white shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:rounded-lg ${small ? "sm:max-w-3xl" : "sm:max-w-6xl"}`}><header className="flex items-start justify-between gap-4 border-b border-[#dbe6ed] bg-[#f1f7fa] p-4 sm:px-6"><div className="min-w-0"><p className="text-xs font-bold uppercase text-[#075f8f]">{subtitle}</p><h2 className="mt-1 truncate text-xl font-bold text-[#16263c]">{title}</h2></div><IconButton label="Close" icon={X} onClick={onClose} /></header><div className="overflow-y-auto p-4 text-[#405168] sm:p-6">{children}</div><footer className="grid grid-cols-2 gap-2 border-t border-[#dbe3ec] bg-[#f7f9fb] p-4 sm:flex sm:justify-end">{footer}</footer></div></div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block text-sm font-semibold text-slate-600">{label}{children}</label>; }
-function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] font-bold uppercase text-sky-700">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-700">{value || "-"}</p></div>; }
+function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3"><p className="text-[11px] font-bold uppercase text-[#075f8f]">{label}</p><p className="mt-1 break-words text-sm font-semibold text-[#405168]">{value || "-"}</p></div>; }
 function Select({ className, value, onChange, options, empty }: { className: string; value: string; onChange: (value: string) => void; options: string[] | Array<[string, string]>; empty?: string }) { return <select className={className} value={value} onChange={(event) => onChange(event.target.value)}>{empty ? <option value="">{empty}</option> : null}{options.map((option) => { const pair = Array.isArray(option) ? option : [option, option]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select>; }
 function FilterSelect({ value, onChange, emptyLabel, options, compact = false }: { value: string; onChange: (value: string) => void; emptyLabel: string; options: string[] | Array<[string, string]>; compact?: boolean }) { return <select className={`${compact ? "h-11 min-w-44" : "h-12 md:h-11"} rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700`} value={value} onChange={(event) => onChange(event.target.value)}><option value="">{emptyLabel}</option>{options.map((option) => { const pair = Array.isArray(option) ? option : [option, option]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select>; }
 function StatusBadge({ value, label }: { value: string; label: string }) { return <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${statusTone(value.toLowerCase())}`}>{label}</span>; }
-function IconButton({ label, icon: Icon, onClick, danger = false }: { label: string; icon: typeof Eye; onClick: () => void; danger?: boolean }) { return <button type="button" onClick={onClick} title={label} aria-label={label} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition ${danger ? "border-rose-200 text-rose-600 hover:bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" /></button>; }
-function PrimaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800">{children}</button>; }
-function SecondaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700">{children}</button>; }
+function IconButton({ label, icon: Icon, onClick, danger = false }: { label: string; icon: typeof Eye; onClick: () => void; danger?: boolean }) { return <button type="button" onClick={onClick} title={label} aria-label={label} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white shadow-sm transition ${danger ? "border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50" : "border-[#d7e0ea] text-[#607389] hover:border-[#9ec3d7] hover:bg-[#f1f8fb] hover:text-[#075f8f]"}`}><Icon className="h-4 w-4" /></button>; }
+function PrimaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="app-button-primary h-12">{children}</button>; }
+function SecondaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="app-button-secondary h-12">{children}</button>; }
 function Th({ children, right = false }: { children: ReactNode; right?: boolean }) { return <th className={`px-4 py-3 font-semibold ${right ? "text-right" : ""}`}>{children}</th>; }
-function Td({ children }: { children: ReactNode }) { return <td className="px-4 py-4 text-slate-700">{children}</td>; }
-function EmptyState({ label }: { label: string }) { return <div className="px-5 py-12 text-center text-sm text-slate-500">{label}</div>; }
+function Td({ children }: { children: ReactNode }) { return <td className="px-4 py-4 text-[#506278]">{children}</td>; }
+function EmptyState({ label }: { label: string }) { return <div className="px-5 py-12 text-center text-sm text-[#718096]">{label}</div>; }
 function CenteredLoading({ label }: { label: string }) { return <div className="flex min-h-[60vh] items-center justify-center"><div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-lg"><Loader2 className="h-5 w-5 animate-spin text-sky-700" /><span className="text-sm font-semibold text-slate-700">{label}</span></div></div>; }
-function TableLoading({ label }: { label: string }) { return <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80"><div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg"><Loader2 className="h-4 w-4 animate-spin text-sky-700" />{label}</div></div>; }
-function WorkingOverlay({ label }: { label: string }) { return <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"><div className="flex w-full max-w-sm items-center gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-2xl"><Loader2 className="h-5 w-5 animate-spin text-sky-700" /><div><p className="text-sm font-semibold text-slate-950">Please wait</p><p className="text-sm text-slate-500">{label}</p></div></div></div>; }
-function Pagination({ page, totalPages, totalRecords, count, previous, next, loading, onPage }: { page: number; totalPages: number; totalRecords: number; count: number; previous: boolean; next: boolean; loading: boolean; onPage: (page: number) => Promise<void> }) { return <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Showing {count} of {totalRecords} / Page {page} of {totalPages}</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!previous || loading} onClick={() => void onPage(page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button><button type="button" disabled={!next || loading} onClick={() => void onPage(page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button></div></div>; }
+function TableLoading({ label }: { label: string }) { return <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/85 backdrop-blur-[1px]"><div className="app-panel-enter flex items-center gap-2 rounded-lg border border-[#d7e0ea] bg-white px-4 py-3 text-sm font-semibold text-[#405168] shadow-[0_12px_30px_rgba(16,42,67,0.14)]"><Loader2 className="h-4 w-4 animate-spin text-[#075f8f]" />{label}</div></div>; }
+function WorkingOverlay({ label }: { label: string }) { return <div className="app-overlay-enter fixed inset-0 z-[130] flex items-center justify-center bg-[#102a43]/50 p-4 backdrop-blur-sm"><div className="app-panel-enter flex w-full max-w-sm items-center gap-3 rounded-lg border border-[#d7e0ea] bg-white p-5 shadow-[0_24px_60px_rgba(16,42,67,0.28)]"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8]"><Loader2 className="h-5 w-5 animate-spin" /></div><div><p className="text-sm font-semibold text-[#16263c]">Please wait</p><p className="text-sm text-[#6b7d92]">{label}</p></div></div></div>; }
+function Pagination({ page, totalPages, totalRecords, count, previous, next, loading, onPage }: { page: number; totalPages: number; totalRecords: number; count: number; previous: boolean; next: boolean; loading: boolean; onPage: (page: number) => Promise<void> }) { return <div className="flex flex-col gap-3 border-t border-[#dbe3ec] bg-[#fbfcfd] p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-[#6b7d92]">Showing {count} of {totalRecords} / Page {page} of {totalPages}</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!previous || loading} onClick={() => void onPage(page - 1)} className="app-button-secondary"><ChevronLeft className="h-4 w-4" /> Previous</button><button type="button" disabled={!next || loading} onClick={() => void onPage(page + 1)} className="app-button-secondary">Next <ChevronRight className="h-4 w-4" /></button></div></div>; }
 
