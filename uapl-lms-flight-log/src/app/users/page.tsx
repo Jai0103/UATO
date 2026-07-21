@@ -191,6 +191,7 @@ export default function UsersPage() {
       await postToGoogle<{ message?: string }>({
         action: "forgotPassword",
         identifier: email,
+        purpose: "new-account",
       });
 
       await loadUsers(false);
@@ -279,6 +280,7 @@ export default function UsersPage() {
       await postToGoogle<{ message?: string }>({
         action: "forgotPassword",
         identifier: user.email,
+        purpose: "password-reset",
       });
 
       await loadUsers(false);
