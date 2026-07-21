@@ -125,18 +125,21 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-[#f4f7fb] px-4">
-        <div className="w-full max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
-          <div className="h-1 bg-sky-600" />
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef3f8] px-4">
+        <div className="app-panel-enter w-full max-w-sm overflow-hidden rounded-lg border border-[#d7e0ea] bg-white shadow-[0_18px_44px_rgba(16,42,67,0.13)]">
+          <div className="grid h-1 grid-cols-[1fr_48px]">
+            <span className="bg-[#075f8f]" />
+            <span className="bg-[#c7353d]" />
+          </div>
           <div className="flex items-center gap-4 p-5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-cyan-300">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8]">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-950">
+              <p className="text-sm font-semibold text-[#16263c]">
                 Checking session
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-[#6b7d92]">
                 Verifying your secure access...
               </p>
             </div>
@@ -147,36 +150,35 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-6 sm:px-6 sm:py-10">
-      <div className="absolute inset-x-0 top-0 h-1 bg-sky-600" />
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#eef3f8] px-4 py-6 sm:px-6 sm:py-10">
+      <div className="absolute inset-x-0 top-0 grid h-1 grid-cols-[1fr_72px]">
+        <span className="bg-[#075f8f]" />
+        <span className="bg-[#c7353d]" />
+      </div>
 
-      <section className="w-full max-w-[460px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
-        <header className="border-b border-slate-200 px-5 py-6 text-center sm:px-8 sm:py-7">
+      <section className="app-panel-enter w-full max-w-[470px] overflow-hidden rounded-lg border border-[#d4dee8] bg-white shadow-[0_2px_4px_rgba(16,42,67,0.06),0_24px_60px_rgba(16,42,67,0.14)]">
+        <header className="relative border-b border-[#e1e8ef] px-5 py-7 text-center sm:px-9 sm:py-8">
           <img
             src={LOGO_PATH}
             alt="Apollo Global Academy"
-            className="mx-auto h-auto max-h-20 w-auto max-w-[230px] object-contain sm:max-w-[260px]"
+            className="mx-auto h-auto max-h-20 w-auto max-w-[238px] object-contain sm:max-w-[268px]"
           />
-          <div className="mx-auto mt-5 flex w-max max-w-full items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800">
-            <ShieldCheck className="h-4 w-4 shrink-0" />
-            Authorized account access
-          </div>
-          <h1 className="mt-4 text-2xl font-bold text-slate-950">
+          <h1 className="mt-6 text-2xl font-bold text-[#16263c]">
             Flight Management System
           </h1>
-          <p className="mt-1.5 text-sm leading-6 text-slate-500">
+          <p className="mt-1.5 text-sm leading-6 text-[#6b7d92]">
             Sign in with the account issued by your administrator.
           </p>
         </header>
 
-        <div className="px-5 py-6 sm:px-8 sm:py-7">
+        <div className="px-5 py-6 sm:px-9 sm:py-8">
           <form onSubmit={handleLogin} className="space-y-5" noValidate>
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">
+              <span className="mb-2 block text-sm font-semibold text-[#405168]">
                 Email or username
               </span>
               <div className="relative">
-                <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
                 <input
                   value={identifier}
                   onChange={(event) => {
@@ -196,11 +198,11 @@ export default function LoginPage() {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">
+              <span className="mb-2 block text-sm font-semibold text-[#405168]">
                 Password
               </span>
               <div className="relative">
-                <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
                 <input
                   value={password}
                   onChange={(event) => {
@@ -221,7 +223,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
                   disabled={loggingIn}
-                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[#6b7d92] transition hover:bg-[#edf3f7] hover:text-[#075f8f] disabled:opacity-50"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -243,7 +245,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => router.push("/forgot-password")}
                 disabled={loggingIn}
-                className="min-h-10 px-1 text-sm font-semibold text-sky-700 transition hover:text-sky-900 hover:underline disabled:opacity-50"
+                className="min-h-10 px-1 text-sm font-semibold text-[#075f8f] transition hover:text-[#064d75] hover:underline disabled:opacity-50"
               >
                 Forgot password?
               </button>
@@ -286,7 +288,8 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <footer className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-center text-xs text-slate-500">
+        <footer className="flex items-center justify-center gap-2 border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
+          <ShieldCheck className="h-3.5 w-3.5 text-[#075f8f]" />
           Powered by: Jairus Github
         </footer>
       </section>
