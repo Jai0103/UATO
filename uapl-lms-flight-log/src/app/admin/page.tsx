@@ -264,17 +264,17 @@ export default function AdminPage() {
       {loading ? <LoadingOverlay label="Loading dashboard statistics..." /> : null}
 
       <div className="app-page">
-        <section className="app-card overflow-hidden border-t-4 border-t-sky-600">
+        <section className="app-page-header">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-100">
+              <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-bold text-[#075f8f] ring-1 ring-[#d5e9f1]">
                 <Database className="h-3.5 w-3.5" />
                 Admin Overview
               </div>
-              <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">
+              <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">
                 Dashboard
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6b7d92]">
                 Monitor training records, operational activity, and system administration.
               </p>
             </div>
@@ -294,22 +294,22 @@ export default function AdminPage() {
             return (
               <article
                 key={stat.label}
-                className={`min-w-0 rounded-lg border border-slate-200 border-t-4 bg-white p-4 shadow-sm sm:p-5 ${accent}`}
+                className={`group min-w-0 rounded-lg border border-[#d7e0ea] border-t-[3px] bg-white p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_7px_20px_rgba(16,42,67,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,42,67,0.06),0_14px_30px_rgba(16,42,67,0.09)] sm:p-5 ${accent}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase text-slate-500 sm:text-sm sm:normal-case">
+                    <p className="text-xs font-semibold uppercase text-[#6b7d92] sm:text-sm sm:normal-case">
                       {stat.label}
                     </p>
-                    <p className="mt-2 break-words text-2xl font-bold text-slate-800 sm:text-3xl">
+                    <p className="mt-2 break-words text-2xl font-bold text-[#16263c] sm:text-3xl">
                       {stat.value}
                     </p>
                   </div>
-                  <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 sm:flex ${iconBackground} ${iconColor}`}>
+                  <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 transition group-hover:scale-105 sm:flex ${iconBackground} ${iconColor}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
+                <p className="mt-2 text-xs leading-5 text-[#718096]">
                   {stat.description}
                 </p>
               </article>
@@ -319,17 +319,17 @@ export default function AdminPage() {
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
           <article className="app-card min-w-0 overflow-hidden">
-            <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-b border-[#e5ebf2] pb-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="app-section-label">Activity trend</p>
-                <h2 className="mt-1 text-lg font-bold text-slate-800">Monthly Activity</h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <h2 className="app-section-title">Monthly Activity</h2>
+                <p className="mt-1 text-sm text-[#6b7d92]">
                   Records updated during the last six months.
                 </p>
               </div>
-              <div className="w-fit rounded-lg border border-sky-100 bg-sky-50 px-4 py-2.5">
-                <p className="text-xl font-bold text-sky-800">{sixMonthTotal}</p>
-                <p className="text-[11px] font-bold uppercase text-sky-700">
+              <div className="w-fit rounded-lg border border-[#d4e7ef] bg-[#f0f7fa] px-4 py-2.5">
+                <p className="text-xl font-bold text-[#075f8f]">{sixMonthTotal}</p>
+                <p className="text-[11px] font-bold uppercase text-[#53748a]">
                   Six-month total
                 </p>
               </div>
@@ -348,7 +348,7 @@ export default function AdminPage() {
                     key={month.key}
                     className="grid grid-cols-[64px_minmax(0,1fr)_40px] items-center gap-2 sm:grid-cols-[88px_minmax(0,1fr)_52px] sm:gap-3"
                   >
-                    <p className="truncate text-xs font-semibold text-slate-600 sm:text-sm">
+                    <p className="truncate text-xs font-semibold text-[#506278] sm:text-sm">
                       {month.label}
                     </p>
                     <div className={`relative h-9 overflow-hidden rounded-lg ${color.track}`}>
@@ -374,11 +374,11 @@ export default function AdminPage() {
               })}
 
               {!dashboard.monthlyActivity.length ? (
-                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                  <p className="text-sm font-semibold text-slate-700">
+                <div className="app-empty-state">
+                  <p className="text-sm font-semibold text-[#405168]">
                     No monthly activity available
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-[#718096]">
                     Updated flight records will appear here.
                   </p>
                 </div>
@@ -390,29 +390,29 @@ export default function AdminPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="app-section-label">Latest updates</p>
-                <h2 className="mt-1 text-lg font-bold text-slate-800">Recent Records</h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <h2 className="app-section-title">Recent Records</h2>
+                <p className="mt-1 text-sm text-[#6b7d92]">
                   Five most recently updated records.
                 </p>
               </div>
               <Link
                 href="/records"
-                className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+                className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-[#075f8f] transition hover:bg-[#edf5f8]"
               >
                 View all <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
 
-            <div className="mt-5 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+            <div className="mt-5 divide-y divide-[#e7edf3] overflow-hidden rounded-lg border border-[#dbe3ec]">
               {dashboard.recentRecords.length ? (
                 dashboard.recentRecords.map((record) => (
-                  <div key={record.id} className="bg-white p-4 transition hover:bg-slate-50">
+                  <div key={record.id} className="bg-white p-4 transition hover:bg-[#f6f9fb]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-800">
+                        <p className="truncate text-sm font-bold text-[#16263c]">
                           {record.studentName || "-"}
                         </p>
-                        <p className="mt-1 truncate text-sm text-slate-500">
+                        <p className="mt-1 truncate text-sm text-[#6b7d92]">
                           {record.company || "No company"}
                         </p>
                       </div>
@@ -420,26 +420,30 @@ export default function AdminPage() {
                         {record.flightCount} {record.flightCount === 1 ? "flight" : "flights"}
                       </span>
                     </div>
-                    <p className="mt-3 text-xs text-slate-400">
+                    <p className="mt-3 text-xs text-[#8a99aa]">
                       {formatDate(record.updatedAt || record.createdAt)}
                     </p>
                   </div>
                 ))
               ) : (
-                <div className="bg-slate-50 p-8 text-center">
-                  <p className="text-sm text-slate-500">No recent records available.</p>
+                <div className="bg-[#f7f9fb] p-8 text-center">
+                  <p className="text-sm text-[#718096]">No recent records available.</p>
                 </div>
               )}
             </div>
           </article>
         </section>
 
-        <section className="app-card">
-          <p className="app-section-label">Shortcuts</p>
-          <h2 className="mt-1 text-lg font-bold text-slate-800">Quick Actions</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Open common operational and administration workflows.
-          </p>
+        <section>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="app-section-label">Shortcuts</p>
+              <h2 className="app-section-title">Quick Actions</h2>
+              <p className="mt-1 text-sm text-[#6b7d92]">
+                Open common operational and administration workflows.
+              </p>
+            </div>
+          </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {quickActions.map((action) => {
@@ -448,17 +452,17 @@ export default function AdminPage() {
                 <Link
                   key={action.href}
                   href={action.href}
-                  className="group flex min-w-0 items-start gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-sky-200 hover:bg-sky-50/40 hover:shadow-md"
+                  className="group flex min-w-0 items-start gap-3 rounded-lg border border-[#d7e0ea] bg-white p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_6px_18px_rgba(16,42,67,0.04)] transition hover:-translate-y-0.5 hover:border-[#a8c8d8] hover:shadow-[0_2px_4px_rgba(16,42,67,0.05),0_12px_28px_rgba(16,42,67,0.09)]"
                 >
                   <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ring-1 ${action.tone}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-slate-800">{action.title}</p>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-sky-600" />
+                      <p className="text-sm font-bold text-[#16263c]">{action.title}</p>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[#b7c3d0] transition group-hover:translate-x-0.5 group-hover:text-[#075f8f]" />
                     </div>
-                    <p className="mt-1 text-sm leading-5 text-slate-500">
+                    <p className="mt-1 text-sm leading-5 text-[#6b7d92]">
                       {action.description}
                     </p>
                   </div>
