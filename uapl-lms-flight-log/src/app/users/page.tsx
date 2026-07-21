@@ -12,12 +12,14 @@ import type { ManagedUser } from "@/lib/user-storage";
 import {
   CheckCircle2,
   KeyRound,
+  Mail,
   Plus,
   Power,
   Search,
   ShieldCheck,
   Trash2,
   UserRound,
+  UserX,
   Users,
   X,
 } from "lucide-react";
@@ -85,6 +87,7 @@ export default function UsersPage() {
   const message = useAppMessage();
   const [users, setUsers] = useState<ManagedUserWithStatus[]>([]);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [form, setForm] = useState<CreateUserForm>(emptyForm);
   const [createOpen, setCreateOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -116,19 +119,23 @@ export default function UsersPage() {
 
   const filteredUsers = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase();
-    if (!cleanQuery) return users;
-
-    return users.filter((user) =>
-      [user.name, user.email, user.role, accountStatus(user)]
-        .join(" ")
-        .toLowerCase()
-        .includes(cleanQuery)
-    );
-  }, [query, users]);
+    return users.filter((user) => {
+      const matchesStatus =
+        statusFilter === "all" || accountStatus(user) === statusFilter;
+      const matchesQuery =
+        !cleanQuery ||
+        [user.name, user.email, user.role, accountStatus(user)]
+          .join(" ")
+          .toLowerCase()
+          .includes(cleanQuery);
+      return matchesStatus && matchesQuery;
+    });
+  }, [query, statusFilter, users]);
 
   const activeCount = users.filter(
     (user) => accountStatus(user) === "active"
   ).length;
+  const inactiveCount = users.length - activeCount;
   const trainerCount = users.filter((user) => user.role === "trainer").length;
   const adminCount = users.filter((user) => user.role === "admin").length;
 
@@ -328,15 +335,16 @@ export default function UsersPage() {
       {loading ? <LoadingOverlay label="Loading users..." /> : null}
       {operationLabel ? <LoadingOverlay label={operationLabel} /> : null}
 
-      <div className="app-page">
-        <section className="app-card">
+      <div className="app-page mx-auto w-full max-w-[1600px]">
+        <section className="app-card relative overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-1 bg-indigo-600" />
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                 <ShieldCheck size={14} /> Administrator Access
               </div>
               <h1 className="mt-3 text-2xl font-semibold text-slate-950">Users</h1>
-              <p className="mt-1 text-sm text-slate-500">{users.length} registered accounts</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Manage access, roles, account status, and password delivery for {users.length} registered accounts.</p>
             </div>
 
             <button type="button" onClick={() => setCreateOpen(true)} className="app-button-primary justify-center">
@@ -345,26 +353,31 @@ export default function UsersPage() {
           </div>
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-3">
+        <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Metric label="Active" value={activeCount} icon={<CheckCircle2 size={19} />} color="text-emerald-600 bg-emerald-50" />
+          <Metric label="Inactive" value={inactiveCount} icon={<UserX size={19} />} color="text-rose-600 bg-rose-50" />
           <Metric label="Trainers" value={trainerCount} icon={<Users size={19} />} color="text-sky-700 bg-sky-50" />
           <Metric label="Administrators" value={adminCount} icon={<ShieldCheck size={19} />} color="text-indigo-700 bg-indigo-50" />
         </section>
 
         <section className="app-card">
-          <label className="block max-w-xl">
-            <span className="text-sm font-medium text-slate-700">Search users</span>
-            <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 px-3 focus-within:border-brand-blue">
-              <Search size={17} className="text-slate-400" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm" placeholder="Name, email, role, or status" />
-            </div>
-          </label>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_190px_auto] md:items-end">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Search users</span>
+              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
+                <Search size={17} className="text-slate-400" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 md:text-sm" placeholder="Name, email, role, or status" />
+              </div>
+            </label>
+            <label className="block"><span className="text-sm font-medium text-slate-700">Account status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "active" | "inactive")} className="app-input mt-2"><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+            <button type="button" disabled={!query && statusFilter === "all"} onClick={() => { setQuery(""); setStatusFilter("all"); }} className="app-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-40"><X size={16} /> Clear</button>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="divide-y divide-slate-200 lg:hidden">
             {filteredUsers.map((user) => (
-              <article key={user.id} className="p-4">
+              <article key={user.id} className={`p-4 ${accountStatus(user) === "inactive" ? "bg-slate-50/70" : "bg-white"}`}>
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><UserRound size={19} /></div>
                   <div className="min-w-0 flex-1">
@@ -379,10 +392,13 @@ export default function UsersPage() {
                   <span className="text-slate-500">{formatDate(user.createdAt)}</span>
                 </div>
 
-                <div className="mt-4 flex justify-end gap-2">
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                  <span className="text-xs font-medium text-slate-500">Account actions</span>
+                  <div className="flex gap-2">
                   <IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={17} /></IconButton>
                   <IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={17} /></IconButton>
                   <IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={17} /></IconButton>
+                  </div>
                 </div>
               </article>
             ))}
@@ -412,9 +428,10 @@ export default function UsersPage() {
 
       {createOpen ? (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full rounded-t-xl bg-white shadow-2xl sm:max-w-lg sm:rounded-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h2 className="text-lg font-semibold text-slate-950">Add User</h2><p className="mt-0.5 text-sm text-slate-500">A temporary password will be emailed automatically.</p></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
+          <div className="w-full overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-w-lg sm:rounded-lg">
+            <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><UserRound size={19} /></div><div><h2 className="text-lg font-semibold text-slate-950">Add User</h2><p className="mt-0.5 text-sm text-slate-500">Create a secure administrator or trainer account.</p></div></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
             <form onSubmit={createUser} className="space-y-4 p-5">
+              <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><Mail size={18} className="mt-0.5 shrink-0 text-sky-700" /><p>A temporary password and sign-in link will be emailed automatically after the account is created.</p></div>
               <FormInput label="Full name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Trainer name" />
               <FormInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="name@example.com" type="email" />
               <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
