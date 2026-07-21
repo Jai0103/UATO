@@ -64,7 +64,7 @@ import {
 type PageMode = "assets" | "activity" | "masterData";
 
 const inputClass =
-  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
+  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
 
 const emptyDashboard: InventoryDashboard = {
   totalAssets: 0,
@@ -482,7 +482,7 @@ export default function InventoryPage() {
             <div className="flex items-center gap-2 text-xs font-bold uppercase text-sky-700">
               <Box className="h-4 w-4" /> Equipment Control
             </div>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
+            <h1 className="mt-2 text-2xl font-bold text-slate-800 sm:text-3xl">
               {mode === "activity" ? "Inventory Activity" : mode === "masterData" ? "Inventory Data" : "Inventory"}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
@@ -632,16 +632,16 @@ function HistorySection({ title, empty, items }: { title: string; empty: string;
 }
 
 function Modal({ title, subtitle, onClose, children, footer, small = false }: { title: string; subtitle: string; onClose: () => void; children: ReactNode; footer: ReactNode; small?: boolean }) {
-  return <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5"><button type="button" className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" onClick={onClose} aria-label="Close dialog" /><div className={`relative flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:rounded-lg ${small ? "sm:max-w-3xl" : "sm:max-w-6xl"}`}><header className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 sm:px-6"><div className="min-w-0"><p className="text-xs font-bold uppercase text-sky-700">{subtitle}</p><h2 className="mt-1 truncate text-xl font-bold text-slate-950">{title}</h2></div><IconButton label="Close" icon={X} onClick={onClose} /></header><div className="overflow-y-auto p-4 sm:p-6">{children}</div><footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 p-4">{footer}</footer></div></div>;
+  return <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5"><button type="button" className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" onClick={onClose} aria-label="Close dialog" /><div className={`relative flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:rounded-lg ${small ? "sm:max-w-3xl" : "sm:max-w-6xl"}`}><header className="flex items-start justify-between gap-4 border-b border-sky-100 bg-sky-50 p-4 sm:px-6"><div className="min-w-0"><p className="text-xs font-bold uppercase text-sky-700">{subtitle}</p><h2 className="mt-1 truncate text-xl font-bold text-slate-800">{title}</h2></div><IconButton label="Close" icon={X} onClick={onClose} /></header><div className="overflow-y-auto p-4 text-slate-700 sm:p-6">{children}</div><footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:flex sm:justify-end">{footer}</footer></div></div>;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block text-sm font-semibold text-slate-800">{label}{children}</label>; }
-function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>; }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block text-sm font-semibold text-slate-600">{label}{children}</label>; }
+function Detail({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] font-bold uppercase text-sky-700">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-700">{value || "-"}</p></div>; }
 function Select({ className, value, onChange, options, empty }: { className: string; value: string; onChange: (value: string) => void; options: string[] | Array<[string, string]>; empty?: string }) { return <select className={className} value={value} onChange={(event) => onChange(event.target.value)}>{empty ? <option value="">{empty}</option> : null}{options.map((option) => { const pair = Array.isArray(option) ? option : [option, option]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select>; }
 function FilterSelect({ value, onChange, emptyLabel, options, compact = false }: { value: string; onChange: (value: string) => void; emptyLabel: string; options: string[] | Array<[string, string]>; compact?: boolean }) { return <select className={`${compact ? "h-11 min-w-44" : "h-12 md:h-11"} rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700`} value={value} onChange={(event) => onChange(event.target.value)}><option value="">{emptyLabel}</option>{options.map((option) => { const pair = Array.isArray(option) ? option : [option, option]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select>; }
 function StatusBadge({ value, label }: { value: string; label: string }) { return <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${statusTone(value.toLowerCase())}`}>{label}</span>; }
 function IconButton({ label, icon: Icon, onClick, danger = false }: { label: string; icon: typeof Eye; onClick: () => void; danger?: boolean }) { return <button type="button" onClick={onClick} title={label} aria-label={label} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition ${danger ? "border-rose-200 text-rose-600 hover:bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" /></button>; }
-function PrimaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white">{children}</button>; }
+function PrimaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800">{children}</button>; }
 function SecondaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700">{children}</button>; }
 function Th({ children, right = false }: { children: ReactNode; right?: boolean }) { return <th className={`px-4 py-3 font-semibold ${right ? "text-right" : ""}`}>{children}</th>; }
 function Td({ children }: { children: ReactNode }) { return <td className="px-4 py-4 text-slate-700">{children}</td>; }
