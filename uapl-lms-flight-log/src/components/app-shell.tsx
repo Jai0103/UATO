@@ -47,6 +47,7 @@ const PASSWORD_PAGE = "/change-password";
 
 const adminOnlyPages = [
   "/admin",
+  "/approvals",
   "/master-data",
   "/users",
   "/audit-history",
@@ -60,6 +61,11 @@ const adminLinks: NavigationItem[] = [
     href: "/admin",
     label: "Dashboard",
     icon: BarChart3
+  },
+  {
+    href: "/approvals",
+    label: "AGA Approvals",
+    icon: Shield
   },
   {
     href: "/operations",
