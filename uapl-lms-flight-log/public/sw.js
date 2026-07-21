@@ -1,4 +1,4 @@
-const VERSION = "uapl-fms-2026-07-16-v1";
+const VERSION = "uapl-fms-2026-07-21-v2";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const BASE_PATH = "/UATO";
@@ -7,7 +7,7 @@ const CORE_ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/manifest.webmanifest`,
   `${BASE_PATH}/offline.html`,
-  `${BASE_PATH}/AGA_Logo_Square (1).jpg`
+  `${BASE_PATH}/apollo-global-academy-logo.png`
 ];
 
 self.addEventListener("install", (event) => {
