@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
+import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
 import {
@@ -24,8 +25,7 @@ import { createCombinedUaMaintenancePdf } from "@/lib/ua-maintenance-pdf";
 
 type ReportType = "flight" | "staff" | "maintenance";
 
-const fieldClass =
-  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
+const fieldClass = "app-input";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -166,15 +166,29 @@ export default function ReportsPage() {
 
   return (
     <AppShell>
+      {working ? (
+        <LoadingOverlay
+          label={
+            working === "flight"
+              ? "Preparing Flight Log reports..."
+              : working === "staff"
+                ? "Preparing Staff Training reports..."
+                : "Preparing UA Maintenance reports..."
+          }
+          description="Collecting the selected records and building your combined PDF."
+          delay={180}
+        />
+      ) : null}
+
       <div className="app-page">
-        <header className="rounded-lg border border-slate-200 border-t-4 border-t-sky-600 bg-white p-4 shadow-sm sm:p-5">
-          <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold uppercase text-sky-700 ring-1 ring-sky-100">
+        <header className="app-page-header">
+          <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-bold uppercase text-[#075f8f] ring-1 ring-[#d5e9f1]">
             <CalendarRange className="h-4 w-4" /> Report Centre
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">
+          <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">
             Combined Reports
           </h1>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[#6b7d92]">
             Generate operational report batches for the selected reporting period.
           </p>
         </header>
@@ -224,10 +238,10 @@ export default function ReportsPage() {
               accent="emerald"
             >
               <Field label="Staff name">
-                <div className="relative">
-                  <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
+                <div className="relative mt-2">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
                   <input
-                    className={`${fieldClass} pl-10`}
+                    className={`${fieldClass} mt-0 pl-10`}
                     value={staffName}
                     onChange={(event) => setStaffName(event.target.value)}
                     placeholder="All staff or search by name"
@@ -310,7 +324,7 @@ export default function ReportsPage() {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block text-sm font-semibold text-slate-600">
+    <label className="block text-sm font-semibold text-[#405168]">
       {label}
       {children}
     </label>
@@ -331,19 +345,28 @@ function ReportCard({
   children: ReactNode;
 }) {
   const colors = {
-    sky: "border-t-sky-600 bg-sky-50 text-sky-700",
-    emerald: "border-t-emerald-600 bg-emerald-50 text-emerald-700",
-    amber: "border-t-amber-500 bg-amber-50 text-amber-700"
+    sky: {
+      border: "border-t-[#1686b1]",
+      icon: "bg-[#edf5f8] text-[#075f8f] ring-[#d5e9f1]"
+    },
+    emerald: {
+      border: "border-t-emerald-600",
+      icon: "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    },
+    amber: {
+      border: "border-t-amber-500",
+      icon: "bg-amber-50 text-amber-700 ring-amber-200"
+    }
   }[accent];
 
   return (
-    <section className={`flex min-w-0 flex-col rounded-lg border border-t-4 border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md sm:p-6 xl:min-h-[390px] ${colors.split(" ")[0]}`}>
-      <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${colors}`}>
+    <section className={`group flex min-w-0 flex-col rounded-lg border border-t-[3px] border-[#d7e0ea] bg-white p-5 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_8px_24px_rgba(16,42,67,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,42,67,0.06),0_16px_36px_rgba(16,42,67,0.1)] sm:p-6 xl:min-h-[390px] ${colors.border}`}>
+      <div className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 transition group-hover:scale-105 ${colors.icon}`}>
         {icon}
       </div>
-      <h2 className="mt-4 text-xl font-bold text-slate-800">{title}</h2>
-      <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
-      <div className="mt-4 h-px bg-slate-100" />
+      <h2 className="mt-4 text-xl font-bold text-[#16263c]">{title}</h2>
+      <p className="mt-1 text-sm leading-5 text-[#6b7d92]">{description}</p>
+      <div className="mt-4 h-px bg-[#e5ebf2]" />
       <div className="mt-5 flex flex-1 flex-col gap-4">{children}</div>
     </section>
   );
@@ -363,7 +386,7 @@ function GenerateButton({
   onClick: () => void;
 }) {
   const buttonColor = {
-    sky: "bg-sky-700 hover:bg-sky-800 focus-visible:ring-sky-200",
+    sky: "bg-[#075f8f] hover:bg-[#064d75] focus-visible:ring-[#cce5ef]",
     emerald: "bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-200",
     amber: "bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-200"
   }[accent];
@@ -373,7 +396,7 @@ function GenerateButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold text-white shadow-sm transition focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${buttonColor}`}
+      className={`mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold text-white shadow-[0_1px_2px_rgba(16,42,67,0.12),0_6px_16px_rgba(16,42,67,0.12)] transition hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${buttonColor}`}
     >
       {busy ? (
         <Loader2 className="h-4 w-4 animate-spin" />
