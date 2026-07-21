@@ -198,13 +198,13 @@ function drawFooter(doc: jsPDF) {
   }
 }
 
-export async function createStaffTrainingPdf(record: StaffTrainingRecord) {
-  const doc = new jsPDF({
-    orientation: "landscape",
-    unit: "mm",
-    format: "a4"
-  });
-  const logo = await loadImage(LOGO_PATH);
+async function appendStaffTrainingRecord(
+  doc: jsPDF,
+  record: StaffTrainingRecord,
+  logo: HTMLImageElement | null,
+  addFirstPage: boolean
+) {
+  if (addFirstPage) doc.addPage("a4", "landscape");
   let y = drawPageHeader(doc, record, logo);
   y = drawTableHeader(doc, y);
 
@@ -263,6 +263,34 @@ export async function createStaffTrainingPdf(record: StaffTrainingRecord) {
   }
   doc.line(70, y + 8, 132, y + 8);
 
+}
+
+export async function createStaffTrainingPdf(record: StaffTrainingRecord) {
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4"
+  });
+  const logo = await loadImage(LOGO_PATH);
+  await appendStaffTrainingRecord(doc, record, logo, false);
+  drawFooter(doc);
+  return doc;
+}
+
+export async function createCombinedStaffTrainingPdf(
+  records: StaffTrainingRecord[]
+) {
+  const doc = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4"
+  });
+  const logo = await loadImage(LOGO_PATH);
+
+  if (!records.length) return doc;
+  for (let index = 0; index < records.length; index += 1) {
+    await appendStaffTrainingRecord(doc, records[index], logo, index > 0);
+  }
   drawFooter(doc);
   return doc;
 }
