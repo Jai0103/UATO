@@ -19,8 +19,8 @@ export const metadata: Metadata = {
     title: "Flight Manager",
   },
   icons: {
-    icon: "/UATO/apollo-global-academy-logo.png",
-    apple: "/UATO/apollo-global-academy-logo.png",
+    icon: "/UATO/AGA_Logo_Square%20(1).jpg",
+    apple: "/UATO/AGA_Logo_Square%20(1).jpg",
   },
   formatDetection: {
     telephone: false,
