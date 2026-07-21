@@ -231,43 +231,47 @@ export default function RecordsPage() {
       {deleting ? <LoadingOverlay label="Deleting flight record..." /> : null}
 
       <div className="app-page">
-        <section className="app-card">
+        <section className="app-card border-t-4 border-t-sky-600">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-100">
                 <FileText size={14} />
                 Saved Flight Logs
               </div>
-              <h1 className="mt-3 text-2xl font-semibold text-slate-950">Records</h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">Flight Log Records</h1>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 {totalRecords.toLocaleString()} {totalRecords === 1 ? "record" : "records"}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <CalendarDays size={17} className="text-brand-navy" />
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+              <CalendarDays size={17} />
               Page {page} of {totalPages}
             </div>
           </div>
         </section>
 
         <section className="app-card">
+          <div className="mb-4">
+            <p className="app-section-label">Find records</p>
+            <p className="mt-1 text-sm text-slate-500">Search by student identity or narrow the list by month and year.</p>
+          </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_180px_160px_auto] lg:items-end">
             <label className="min-w-0">
-              <span className="text-sm font-medium text-slate-700">Search records</span>
-              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:border-brand-blue">
+              <span className="text-sm font-semibold text-slate-600">Search records</span>
+              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
                 <Search size={17} className="shrink-0 text-slate-400" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-slate-800 outline-none placeholder:text-slate-400 md:text-sm"
                   placeholder="Student, company, or last 4"
                 />
               </div>
             </label>
 
             <label>
-              <span className="text-sm font-medium text-slate-700">Month</span>
+              <span className="text-sm font-semibold text-slate-600">Month</span>
               <select
                 value={selectedMonth}
                 onChange={(event) => {
@@ -283,7 +287,7 @@ export default function RecordsPage() {
             </label>
 
             <label>
-              <span className="text-sm font-medium text-slate-700">Year</span>
+              <span className="text-sm font-semibold text-slate-600">Year</span>
               <select
                 value={selectedYear}
                 onChange={(event) => {
@@ -309,22 +313,22 @@ export default function RecordsPage() {
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="divide-y divide-slate-200 lg:hidden">
             {records.map((record) => (
-              <article key={record.id} className="p-4">
+              <article key={record.id} className="border-l-4 border-l-sky-500 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-slate-950">
+                    <p className="truncate text-base font-bold text-slate-800">
                       {record.student.studentName || "-"}
                     </p>
                     <p className="mt-1 truncate text-sm text-slate-500">
                       {record.student.company || "-"}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">
                     {record.flightCount} {record.flightCount === 1 ? "flight" : "flights"}
                   </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
+                <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
                   <div>
                     <p className="text-xs text-slate-500">Last 4</p>
                     <p className="mt-1 font-medium text-slate-800">{record.student.lastFourCharacters || "-"}</p>
@@ -335,7 +339,7 @@ export default function RecordsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex justify-end gap-2">
+                <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
                   <ActionButton label="View record" onClick={() => void viewRecord(record.id)}>
                     <Eye size={17} />
                   </ActionButton>
@@ -357,7 +361,7 @@ export default function RecordsPage() {
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[880px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                <tr className="border-b border-slate-200 bg-sky-50 text-xs uppercase text-sky-800">
                   <th className="px-5 py-3 font-semibold">Student</th>
                   <th className="px-5 py-3 font-semibold">Company</th>
                   <th className="px-5 py-3 font-semibold">Last 4</th>
@@ -369,10 +373,10 @@ export default function RecordsPage() {
               <tbody>
                 {records.map((record) => (
                   <tr key={record.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/70">
-                    <td className="px-5 py-4 font-semibold text-slate-950">{record.student.studentName || "-"}</td>
+                    <td className="px-5 py-4 font-bold text-slate-800">{record.student.studentName || "-"}</td>
                     <td className="px-5 py-4 text-slate-700">{record.student.company || "-"}</td>
                     <td className="px-5 py-4 text-slate-700">{record.student.lastFourCharacters || "-"}</td>
-                    <td className="px-5 py-4 text-slate-700">{record.flightCount}</td>
+                    <td className="px-5 py-4"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{record.flightCount}</span></td>
                     <td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(record.updatedAt)}</td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
@@ -439,13 +443,13 @@ function ActionButton({
   danger?: boolean;
 }) {
   const colors = danger
-    ? "border-rose-200 text-rose-600 hover:bg-rose-50"
+    ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
     : primary
-      ? "border-brand-navy bg-brand-navy text-white hover:bg-slate-800"
-      : "border-slate-200 text-slate-600 hover:bg-slate-100";
+      ? "border-sky-700 bg-sky-700 text-white hover:bg-sky-800"
+      : "border-slate-200 bg-white text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700";
 
   return (
-    <button type="button" onClick={onClick} aria-label={label} title={label} className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${colors}`}>
+    <button type="button" onClick={onClick} aria-label={label} title={label} className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border shadow-sm transition-colors ${colors}`}>
       {children}
     </button>
   );
@@ -453,11 +457,12 @@ function ActionButton({
 
 function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogRecord; onClose: () => void; onContinue: () => void }) {
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-2xl sm:max-w-6xl sm:rounded-xl">
-        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-6xl sm:rounded-lg">
+        <div className="flex items-center justify-between gap-4 border-b border-sky-100 bg-sky-50 px-4 py-4 sm:px-5">
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold text-slate-950">{record.student.studentName || "Student record"}</h2>
+            <p className="text-xs font-bold uppercase text-sky-700">Flight log record</p>
+            <h2 className="mt-0.5 truncate text-lg font-bold text-slate-800">{record.student.studentName || "Student record"}</h2>
             <p className="mt-0.5 text-sm text-slate-500">{record.rows.length} {record.rows.length === 1 ? "flight" : "flights"}</p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -466,16 +471,42 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-3">
             <DetailItem label="Company" value={record.student.company} />
             <DetailItem label="Last 4" value={record.student.lastFourCharacters} />
             <DetailItem label="Updated" value={formatDate(record.updatedAt)} />
           </div>
 
-          <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
+          <div className="mt-5 space-y-3 lg:hidden">
+            {record.rows.map((row, index) => (
+              <article key={`${record.id}-mobile-${index}`} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-sky-700">Flight {index + 1}</p>
+                    <p className="mt-0.5 font-bold text-slate-800">{row.date || "No date"}</p>
+                  </div>
+                  <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                    {row.duration || "0"} min
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-4 text-sm">
+                  <MobileDetail label="Location" value={row.location} />
+                  <MobileDetail label="Start Time" value={row.startTime} />
+                  <MobileDetail label="UA Model" value={row.uaModel} />
+                  <MobileDetail label="Category" value={row.uaCategory} />
+                  <MobileDetail label="Battery" value={row.batterySn} />
+                  <MobileDetail label="Pilot" value={row.pilotInCommand} />
+                  <div className="col-span-2"><MobileDetail label="AFE / Instructor" value={row.instructorInCommand} /></div>
+                  {row.remarks ? <div className="col-span-2"><MobileDetail label="Remarks" value={row.remarks} /></div> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto rounded-lg border border-slate-200 lg:block">
             <table className="w-full min-w-[1120px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="bg-sky-50 text-xs uppercase text-sky-800">
                 <tr>
                   {['Date','Location','Start','Minutes','UA Model','Category','Battery','Pilot in Command','AFE / Instructor','Remarks'].map((label) => (
                     <th key={label} className="px-4 py-3 font-semibold">{label}</th>
@@ -484,7 +515,7 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
               </thead>
               <tbody>
                 {record.rows.map((row, index) => (
-                  <tr key={`${record.id}-${index}`} className="border-t border-slate-100">
+                  <tr key={`${record.id}-${index}`} className="border-t border-slate-100 text-slate-700 hover:bg-slate-50">
                     <td className="px-4 py-3">{row.date || "-"}</td><td className="px-4 py-3">{row.location || "-"}</td><td className="px-4 py-3">{row.startTime || "-"}</td><td className="px-4 py-3">{row.duration || "-"}</td><td className="px-4 py-3">{row.uaModel || "-"}</td><td className="px-4 py-3">{row.uaCategory || "-"}</td><td className="px-4 py-3">{row.batterySn || "-"}</td><td className="px-4 py-3">{row.pilotInCommand || "-"}</td><td className="px-4 py-3">{row.instructorInCommand || "-"}</td><td className="px-4 py-3">{row.remarks || "-"}</td>
                   </tr>
                 ))}
@@ -498,5 +529,9 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
+  return <div className="rounded-lg border border-slate-100 bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-sky-700">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-700">{value || "-"}</p></div>;
+}
+
+function MobileDetail({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-slate-400">{label}</p><p className="mt-1 break-words font-semibold text-slate-700">{value || "-"}</p></div>;
 }
