@@ -23,6 +23,8 @@ export type ApprovalDocumentStatus = "current" | "superseded";
 
 export type ApprovalDocument = {
   id: string;
+  approvalId: string;
+  locationId: string;
   fileName: string;
   mimeType: string;
   driveFileId: string;
