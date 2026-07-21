@@ -1,1 +1,64 @@
 
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="color-scheme" content="light">
+    <title>Offline | Apollo Flight Management System</title>
+    <style>
+      *{box-sizing:border-box}
+      html{min-height:100%;background:#f4f7fb}
+      body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f7fb;color:#1e293b;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:max(20px,env(safe-area-inset-top)) 18px max(20px,env(safe-area-inset-bottom));-webkit-font-smoothing:antialiased}
+      main{width:100%;max-width:440px;overflow:hidden;background:#fff;border:1px solid #dbe3ee;border-radius:8px;box-shadow:0 20px 50px rgba(15,23,42,.12)}
+      .accent{height:4px;background:#0284c7}
+      .content{padding:24px}
+      .brand{display:flex;align-items:center;gap:14px;padding-bottom:20px;border-bottom:1px solid #e2e8f0}
+      .brand img{display:block;width:auto;max-width:150px;max-height:52px;object-fit:contain}
+      .brand-name{padding-left:14px;border-left:1px solid #dbe3ee;font-size:13px;line-height:1.35;font-weight:750;color:#0f172a}
+      .status{display:flex;width:max-content;align-items:center;gap:8px;margin-top:24px;border:1px solid #fde68a;border-radius:6px;background:#fffbeb;padding:7px 10px;color:#a16207;font-size:12px;font-weight:700}
+      .dot{width:8px;height:8px;border-radius:50%;background:#f59e0b}
+      h1{font-size:25px;line-height:1.2;margin:16px 0 0;color:#0f172a;letter-spacing:0}
+      p{color:#64748b;font-size:14px;line-height:1.65;margin:10px 0 0}
+      .note{margin-top:18px;border-left:3px solid #38bdf8;background:#f0f9ff;padding:12px 14px;color:#334155;font-size:13px;line-height:1.55}
+      button{display:flex;width:100%;height:46px;align-items:center;justify-content:center;border:0;border-radius:8px;background:#0f172a;color:#fff;font:inherit;font-size:14px;font-weight:700;margin-top:22px;cursor:pointer;transition:background .15s ease}
+      button:hover{background:#1e293b}
+      button:disabled{cursor:wait;opacity:.65}
+      @media(max-width:420px){.content{padding:20px}.brand img{max-width:128px}.brand-name{font-size:12px}h1{font-size:23px}}
+      @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="accent"></div>
+      <div class="content">
+        <div class="brand">
+          <img src="/UATO/apollo-global-academy-logo.png" alt="Apollo Global Academy">
+          <div class="brand-name">Flight Management<br>System</div>
+        </div>
+        <div class="status"><span class="dot"></span><span id="status-text">No internet connection</span></div>
+        <h1>This page is unavailable offline</h1>
+        <p>Reconnect to load live records, submit changes, generate reports, or synchronize with Google Sheets.</p>
+        <div class="note">Keep this screen open. The system will retry automatically when your connection returns.</div>
+        <button id="retry-button" type="button">Try Again</button>
+      </div>
+    </main>
+    <script>
+      const button = document.getElementById("retry-button");
+      const statusText = document.getElementById("status-text");
+
+      function retry() {
+        button.disabled = true;
+        button.textContent = "Checking connection...";
+        window.location.reload();
+      }
+
+      button.addEventListener("click", retry);
+      window.addEventListener("online", function () {
+        statusText.textContent = "Connection restored";
+        retry();
+      });
+    </script>
+  </body>
+</html>
