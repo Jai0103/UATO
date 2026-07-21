@@ -589,21 +589,20 @@ export default function StaffTrainingPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-[1600px] space-y-5">
-        <header className="relative overflow-hidden rounded-lg border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6 lg:flex lg:items-center lg:justify-between lg:gap-6">
-          <div className="absolute inset-y-0 left-0 w-1 bg-sky-600" />
+      <div className="app-page mx-auto max-w-[1600px]">
+        <header className="app-page-header lg:flex lg:items-center lg:justify-between lg:gap-6">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-sky-700">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase text-[#075f8f]">
               <ClipboardCheck className="h-4 w-4" /> ADA-UATO-3-1B
             </div>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
+            <h1 className="mt-2 text-2xl font-bold text-[#16263c] sm:text-3xl">
               {mode === "records"
                 ? "Staff Training Records"
                 : mode === "descriptions"
                   ? "Staff Training Data"
                   : "Staff Internal Training"}
             </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6b7d92]">
               {mode === "records"
                 ? "Review, continue, or delete saved staff training records."
                 : mode === "descriptions"
@@ -614,7 +613,7 @@ export default function StaffTrainingPage() {
           <button
             type="button"
             onClick={startNewRecord}
-            className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 lg:mt-0 lg:h-11 lg:w-auto"
+            className="app-button-primary mt-4 h-12 w-full lg:mt-0 lg:h-11 lg:w-auto"
           >
             <Plus className="h-4 w-4" /> New checklist
           </button>
@@ -759,12 +758,12 @@ export default function StaffTrainingPage() {
 
         {mode === "records" ? (
           <section className="space-y-4">
-            <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:flex-row lg:items-end lg:justify-between">
-              <div><h2 className="text-xl font-bold text-slate-950">Saved staff records</h2><p className="text-sm text-slate-500">View reports or continue updating a checklist.</p></div>
+            <div className="app-toolbar lg:items-end">
+              <div><p className="app-section-label">Record library</p><h2 className="app-section-title">Saved staff records</h2><p className="mt-1 text-sm text-[#6b7d92]">View reports or continue updating a checklist.</p></div>
               <div className="grid w-full gap-3 sm:grid-cols-[minmax(220px,1fr)_150px_auto] lg:max-w-2xl">
                 <label className="relative block">
                   <span className="sr-only">Search staff records</span>
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
                   <input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search staff" />
                 </label>
                 <label>
@@ -774,20 +773,20 @@ export default function StaffTrainingPage() {
                     {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
                   </select>
                 </label>
-                <button type="button" onClick={() => { setSearch(""); setSelectedYear(""); }} disabled={!search && !selectedYear} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button>
+                <button type="button" onClick={() => { setSearch(""); setSelectedYear(""); }} disabled={!search && !selectedYear} className="app-button-secondary h-12 md:h-11"><X className="h-4 w-4" /> Clear</button>
               </div>
             </div>
 
-            <div className="relative min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="divide-y divide-slate-200 lg:hidden">
+            <div className="app-table-shell relative min-h-40">
+              <div className="divide-y divide-[#e4eaf1] lg:hidden">
                 {records.map((item) => (
-                  <article key={item.id} className="p-4">
+                  <article key={item.id} className="border-l-[3px] border-l-[#1686b1] p-4 transition hover:bg-[#f7fafc]">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><UserRound className="h-5 w-5" /></div>
-                      <div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.staffName}</p><p className="truncate text-sm text-slate-500">{item.designation || "-"}</p><p className="mt-1 truncate text-xs text-slate-500">{item.staffEmail || "-"}</p></div>
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#edf5f8] text-[#075f8f]"><UserRound className="h-5 w-5" /></div>
+                      <div className="min-w-0 flex-1"><p className="truncate font-semibold text-[#16263c]">{item.staffName}</p><p className="truncate text-sm text-[#6b7d92]">{item.designation || "-"}</p><p className="mt-1 truncate text-xs text-[#7e8fa3]">{item.staffEmail || "-"}</p></div>
                       <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{item.completedCount}/{item.totalCount}</span>
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"><div><p className="text-xs text-slate-500">Updated</p><p className="mt-1 text-sm font-medium text-slate-800">{formatRecordDate(item.updatedAt)}</p></div><div className="flex gap-2"><IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} /><IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} /><IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger /></div></div>
+                    <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3"><div><p className="text-xs text-[#718096]">Updated</p><p className="mt-1 text-sm font-medium text-[#16263c]">{formatRecordDate(item.updatedAt)}</p></div><div className="flex gap-2"><IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} /><IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} /><IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger /></div></div>
                   </article>
                 ))}
                 {!records.length && !recordsLoading ? <div className="px-5 py-14 text-center text-sm text-slate-500">No staff training records found.</div> : null}
@@ -796,7 +795,7 @@ export default function StaffTrainingPage() {
               <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[940px] text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr className="app-table-header">
                       <th className="px-5 py-3 font-semibold">Staff</th>
                       <th className="px-5 py-3 font-semibold">Designation</th>
                       <th className="px-5 py-3 font-semibold">Email</th>
@@ -807,12 +806,12 @@ export default function StaffTrainingPage() {
                   </thead>
                   <tbody>
                     {records.map((item) => (
-                      <tr key={item.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/70">
-                        <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><UserRound className="h-5 w-5" /></div><span className="font-semibold text-slate-950">{item.staffName || "-"}</span></div></td>
-                        <td className="px-5 py-4 text-slate-700">{item.designation || "-"}</td>
-                        <td className="max-w-[240px] truncate px-5 py-4 text-slate-700" title={item.staffEmail}>{item.staffEmail || "-"}</td>
+                      <tr key={item.id} className="border-b border-[#e7edf3] transition-colors hover:bg-[#f7fafc]">
+                        <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#edf5f8] text-[#075f8f]"><UserRound className="h-5 w-5" /></div><span className="font-semibold text-[#16263c]">{item.staffName || "-"}</span></div></td>
+                        <td className="px-5 py-4 text-[#506278]">{item.designation || "-"}</td>
+                        <td className="max-w-[240px] truncate px-5 py-4 text-[#506278]" title={item.staffEmail}>{item.staffEmail || "-"}</td>
                         <td className="px-5 py-4"><span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{item.completedCount} of {item.totalCount}</span></td>
-                        <td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatRecordDate(item.updatedAt)}</td>
+                        <td className="whitespace-nowrap px-5 py-4 text-[#506278]">{formatRecordDate(item.updatedAt)}</td>
                         <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="View record" onClick={() => void viewSavedRecord(item.id)} icon={Eye} /><IconButton label="Edit record" onClick={() => void openRecord(item.id)} icon={Edit3} /><IconButton label="Delete record" onClick={() => void removeRecord(item)} icon={Trash2} danger /></div></td>
                       </tr>
                     ))}
@@ -828,13 +827,13 @@ export default function StaffTrainingPage() {
                   </div>
                 </div>
               ) : null}
-              <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-500">
+              <div className="flex flex-col gap-3 border-t border-[#dbe3ec] bg-[#fbfcfd] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-[#6b7d92]">
                 Showing {records.length} of {recordsPage.totalRecords} records / Page <span className="font-semibold text-slate-900">{recordsPage.page}</span> of <span className="font-semibold text-slate-900">{recordsPage.totalPages}</span>
               </p>
               <div className="grid grid-cols-2 gap-2 sm:flex">
-                <button type="button" disabled={!recordsPage.hasPreviousPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button>
-                <button type="button" disabled={!recordsPage.hasNextPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button>
+                <button type="button" disabled={!recordsPage.hasPreviousPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page - 1)} className="app-button-secondary"><ChevronLeft className="h-4 w-4" /> Previous</button>
+                <button type="button" disabled={!recordsPage.hasNextPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page + 1)} className="app-button-secondary">Next <ChevronRight className="h-4 w-4" /></button>
               </div>
               </div>
             </div>
@@ -874,20 +873,20 @@ export default function StaffTrainingPage() {
       </div>
 
       {viewingRecord ? (
-        <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5">
+        <div className="app-overlay-enter fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#102a43]/60 backdrop-blur-[2px]"
             onClick={() => setViewingRecord(null)}
             aria-label="Close staff training record"
           />
 
-          <div className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-lg">
-            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+          <div className="app-panel-enter relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-[#d7e0ea] bg-white shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:max-w-5xl sm:rounded-lg">
+            <header className="flex items-start justify-between gap-4 border-b border-[#dbe6ed] bg-[#f1f7fa] px-4 py-4 sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase text-sky-700">ADA-UATO-3-1B</p>
-                <h2 className="mt-1 truncate text-xl font-bold text-slate-950">{viewingRecord.staffName}</h2>
-                <p className="mt-1 truncate text-sm text-slate-500">{viewingRecord.designation} / {viewingRecord.staffEmail}</p>
+                <p className="text-xs font-bold uppercase text-[#075f8f]">ADA-UATO-3-1B</p>
+                <h2 className="mt-1 truncate text-xl font-bold text-[#16263c]">{viewingRecord.staffName}</h2>
+                <p className="mt-1 truncate text-sm text-[#6b7d92]">{viewingRecord.designation} / {viewingRecord.staffEmail}</p>
               </div>
               <button type="button" onClick={() => setViewingRecord(null)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" aria-label="Close record"><X className="h-4 w-4" /></button>
             </header>
@@ -928,9 +927,9 @@ export default function StaffTrainingPage() {
               </div>
             </div>
 
-            <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:flex sm:justify-end">
-              <button type="button" onClick={() => setViewingRecord(null)} className="inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 sm:h-11">Close</button>
-              <button type="button" onClick={() => void downloadSavedRecordPdf(viewingRecord)} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 sm:h-11"><Download className="h-4 w-4" /> Download PDF</button>
+            <footer className="grid grid-cols-2 gap-2 border-t border-[#dbe3ec] bg-[#f7f9fb] p-4 sm:flex sm:justify-end">
+              <button type="button" onClick={() => setViewingRecord(null)} className="app-button-secondary h-12 sm:h-11">Close</button>
+              <button type="button" onClick={() => void downloadSavedRecordPdf(viewingRecord)} className="app-button-primary h-12 sm:h-11"><Download className="h-4 w-4" /> Download PDF</button>
             </footer>
           </div>
         </div>
@@ -950,7 +949,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function DetailValue({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[11px] font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
+  return <div className="rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3"><p className="text-[11px] font-bold uppercase text-[#718096]">{label}</p><p className="mt-1 break-words text-sm font-semibold text-[#16263c]">{value || "-"}</p></div>;
 }
 
 function formatRecordDate(value: string) {
@@ -961,5 +960,5 @@ function formatRecordDate(value: string) {
 }
 
 function IconButton({ label, onClick, icon: Icon, danger = false }: { label: string; onClick: () => void; icon: typeof Edit3; danger?: boolean }) {
-  return <button type="button" onClick={onClick} title={label} aria-label={label} className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${danger ? "border-rose-200 text-rose-600 hover:bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" /></button>;
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white shadow-sm transition ${danger ? "border-rose-200 text-rose-600 hover:border-rose-300 hover:bg-rose-50" : "border-[#d7e0ea] text-[#607389] hover:border-[#9ec3d7] hover:bg-[#f1f8fb] hover:text-[#075f8f]"}`}><Icon className="h-4 w-4" /></button>;
 }
