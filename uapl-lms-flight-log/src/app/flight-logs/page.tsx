@@ -921,7 +921,7 @@ export default function FlightLogsPage() {
       <div className="relative">
         <input
           type="text"
-          className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm"
+          className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm"
           value={value}
           onFocus={() => setActiveSuggestField(fieldKey)}
           onChange={(event) => {
@@ -960,7 +960,7 @@ export default function FlightLogsPage() {
 
   function renderModalField(field: (typeof fields)[number]) {
     const inputClass =
-      "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-brand-blue md:h-11 md:text-sm";
+      "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
 
     if (field.key === "pilotInCommand") {
       return (
@@ -1045,16 +1045,16 @@ export default function FlightLogsPage() {
   function renderStepContent() {
     if (activeStep === "details") {
       return (
-        <section className="app-card">
+        <section className="app-card border-t-4 border-t-sky-600 shadow-sm">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700 ring-1 ring-sky-100">
               <UserRound size={18} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">
+              <h2 className="text-lg font-bold text-slate-800">
                 Student Details
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm leading-5 text-slate-500">
                 Enter the report header information first.
               </p>
             </div>
@@ -1062,7 +1062,7 @@ export default function FlightLogsPage() {
 
           <div className="mt-5 grid gap-4 md:grid-cols-3">
             <label>
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-semibold text-slate-600">
                 Student Name
               </span>
               <input
@@ -1074,7 +1074,7 @@ export default function FlightLogsPage() {
             </label>
 
             <label>
-              <span className="text-sm font-medium text-slate-700">Company</span>
+              <span className="text-sm font-semibold text-slate-600">Company</span>
               <input
                 value={student.company}
                 onChange={(event) => updateStudent("company", event.target.value)}
@@ -1084,7 +1084,7 @@ export default function FlightLogsPage() {
             </label>
 
             <label>
-              <span className="text-sm font-medium text-slate-700">
+              <span className="text-sm font-semibold text-slate-600">
                 Last 4 Characters
               </span>
               <input
@@ -1104,17 +1104,17 @@ export default function FlightLogsPage() {
 
     if (activeStep === "signature") {
       return (
-        <section className="app-card">
+        <section className="app-card border-t-4 border-t-violet-500 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700 ring-1 ring-violet-100">
                 <Signature size={18} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-950">
+                <h2 className="text-lg font-bold text-slate-800">
                   Student Signature
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm leading-5 text-slate-500">
                   The signature locks only after saving the record.
                 </p>
               </div>
@@ -1131,7 +1131,7 @@ export default function FlightLogsPage() {
             ) : null}
           </div>
 
-          <div className="relative mt-4 overflow-hidden rounded-lg border border-slate-300 bg-slate-50 p-2">
+          <div className="relative mt-4 overflow-hidden rounded-lg border border-violet-200 bg-violet-50/60 p-2 shadow-inner">
             <canvas
               ref={signatureCanvasRef}
               width={900}
@@ -1170,13 +1170,13 @@ export default function FlightLogsPage() {
 
     if (activeStep === "flights") {
       return (
-        <section className="app-card">
+        <section className="app-card border-t-4 border-t-emerald-500 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-slate-950">
+              <h2 className="text-lg font-bold text-slate-800">
                 Flight Entries
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm leading-5 text-slate-500">
                 Add each flight through the flight form.
               </p>
             </div>
@@ -1192,21 +1192,21 @@ export default function FlightLogsPage() {
               {rows.map((row, index) => (
                 <article
                   key={index}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white hover:shadow-sm"
+                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-sky-200 hover:shadow-md"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-950">
+                      <p className="truncate text-sm font-bold text-slate-800">
                         {row.date || "No date"} - {row.location || "No location"}
                       </p>
 
                       <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-sky-700">
                           <Clock size={13} />
                           {row.startTime || "--:--"}
                         </span>
 
-                        <span className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-emerald-700">
                           <MapPin size={13} />
                           {row.uaCategory || "-"}
                         </span>
@@ -1269,46 +1269,46 @@ export default function FlightLogsPage() {
     }
 
     return (
-      <section className="app-card">
+      <section className="app-card border-t-4 border-t-amber-500 shadow-sm">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 ring-1 ring-amber-100">
             <ShieldCheck size={18} />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">
+            <h2 className="text-lg font-bold text-slate-800">
               Review and Save
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm leading-5 text-slate-500">
               Confirm the details before saving the record.
             </p>
           </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase text-slate-500">
+          <div className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+            <p className="text-xs font-bold uppercase text-sky-700">
               Student
             </p>
-            <p className="mt-1 font-semibold text-slate-950">
+            <p className="mt-1 font-bold text-slate-800">
               {student.studentName || "-"}
             </p>
             <p className="text-sm text-slate-500">{student.company || "-"}</p>
           </div>
 
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase text-slate-500">
+          <div className="rounded-lg border border-violet-100 bg-violet-50 p-4">
+            <p className="text-xs font-bold uppercase text-violet-700">
               Signature
             </p>
-            <p className="mt-1 font-semibold text-slate-950">
+            <p className="mt-1 font-bold text-slate-800">
               {student.studentSignatureDataUrl ? "Captured" : "Missing"}
             </p>
           </div>
 
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase text-slate-500">
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs font-bold uppercase text-emerald-700">
               Flights
             </p>
-            <p className="mt-1 font-semibold text-slate-950">
+            <p className="mt-1 font-bold text-slate-800">
               {rows.length} entries
             </p>
           </div>
@@ -1328,16 +1328,16 @@ export default function FlightLogsPage() {
         <LoadingOverlay label="Checking battery availability..." />
       ) : null}
 
-      <div className="app-page pb-28 md:pb-0">
-        <section className="app-card overflow-hidden">
+      <div className="app-page pb-32 md:pb-0">
+        <section className="app-card overflow-hidden border-t-4 border-t-sky-600 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-100">
                 <FileCheck2 size={14} />
                 {activeRecordId ? "Continuing Record" : "New Flight Log"}
               </div>
 
-              <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+              <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">
                 {student.studentName || "Flight Log"}
               </h1>
 
@@ -1352,18 +1352,18 @@ export default function FlightLogsPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:min-w-[300px]">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xl font-bold text-slate-950">{completedCount}/3</p>
-                <p className="text-xs font-medium text-slate-500">Sections ready</p>
+              <div className="rounded-lg border border-sky-100 bg-sky-50 px-4 py-3">
+                <p className="text-xl font-bold text-sky-800">{completedCount}/3</p>
+                <p className="text-xs font-semibold text-sky-700">Sections ready</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xl font-bold text-slate-950">{rows.length}</p>
-                <p className="text-xs font-medium text-slate-500">Flight entries</p>
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <p className="text-xl font-bold text-emerald-800">{rows.length}</p>
+                <p className="text-xs font-semibold text-emerald-700">Flight entries</p>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-4 gap-2 xl:hidden">
+          <div className="mt-5 grid grid-cols-4 gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1.5 xl:hidden">
             {steps.map((step, index) => {
               const isActive = activeStep === step.key;
               const isComplete =
@@ -1377,10 +1377,12 @@ export default function FlightLogsPage() {
                   key={step.key}
                   type="button"
                   onClick={() => void selectStep(step.key)}
-                  className={`min-w-0 rounded-lg border px-1.5 py-2.5 text-center text-[11px] font-bold sm:px-3 sm:text-sm ${
+                  className={`min-w-0 rounded-md border px-1 py-2.5 text-center text-[11px] font-bold transition sm:px-3 sm:text-sm ${
                     isActive
-                      ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      ? "border-sky-700 bg-sky-700 text-white shadow-sm"
+                      : isComplete
+                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                        : "border-transparent bg-white text-slate-500 hover:border-slate-200"
                   }`}
                 >
                   <span className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-current/10">
@@ -1491,13 +1493,13 @@ export default function FlightLogsPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-2.5 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur md:hidden">
-        <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-1.5">
+      <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-slate-200 bg-white/95 px-3 pt-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur md:hidden">
+        <div className="mx-auto grid w-full max-w-lg grid-cols-4 gap-2">
           <button
             type="button"
             onClick={goBack}
             disabled={activeStep === "details"}
-            className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-700 disabled:opacity-40"
+            className="inline-flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-1 text-[11px] font-semibold text-slate-600 shadow-sm disabled:opacity-40"
           >
             <ChevronLeft size={15} />
             <span className="leading-none">Back</span>
@@ -1506,7 +1508,7 @@ export default function FlightLogsPage() {
           <button
             type="button"
             onClick={clearDraft}
-            className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-rose-200 bg-rose-50 px-1 text-[10px] font-semibold text-rose-700"
+            className="inline-flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-rose-100 bg-rose-50 px-1 text-[11px] font-semibold text-rose-700 shadow-sm"
           >
             <RotateCcw size={15} />
             <span className="leading-none">Clear</span>
@@ -1515,7 +1517,7 @@ export default function FlightLogsPage() {
           <button
             type="button"
             onClick={saveDraft}
-            className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 text-[10px] font-semibold text-slate-700"
+            className="inline-flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border border-sky-100 bg-sky-50 px-1 text-[11px] font-semibold text-sky-700 shadow-sm"
           >
             <Save size={15} />
             <span className="leading-none">Draft</span>
@@ -1526,7 +1528,7 @@ export default function FlightLogsPage() {
               type="button"
               onClick={saveRecord}
               disabled={saving}
-              className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy px-1 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg bg-sky-700 px-1 text-[11px] font-bold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShieldCheck size={15} />
               <span className="leading-none">Save</span>
@@ -1535,7 +1537,7 @@ export default function FlightLogsPage() {
             <button
               type="button"
               onClick={() => void goNext()}
-              className="inline-flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg bg-brand-navy px-1 text-[10px] font-semibold text-white"
+              className="inline-flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg bg-sky-700 px-1 text-[11px] font-bold text-white shadow-md"
             >
               <ChevronRight size={15} />
               <span className="leading-none">Next</span>
@@ -1545,11 +1547,12 @@ export default function FlightLogsPage() {
       </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-lg">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div className="max-h-[94dvh] w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-3xl sm:rounded-lg">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-sky-100 bg-sky-50 px-4 py-4 sm:px-5">
               <div>
-                <h2 className="text-lg font-semibold text-slate-950">
+                <p className="text-xs font-bold uppercase text-sky-700">Flight entry</p>
+                <h2 className="mt-0.5 text-lg font-bold text-slate-800">
                   {editingIndex === null ? "Add Flight" : "Edit Flight"}
                 </h2>
                 <p className="text-sm text-slate-500">
@@ -1566,13 +1569,13 @@ export default function FlightLogsPage() {
               </button>
             </div>
 
-            <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <div className="grid gap-5 p-4 sm:grid-cols-2 sm:p-5">
               {fields.map((field) => (
                 <label
                   key={field.key}
                   className={field.key === "remarks" ? "sm:col-span-2" : ""}
                 >
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="text-sm font-semibold text-slate-600">
                     {field.label}
                   </span>
                   {renderModalField(field)}
@@ -1580,7 +1583,7 @@ export default function FlightLogsPage() {
               ))}
             </div>
 
-            <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white p-5 sm:flex-row sm:justify-end">
+            <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:p-5">
               <button onClick={closeFlightModal} className="app-button-secondary">
                 Cancel
               </button>
