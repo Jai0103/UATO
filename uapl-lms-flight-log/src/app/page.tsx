@@ -1,127 +1,96 @@
 "use client";
 
 import {
-  FormEvent,
-  useEffect,
-  useState
-} from "react";
-import {
+  AlertCircle,
+  AtSign,
   Eye,
   EyeOff,
+  KeyRound,
   Loader2,
-  Lock,
-  Plane
+  LockKeyhole,
+  ShieldCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import {
   AuthApiError,
   getSecureSession,
   loginSecurely,
-  verifySecureSession
+  verifySecureSession,
 } from "@/lib/auth-api";
+
+const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
 export default function LoginPage() {
   const router = useRouter();
-
-  const [identifier, setIdentifier] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const [
-    showPassword,
-    setShowPassword
-  ] = useState(false);
-
-  const [loginError, setLoginError] =
-    useState("");
-
-  const [
-    remainingAttempts,
-    setRemainingAttempts
-  ] = useState<number | null>(null);
-
-  const [
-    checkingSession,
-    setCheckingSession
-  ] = useState(true);
-
-  const [loggingIn, setLoggingIn] =
-    useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(
+    null
+  );
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loggingIn, setLoggingIn] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function checkExistingSession() {
-      const existingSession =
-        getSecureSession();
+      const existingSession = getSecureSession();
 
       if (!existingSession) {
-        if (active) {
-          setCheckingSession(false);
-        }
-
+        if (active) setCheckingSession(false);
         return;
       }
 
       try {
-        const verifiedSession =
-          await verifySecureSession(
-            existingSession
-          );
-
+        const verifiedSession = await verifySecureSession(existingSession);
         if (!active) return;
 
-        if (
-          verifiedSession
-            .mustChangePassword
-        ) {
-          router.replace(
-            "/change-password"
-          );
-
+        if (verifiedSession.mustChangePassword) {
+          router.replace("/change-password");
           return;
         }
 
         router.replace(
-          verifiedSession.role ===
-            "admin"
-            ? "/admin"
-            : "/flight-logs"
+          verifiedSession.role === "admin" ? "/admin" : "/flight-logs"
         );
       } catch {
-        if (active) {
-          setCheckingSession(false);
-        }
+        if (active) setCheckingSession(false);
       }
     }
 
-    checkExistingSession();
+    void checkExistingSession();
 
     return () => {
       active = false;
     };
   }, [router]);
 
-  async function handleLogin(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
+  function clearError() {
+    if (loginError) setLoginError("");
+    if (remainingAttempts !== null) setRemainingAttempts(null);
+  }
 
+  function updateCapsLock(event: KeyboardEvent<HTMLInputElement>) {
+    setCapsLockOn(event.getModifierState("CapsLock"));
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (loggingIn) return;
 
-    const cleanIdentifier =
-      identifier.trim();
+    const cleanIdentifier = identifier.trim();
 
-    if (
-      !cleanIdentifier ||
-      !password
-    ) {
-      setLoginError(
-        "Enter your email or username and password."
-      );
-
+    if (!cleanIdentifier || !password) {
+      setLoginError("Enter your email or username and password.");
       return;
     }
 
@@ -130,46 +99,25 @@ export default function LoginPage() {
     setLoggingIn(true);
 
     try {
-      const session =
-        await loginSecurely(
-          cleanIdentifier,
-          password
-        );
+      const session = await loginSecurely(cleanIdentifier, password);
 
       if (session.mustChangePassword) {
-        router.replace(
-          "/change-password"
-        );
-
+        router.replace("/change-password");
         return;
       }
 
-      router.replace(
-        session.role === "admin"
-          ? "/admin"
-          : "/flight-logs"
-      );
+      router.replace(session.role === "admin" ? "/admin" : "/flight-logs");
     } catch (error) {
-      if (
-        error instanceof AuthApiError
-      ) {
+      if (error instanceof AuthApiError) {
         setLoginError(error.message);
 
-        if (
-          typeof error.remainingAttempts ===
-          "number"
-        ) {
-          setRemainingAttempts(
-            error.remainingAttempts
-          );
+        if (typeof error.remainingAttempts === "number") {
+          setRemainingAttempts(error.remainingAttempts);
         }
-
         return;
       }
 
-      setLoginError(
-        "Unable to sign in. Please try again."
-      );
+      setLoginError("Unable to sign in. Check your connection and try again.");
     } finally {
       setLoggingIn(false);
     }
@@ -177,18 +125,21 @@ export default function LoginPage() {
 
   if (checkingSession) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-xl shadow-slate-200/70">
-          <Loader2 className="h-5 w-5 animate-spin text-sky-700" />
-
-          <div>
-            <p className="text-sm font-semibold text-slate-950">
-              Checking session
-            </p>
-
-            <p className="text-xs text-slate-500">
-              Verifying your account...
-            </p>
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#f4f7fb] px-4">
+        <div className="w-full max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="h-1 bg-sky-600" />
+          <div className="flex items-center gap-4 p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-cyan-300">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">
+                Checking session
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Verifying your secure access...
+              </p>
+            </div>
           </div>
         </div>
       </main>
@@ -196,203 +147,148 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f3f6fb] px-4 py-6 sm:px-6 lg:px-8">
-      <section className="mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="hidden lg:block">
-          <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
-            <Plane className="h-4 w-4 text-sky-600" />
-            UAPL LMS Flight Operations
-          </div>
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-6 sm:px-6 sm:py-10">
+      <div className="absolute inset-x-0 top-0 h-1 bg-sky-600" />
 
-          <h1 className="max-w-xl text-5xl font-bold tracking-tight text-slate-950">
-            Professional flight log
-            management for trainers and
-            administrators.
+      <section className="w-full max-w-[460px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
+        <header className="border-b border-slate-200 px-5 py-6 text-center sm:px-8 sm:py-7">
+          <img
+            src={LOGO_PATH}
+            alt="Apollo Global Academy"
+            className="mx-auto h-auto max-h-20 w-auto max-w-[230px] object-contain sm:max-w-[260px]"
+          />
+          <div className="mx-auto mt-5 flex w-max max-w-full items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            Authorized account access
+          </div>
+          <h1 className="mt-4 text-2xl font-bold text-slate-950">
+            Flight Management System
           </h1>
-
-          <p className="mt-5 max-w-lg text-base leading-7 text-slate-600">
-            Record student flights, manage
-            operational data, generate
-            reports, and keep training
-            records organized across mobile,
-            tablet, laptop, and desktop.
+          <p className="mt-1.5 text-sm leading-6 text-slate-500">
+            Sign in with the account issued by your administrator.
           </p>
+        </header>
 
-          <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
-            {[
-              "Flight Logs",
-              "Reports",
-              "Admin Control"
-            ].map((item) => (
-              <div
-                key={item}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-5 shadow-sm"
-              >
-                <p className="text-sm font-semibold text-slate-900">
-                  {item}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mx-auto w-full max-w-md">
-          <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
-            <div className="flex justify-center border-b border-slate-100 bg-white px-6 py-7 sm:px-8">
-              <img
-                src="./AGA_Logo_fullcolor_Horizontal (1).png"
-                alt="Apollo Global Academy"
-                className="h-auto max-h-24 w-auto max-w-[240px] object-contain sm:max-w-[280px]"
-              />
-            </div>
-
-            <div className="px-6 py-7 sm:px-8">
-              <form
-                onSubmit={handleLogin}
-                className="space-y-5"
-              >
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Email or username
-                  </span>
-
-                  <input
-                    value={identifier}
-                    onChange={(event) => {
-                      setIdentifier(
-                        event.target.value
-                      );
-
-                      if (loginError) {
-                        setLoginError("");
-                      }
-                    }}
-                    className="app-input"
-                    placeholder="Enter your account"
-                    autoComplete="username"
-                    disabled={loggingIn}
-                    required
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Password
-                  </span>
-
-                  <div className="relative">
-                    <input
-                      value={password}
-                      onChange={(event) => {
-                        setPassword(
-                          event.target.value
-                        );
-
-                        if (loginError) {
-                          setLoginError("");
-                        }
-                      }}
-                      className="app-input pr-12"
-                      placeholder="Enter your password"
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
-                      autoComplete="current-password"
-                      disabled={loggingIn}
-                      required
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowPassword(
-                          (value) => !value
-                        )
-                      }
-                      disabled={loggingIn}
-                      className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                      aria-label={
-                        showPassword
-                          ? "Hide password"
-                          : "Show password"
-                      }
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </label>
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        "/forgot-password"
-                      )
-                    }
-                    disabled={loggingIn}
-                    className="text-sm font-semibold text-sky-700 transition hover:text-sky-900 hover:underline disabled:opacity-50"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-
-                {loginError ? (
-                  <div
-                    role="alert"
-                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-700"
-                  >
-                    <p>{loginError}</p>
-
-                    {remainingAttempts !==
-                      null &&
-                    remainingAttempts > 0 ? (
-                      <p className="mt-1 text-xs text-red-600">
-                        {
-                          remainingAttempts
-                        }{" "}
-                        attempt
-                        {remainingAttempts ===
-                        1
-                          ? ""
-                          : "s"}{" "}
-                        remaining before the
-                        account is temporarily
-                        locked.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <button
-                  type="submit"
+        <div className="px-5 py-6 sm:px-8 sm:py-7">
+          <form onSubmit={handleLogin} className="space-y-5" noValidate>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
+                Email or username
+              </span>
+              <div className="relative">
+                <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={identifier}
+                  onChange={(event) => {
+                    setIdentifier(event.target.value);
+                    clearError();
+                  }}
+                  className="app-input mt-0 pl-10"
+                  placeholder="Enter your account"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   disabled={loggingIn}
-                  className="app-button-primary w-full justify-center"
+                  aria-invalid={Boolean(loginError)}
+                  autoFocus
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-slate-700">
+                Password
+              </span>
+              <div className="relative">
+                <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    clearError();
+                  }}
+                  onKeyDown={updateCapsLock}
+                  onKeyUp={updateCapsLock}
+                  onBlur={() => setCapsLockOn(false)}
+                  className="app-input mt-0 pl-10 pr-12"
+                  placeholder="Enter your password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  disabled={loggingIn}
+                  aria-invalid={Boolean(loginError)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  disabled={loggingIn}
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {loggingIn ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
                   ) : (
-                    <Lock className="h-4 w-4" />
+                    <Eye className="h-4 w-4" />
                   )}
-
-                  {loggingIn
-                    ? "Signing in securely..."
-                    : "Sign in"}
                 </button>
-              </form>
-            </div>
-          </div>
+              </div>
+              {capsLockOn ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                  <AlertCircle className="h-3.5 w-3.5" /> Caps Lock is on
+                </p>
+              ) : null}
+            </label>
 
-          <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-            Powered by: Jairus Github Repo
-          </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => router.push("/forgot-password")}
+                disabled={loggingIn}
+                className="min-h-10 px-1 text-sm font-semibold text-sky-700 transition hover:text-sky-900 hover:underline disabled:opacity-50"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            {loginError ? (
+              <div
+                id="login-error"
+                role="alert"
+                className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-rose-800"
+              >
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-semibold leading-5">
+                    {loginError}
+                  </p>
+                  {remainingAttempts !== null && remainingAttempts > 0 ? (
+                    <p className="mt-1 text-xs leading-5 text-rose-700">
+                      {remainingAttempts} attempt
+                      {remainingAttempts === 1 ? "" : "s"} remaining before
+                      temporary lockout.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={loggingIn}
+              className="app-button-primary h-12 w-full justify-center"
+            >
+              {loggingIn ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LockKeyhole className="h-4 w-4" />
+              )}
+              {loggingIn ? "Signing in securely..." : "Sign in"}
+            </button>
+          </form>
         </div>
+
+        <footer className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-center text-xs text-slate-500">
+          Apollo Global Academy
+        </footer>
       </section>
     </main>
   );
