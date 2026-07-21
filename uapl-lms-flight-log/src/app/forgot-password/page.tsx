@@ -91,34 +91,34 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-6 sm:px-6 sm:py-10">
-      <div className="absolute inset-x-0 top-0 h-1 bg-sky-600" />
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#eef3f8] px-4 py-6 sm:px-6 sm:py-10">
+      <div className="absolute inset-x-0 top-0 grid h-1 grid-cols-[1fr_72px]"><span className="bg-[#075f8f]" /><span className="bg-[#c7353d]" /></div>
 
-      <section className="w-full max-w-[460px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
-        <header className="border-b border-slate-200 px-5 py-6 text-center sm:px-8 sm:py-7">
+      <section className="app-panel-enter w-full max-w-[470px] overflow-hidden rounded-lg border border-[#d4dee8] bg-white shadow-[0_2px_4px_rgba(16,42,67,0.06),0_24px_60px_rgba(16,42,67,0.14)]">
+        <header className="border-b border-[#e1e8ef] px-5 py-7 text-center sm:px-9 sm:py-8">
           <img
             src={LOGO_PATH}
             alt="Apollo Global Academy"
-            className="mx-auto h-auto max-h-20 w-auto max-w-[230px] object-contain sm:max-w-[260px]"
+            className="mx-auto h-auto max-h-20 w-auto max-w-[238px] object-contain sm:max-w-[268px]"
           />
-          <div className="mx-auto mt-5 flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-cyan-300">
+          <div className="mx-auto mt-5 flex h-11 w-11 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8] shadow-sm">
             {message ? (
               <MailCheck className="h-5 w-5" />
             ) : (
               <ShieldQuestion className="h-5 w-5" />
             )}
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-slate-950">
+          <h1 className="mt-4 text-2xl font-bold text-[#16263c]">
             {message ? "Check your email" : "Forgot password?"}
           </h1>
-          <p className="mt-1.5 text-sm leading-6 text-slate-500">
+          <p className="mt-1.5 text-sm leading-6 text-[#6b7d92]">
             {message
               ? "Use the temporary password in the email to sign in."
               : "Enter your registered email or username to request a temporary password."}
           </p>
         </header>
 
-        <div className="px-5 py-6 sm:px-8 sm:py-7">
+        <div className="px-5 py-6 sm:px-9 sm:py-8">
           {message ? (
             <div>
               <div
@@ -157,11 +157,11 @@ export default function ForgotPasswordPage() {
             <>
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  <span className="mb-2 block text-sm font-semibold text-[#405168]">
                     Email or username
                   </span>
                   <div className="relative">
-                    <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
                     <input
                       value={identifier}
                       onChange={(event) => {
@@ -210,7 +210,7 @@ export default function ForgotPasswordPage() {
                 type="button"
                 onClick={() => router.push("/")}
                 disabled={sending}
-                className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 text-sm font-semibold text-sky-700 transition hover:text-sky-900 hover:underline disabled:opacity-50"
+                className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 text-sm font-semibold text-[#075f8f] transition hover:text-[#064d75] hover:underline disabled:opacity-50"
               >
                 <ArrowLeft className="h-4 w-4" /> Sign in
               </button>
@@ -218,8 +218,8 @@ export default function ForgotPasswordPage() {
           )}
         </div>
 
-        <footer className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-center text-xs text-slate-500">
-          Powered by: Jairus Github
+        <footer className="border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
+          Apollo Global Academy secure access
         </footer>
       </section>
     </main>
