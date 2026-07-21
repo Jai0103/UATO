@@ -5,9 +5,13 @@ import { PwaManager } from "@/components/pwa-manager";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Apollo Flight Management System",
+  applicationName: "Apollo Flight Management System",
+  title: {
+    default: "Apollo Flight Management System",
+    template: "%s | Apollo Flight Management System",
+  },
   description:
-    "Mobile flight log management system for Apollo Global Academy.",
+    "Operations, training, maintenance, inventory, records, and reporting for Apollo Global Academy.",
   manifest: "/UATO/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -15,8 +19,13 @@ export const metadata: Metadata = {
     title: "Flight Manager",
   },
   icons: {
-    icon: "/UATO/AGA_Logo_fullcolor_Horizontal (1).png",
-    apple: "/UATO/AGA_Logo_fullcolor_Horizontal (1).png",
+    icon: "/UATO/apollo-global-academy-logo.png",
+    apple: "/UATO/apollo-global-academy-logo.png",
+  },
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
   },
 };
 
@@ -24,7 +33,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0f172a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0f172a" },
+  ],
 };
 
 type RootLayoutProps = Readonly<{
