@@ -30,14 +30,16 @@ export function LoadingOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[3px]"
       role="status"
       aria-live="assertive"
       aria-busy="true"
     >
-      <div className="w-full max-w-sm rounded-lg border border-white/70 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:p-6">
+      <div className="w-full max-w-sm overflow-hidden rounded-lg border border-white/70 bg-white shadow-2xl shadow-slate-950/20">
+        <div className="h-1 bg-sky-600" />
+        <div className="p-5 sm:p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-white">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-cyan-300 shadow-sm">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
 
@@ -52,7 +54,8 @@ export function LoadingOverlay({
         </div>
 
         <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full w-2/5 animate-pulse rounded-full bg-sky-600" />
+          <div className="h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-sky-600 to-cyan-400" />
+        </div>
         </div>
       </div>
     </div>
