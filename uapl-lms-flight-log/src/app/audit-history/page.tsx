@@ -10,6 +10,8 @@ import {
   type AuditValue,
 } from "@/lib/audit-api";
 import {
+  Activity,
+  BadgeCheck,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
@@ -18,10 +20,17 @@ import {
   History,
   Search,
   ShieldCheck,
+  TriangleAlert,
   UserRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 const PAGE_SIZE = 10;
 
@@ -78,6 +87,18 @@ function actionStyle(action: string) {
     return "bg-indigo-50 text-indigo-700 ring-indigo-200";
   }
   return "bg-sky-50 text-sky-700 ring-sky-200";
+}
+
+function actionAccent(action: string) {
+  if (action.includes("DELETED") || action.includes("DEACTIVATED")) {
+    return "border-l-rose-500";
+  }
+  if (action.includes("CREATED") || action.includes("ACTIVATED")) {
+    return "border-l-emerald-500";
+  }
+  if (action.includes("PASSWORD")) return "border-l-amber-500";
+  if (action.includes("REPORT")) return "border-l-indigo-500";
+  return "border-l-sky-500";
 }
 
 export default function AuditHistoryPage() {
@@ -167,6 +188,19 @@ export default function AuditHistoryPage() {
     [dateFrom, dateTo, query, selectedAction, selectedEntityType]
   );
 
+  const pageSummary = useMemo(
+    () => ({
+      changes: records.filter((record) => record.action.includes("UPDATED")).length,
+      additions: records.filter((record) =>
+        record.action.includes("CREATED") || record.action.includes("ACTIVATED")
+      ).length,
+      attention: records.filter((record) =>
+        record.action.includes("DELETED") || record.action.includes("DEACTIVATED")
+      ).length,
+    }),
+    [records]
+  );
+
   function clearFilters() {
     setQuery("");
     setDebouncedQuery("");
@@ -216,8 +250,9 @@ export default function AuditHistoryPage() {
         <LoadingOverlay label="Loading activity details..." />
       ) : null}
 
-      <div className="app-page">
-        <section className="app-card">
+      <div className="app-page mx-auto w-full max-w-[1600px]">
+        <section className="app-card relative overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-1 bg-violet-600" />
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
@@ -227,8 +262,8 @@ export default function AuditHistoryPage() {
               <h1 className="mt-3 text-2xl font-semibold text-slate-950">
                 Audit History
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                {totalRecords.toLocaleString()} recorded {totalRecords === 1 ? "activity" : "activities"}
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                Trace user, operational, master-data, and report activity across {totalRecords.toLocaleString()} recorded {totalRecords === 1 ? "event" : "events"}.
               </p>
             </div>
 
@@ -242,7 +277,13 @@ export default function AuditHistoryPage() {
           </div>
         </section>
 
-        <section className="app-card">
+        <section className="grid grid-cols-3 gap-3">
+          <AuditMetric label="Updates" value={pageSummary.changes} icon={<Activity size={18} />} color="bg-sky-50 text-sky-700" />
+          <AuditMetric label="Created" value={pageSummary.additions} icon={<BadgeCheck size={18} />} color="bg-emerald-50 text-emerald-700" />
+          <AuditMetric label="Attention" value={pageSummary.attention} icon={<TriangleAlert size={18} />} color="bg-rose-50 text-rose-700" />
+        </section>
+
+        <section className="app-card border-slate-200 bg-slate-50/50">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <Filter size={16} /> Filters
           </div>
@@ -250,12 +291,12 @@ export default function AuditHistoryPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_210px_180px_155px_155px_auto] xl:items-end">
             <label className="min-w-0">
               <span className="text-sm font-medium text-slate-700">Search</span>
-              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:border-brand-blue">
+              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
                 <Search size={17} className="shrink-0 text-slate-400" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base outline-none md:text-sm"
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 md:text-sm"
                   placeholder="Person, action, or record"
                 />
               </div>
@@ -292,7 +333,7 @@ export default function AuditHistoryPage() {
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="divide-y divide-slate-200 lg:hidden">
             {records.map((record) => (
-              <article key={record.id} className="p-4">
+              <article key={record.id} className={`border-l-4 p-4 ${actionAccent(record.action)}`}>
                 <div className="flex items-start justify-between gap-3">
                   <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${actionStyle(record.action)}`}>
                     {humanize(record.action)}
@@ -311,6 +352,7 @@ export default function AuditHistoryPage() {
                 <p className="mt-3 truncate font-semibold text-slate-950">
                   {record.entityName || humanize(record.entityType)}
                 </p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{humanize(record.entityType)}</p>
                 <div className="mt-3 grid gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
                   <p className="flex items-center gap-2"><UserRound size={15} /> {record.actorName || "System"}</p>
                   <p className="flex items-center gap-2"><CalendarRange size={15} /> {formatDate(record.timestamp)}</p>
@@ -348,7 +390,7 @@ export default function AuditHistoryPage() {
                         {humanize(record.action)}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-slate-700">{humanize(record.entityType)}</td>
+                    <td className="px-5 py-4"><span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">{humanize(record.entityType)}</span></td>
                     <td className="px-5 py-4">
                       <p className="max-w-[240px] truncate font-medium text-slate-900">{record.entityName || "-"}</p>
                       <p className="mt-0.5 max-w-[240px] truncate text-xs text-slate-500">{record.entityId || "-"}</p>
@@ -395,6 +437,15 @@ export default function AuditHistoryPage() {
   );
 }
 
+function AuditMetric({ label, value, icon, color }: { label: string; value: number; icon: ReactNode; color: string }) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="min-w-0"><p className="truncate text-xs font-medium text-slate-500 sm:text-sm">{label}</p><p className="mt-1 text-xl font-semibold text-slate-950 sm:text-2xl">{value}</p></div>
+      <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:flex ${color}`}>{icon}</div>
+    </div>
+  );
+}
+
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
     <label>
@@ -427,8 +478,9 @@ function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: (
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-xl bg-white shadow-2xl sm:max-w-5xl sm:rounded-xl">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+      <div className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-lg">
+        <div className="relative flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+          <div className="absolute inset-y-0 left-0 w-1 bg-violet-600" />
           <div className="min-w-0">
             <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${actionStyle(record.action)}`}>{humanize(record.action)}</span>
             <h2 className="mt-2 truncate text-lg font-semibold text-slate-950">{record.entityName || humanize(record.entityType)}</h2>
