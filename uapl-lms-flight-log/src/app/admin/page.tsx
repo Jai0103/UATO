@@ -3,8 +3,16 @@
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
+import { fetchApprovalDashboardSummary } from "@/lib/approvals-api";
+import {
+  APPROVAL_TYPE_LABELS,
+  CAAS_ESOMS_URL,
+  type ApprovalDashboardSummary
+} from "@/lib/approvals";
 import { postToGoogle } from "@/lib/google-api";
 import {
+  AlertTriangle,
+  BellRing,
   BookOpenCheck,
   Boxes,
   ChevronRight,
@@ -12,10 +20,12 @@ import {
   ClipboardList,
   Clock,
   Database,
+  ExternalLink,
   FileBarChart,
   FileText,
   GraduationCap,
   Settings,
+  ShieldCheck,
   Timer,
   UserCog,
   Users,
@@ -63,6 +73,18 @@ const emptyDashboard: DashboardData = {
   monthlyActivity: []
 };
 
+const emptyApprovalDashboard: ApprovalDashboardSummary = {
+  totalApprovals: 0,
+  activeApprovals: 0,
+  renewalUpcoming: 0,
+  dueSoon: 0,
+  urgent: 0,
+  expiringToday: 0,
+  expired: 0,
+  missingDocuments: 0,
+  nextExpiry: null
+};
+
 const monthlyActivityColors = [
   {
     bar: "bg-sky-500",
@@ -107,6 +129,24 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function formatApprovalDate(value: string) {
+  if (!value) return "-";
+  const parts = value.slice(0, 10).split("-");
+  if (parts.length !== 3) return value;
+
+  const date = new Date(
+    Number(parts[0]),
+    Number(parts[1]) - 1,
+    Number(parts[2])
+  );
+
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(date);
+}
+
 function formatMinutes(minutes: number) {
   const safeMinutes = Math.max(0, Math.round(minutes));
   const hours = Math.floor(safeMinutes / 60);
@@ -117,16 +157,44 @@ function formatMinutes(minutes: number) {
 export default function AdminPage() {
   const { notify } = useAppMessage();
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
+  const [approvalDashboard, setApprovalDashboard] =
+    useState<ApprovalDashboardSummary>(emptyApprovalDashboard);
+  const [approvalMonitoringAvailable, setApprovalMonitoringAvailable] =
+    useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
       try {
-        const result = await postToGoogle<{ dashboard: DashboardData }>({
-          action: "getDashboardStats"
-        });
-        setDashboard(result.dashboard || emptyDashboard);
+        const [dashboardResult, approvalResult] = await Promise.allSettled([
+          postToGoogle<{ dashboard: DashboardData }>({
+            action: "getDashboardStats"
+          }),
+          fetchApprovalDashboardSummary()
+        ] as const);
+
+        if (dashboardResult.status === "rejected") {
+          throw dashboardResult.reason;
+        }
+
+        setDashboard(dashboardResult.value.dashboard || emptyDashboard);
+
+        if (approvalResult.status === "fulfilled") {
+          setApprovalDashboard(approvalResult.value || emptyApprovalDashboard);
+          setApprovalMonitoringAvailable(true);
+        } else {
+          setApprovalDashboard(emptyApprovalDashboard);
+          setApprovalMonitoringAvailable(false);
+          notify({
+            type: "warning",
+            title: "Approval monitoring unavailable",
+            message:
+              approvalResult.reason instanceof Error
+                ? approvalResult.reason.message
+                : "Approval expiry information could not be loaded."
+          });
+        }
       } catch (error) {
         setDashboard(emptyDashboard);
         notify({
@@ -230,6 +298,13 @@ export default function AdminPage() {
       tone: "bg-emerald-50 text-emerald-700 ring-emerald-100"
     },
     {
+      title: "AGA Approvals",
+      description: "Monitor approvals, permits, locations, and renewals.",
+      href: "/approvals",
+      icon: ShieldCheck,
+      tone: "bg-cyan-50 text-cyan-700 ring-cyan-100"
+    },
+    {
       title: "Records",
       description: "View paginated student records.",
       href: "/records",
@@ -285,6 +360,11 @@ export default function AdminPage() {
             </Link>
           </div>
         </section>
+
+        <ApprovalMonitoringPanel
+          dashboard={approvalDashboard}
+          available={approvalMonitoringAvailable}
+        />
 
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
           {dashboardStats.map((stat) => {
@@ -473,5 +553,131 @@ export default function AdminPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function ApprovalMonitoringPanel({
+  dashboard,
+  available
+}: {
+  dashboard: ApprovalDashboardSummary;
+  available: boolean;
+}) {
+  const criticalCount =
+    dashboard.expired + dashboard.expiringToday + dashboard.urgent;
+  const upcomingCount = dashboard.dueSoon + dashboard.renewalUpcoming;
+  const hasCritical = criticalCount > 0;
+  const hasUpcoming = upcomingCount > 0;
+
+  const panelTone = !available
+    ? "border-amber-200 bg-amber-50/70"
+    : hasCritical
+    ? "border-rose-200 bg-rose-50/70"
+    : hasUpcoming
+      ? "border-amber-200 bg-amber-50/70"
+      : "border-emerald-200 bg-emerald-50/60";
+
+  const iconTone = !available
+    ? "bg-amber-100 text-amber-700"
+    : hasCritical
+    ? "bg-rose-100 text-rose-700"
+    : hasUpcoming
+      ? "bg-amber-100 text-amber-700"
+      : "bg-emerald-100 text-emerald-700";
+
+  return (
+    <section className={`overflow-hidden rounded-lg border shadow-[0_1px_2px_rgba(16,42,67,0.04)] ${panelTone}`}>
+      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconTone}`}>
+            {!available ? (
+              <AlertTriangle className="h-5 w-5" />
+            ) : hasCritical ? (
+              <AlertTriangle className="h-5 w-5" />
+            ) : hasUpcoming ? (
+              <BellRing className="h-5 w-5" />
+            ) : (
+              <ShieldCheck className="h-5 w-5" />
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <p className="app-section-label">Regulatory monitoring</p>
+            <h2 className="mt-1 text-lg font-bold text-[#16263c]">
+              {!available
+                ? "Approval monitoring is temporarily unavailable"
+                : dashboard.totalApprovals === 0
+                ? "AGA Approvals register is ready"
+                : hasCritical
+                  ? `${criticalCount} approval ${criticalCount === 1 ? "requires" : "require"} immediate attention`
+                  : hasUpcoming
+                    ? `${upcomingCount} renewal ${upcomingCount === 1 ? "is" : "are"} approaching`
+                    : "Approvals are within their active validity period"}
+            </h2>
+
+            {!available ? (
+              <p className="mt-1 text-sm leading-6 text-[#5f7187]">
+                Flight operations remain available. Open AGA Approvals to retry the regulatory register.
+              </p>
+            ) : dashboard.nextExpiry ? (
+              <p className="mt-1 text-sm leading-6 text-[#5f7187]">
+                Next expiry: {APPROVAL_TYPE_LABELS[dashboard.nextExpiry.approvalType]} {dashboard.nextExpiry.approvalNumber} on {formatApprovalDate(dashboard.nextExpiry.displayExpiryDate)}.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm leading-6 text-[#5f7187]">
+                Add UATO, UABTO, Class 1 Activity, and Operator approvals to begin expiry monitoring.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <Link
+            href="/approvals"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#c7d4e0] bg-white px-4 text-sm font-semibold text-[#29445f] transition hover:bg-[#f5f8fb]"
+          >
+            <ShieldCheck className="h-4 w-4" /> Manage Approvals
+          </Link>
+          <a
+            href={CAAS_ESOMS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#102a43] px-4 text-sm font-semibold text-white transition hover:bg-[#173b5d]"
+          >
+            Renew in CAAS <ExternalLink className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+
+      {available && dashboard.totalApprovals > 0 ? (
+        <div className="grid grid-cols-2 border-t border-black/5 bg-white/65 sm:grid-cols-4">
+          <ApprovalMetric label="Tracked" value={dashboard.totalApprovals} />
+          <ApprovalMetric label="Renewal Window" value={upcomingCount} />
+          <ApprovalMetric label="Urgent / Expired" value={criticalCount} critical={criticalCount > 0} />
+          <ApprovalMetric label="Missing PDF" value={dashboard.missingDocuments} critical={dashboard.missingDocuments > 0} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ApprovalMetric({
+  label,
+  value,
+  critical = false
+}: {
+  label: string;
+  value: number;
+  critical?: boolean;
+}) {
+  return (
+    <div className="border-b border-r border-[#e5ebf2] p-3 last:border-r-0 sm:border-b-0 sm:p-4">
+      <p className={`text-xl font-bold ${critical ? "text-rose-700" : "text-[#16263c]"}`}>
+        {value}
+      </p>
+      <p className="mt-0.5 text-[11px] font-bold uppercase text-[#718096]">
+        {label}
+      </p>
+    </div>
   );
 }
