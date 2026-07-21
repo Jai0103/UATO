@@ -2,6 +2,8 @@
 
 import {
   CheckCheck,
+  BookOpenCheck,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -55,7 +57,7 @@ import {
 type PageMode = "checklist" | "records" | "descriptions";
 
 const inputClass =
-  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
+  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
 
 const statusOptions: Array<{
   value: StaffTrainingItemStatus;
@@ -587,10 +589,11 @@ export default function StaffTrainingPage() {
 
   return (
     <AppShell>
-      <div className="space-y-5">
-        <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mx-auto w-full max-w-[1600px] space-y-5">
+        <header className="relative overflow-hidden rounded-lg border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6 lg:flex lg:items-center lg:justify-between lg:gap-6">
+          <div className="absolute inset-y-0 left-0 w-1 bg-sky-600" />
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase text-sky-700">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-sky-700">
               <ClipboardCheck className="h-4 w-4" /> ADA-UATO-3-1B
             </div>
             <h1 className="mt-2 text-2xl font-bold text-slate-950 sm:text-3xl">
@@ -600,7 +603,7 @@ export default function StaffTrainingPage() {
                   ? "Staff Training Data"
                   : "Staff Internal Training"}
             </h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
               {mode === "records"
                 ? "Review, continue, or delete saved staff training records."
                 : mode === "descriptions"
@@ -611,7 +614,7 @@ export default function StaffTrainingPage() {
           <button
             type="button"
             onClick={startNewRecord}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800 lg:h-11"
+            className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 lg:mt-0 lg:h-11 lg:w-auto"
           >
             <Plus className="h-4 w-4" /> New checklist
           </button>
@@ -619,8 +622,8 @@ export default function StaffTrainingPage() {
 
         {mode === "checklist" ? (
           <>
-            <section className="grid gap-4 border-b border-slate-200 pb-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <Field label="Staff name">
                   <input className={inputClass} value={record.staffName} onChange={(event) => updateRecord({ staffName: event.target.value })} />
                 </Field>
@@ -631,19 +634,19 @@ export default function StaffTrainingPage() {
                   <input className={inputClass} value={record.designation} onChange={(event) => updateRecord({ designation: event.target.value })} placeholder="e.g. UAPL Trainer" />
                 </Field>
               </div>
-              <div className="rounded-lg bg-slate-950 p-4 text-white">
+              <div className="rounded-lg bg-slate-950 p-4 text-white shadow-sm">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-semibold">Overall progress</span>
                   <span>{progress.completed}/{progress.total}</span>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full bg-sky-400 transition-all" style={{ width: `${progress.percentage}%` }} />
+                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/20">
+                  <div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${progress.percentage}%` }} />
                 </div>
-                <p className="mt-2 text-xs text-slate-300">{progress.percentage}% completed</p>
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-300"><BookOpenCheck className="h-4 w-4 text-cyan-300" /> {progress.percentage}% completed</div>
               </div>
             </section>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {STAFF_TRAINING_TYPES.map((type) => {
                 const count = record.items.filter((item) => item.trainingType === type && item.status === "completed").length;
                 const total = record.items.filter((item) => item.trainingType === type).length;
@@ -652,16 +655,16 @@ export default function StaffTrainingPage() {
                     key={type}
                     type="button"
                     onClick={() => setActiveType(type)}
-                    className={`min-w-0 rounded-lg border px-3 py-3 text-left transition ${activeType === type ? "border-sky-700 bg-sky-50 text-sky-950 ring-1 ring-sky-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                    className={`min-w-0 rounded-lg border px-4 py-3 text-left shadow-sm transition ${activeType === type ? "border-sky-600 bg-sky-50 text-sky-950 ring-1 ring-sky-600" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:bg-sky-50/40"}`}
                   >
-                    <span className="block truncate text-xs font-bold sm:text-sm">{STAFF_TRAINING_LABELS[type].replace(" Training", "")}</span>
-                    <span className="mt-1 block text-[11px]">{count} of {total}</span>
+                    <span className="flex items-center gap-2 text-sm font-bold"><ClipboardCheck className="h-4 w-4 shrink-0" /> <span className="truncate">{STAFF_TRAINING_LABELS[type].replace(" Training", "")}</span></span>
+                    <span className="mt-1.5 block pl-6 text-xs">{count} of {total} completed</span>
                   </button>
                 );
               })}
             </div>
 
-            <section>
+            <section className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:p-5">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 className="text-lg font-bold text-slate-950">{STAFF_TRAINING_LABELS[activeType]}</h2>
@@ -696,7 +699,7 @@ export default function StaffTrainingPage() {
 
               <div className="space-y-3 xl:hidden">
                 {visibleItems.map((item, index) => (
-                  <article key={item.itemId} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <article key={item.itemId} className={`rounded-lg border bg-white p-4 shadow-sm ${item.status === "completed" ? "border-emerald-200" : item.status === "in_progress" ? "border-amber-200" : "border-slate-200"}`}>
                     <div className="flex items-start gap-3">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">{index + 1}</span>
                       <div className="min-w-0 flex-1">
@@ -722,7 +725,7 @@ export default function StaffTrainingPage() {
               </div>
             </section>
 
-            <section className="grid gap-5 border-t border-slate-200 pt-5 lg:grid-cols-2">
+            <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:grid-cols-2">
               <Field label="Head of Training name">
                 <input className={inputClass} value={record.headOfTrainingName} onChange={(event) => updateRecord({ headOfTrainingName: event.target.value })} />
               </Field>
@@ -755,8 +758,8 @@ export default function StaffTrainingPage() {
         ) : null}
 
         {mode === "records" ? (
-          <section>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <section className="space-y-4">
+            <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:flex-row lg:items-end lg:justify-between">
               <div><h2 className="text-xl font-bold text-slate-950">Saved staff records</h2><p className="text-sm text-slate-500">View reports or continue updating a checklist.</p></div>
               <div className="grid w-full gap-3 sm:grid-cols-[minmax(220px,1fr)_150px_auto] lg:max-w-2xl">
                 <label className="relative block">
@@ -775,7 +778,7 @@ export default function StaffTrainingPage() {
               </div>
             </div>
 
-            <div className="relative mt-4 min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="relative min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="divide-y divide-slate-200 lg:hidden">
                 {records.map((item) => (
                   <article key={item.id} className="p-4">
@@ -839,27 +842,27 @@ export default function StaffTrainingPage() {
         ) : null}
 
         {mode === "descriptions" && isAdmin ? (
-          <section>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <section className="space-y-5">
+            <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:flex-row lg:items-end lg:justify-between">
               <div><h2 className="text-xl font-bold text-slate-950">Checklist descriptions</h2><p className="text-sm text-slate-500">Changes apply to new checklists and keep saved descriptions as report history.</p></div>
               <button type="button" onClick={() => void saveDescriptions()} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white"><Save className="h-4 w-4" /> Save descriptions</button>
             </div>
-            <div className="mt-5 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-[200px_minmax(0,1fr)_auto]">
+            <div className="grid gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-4 shadow-sm sm:grid-cols-[200px_minmax(0,1fr)_auto]">
               <select className={inputClass} value={newDescriptionType} onChange={(event) => setNewDescriptionType(event.target.value as StaffTrainingType)}>{STAFF_TRAINING_TYPES.map((type) => <option key={type} value={type}>{STAFF_TRAINING_LABELS[type]}</option>)}</select>
               <input className={inputClass} value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="New checklist description" onKeyDown={(event) => { if (event.key === "Enter") addDescription(); }} />
               <button type="button" onClick={addDescription} className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white md:h-11"><Plus className="h-4 w-4" /> Add</button>
             </div>
-            <div className="mt-5 space-y-6">
+            <div className="grid gap-4 xl:grid-cols-3">
               {STAFF_TRAINING_TYPES.map((type) => (
-                <div key={type}>
-                  <h3 className="mb-2 text-sm font-bold text-slate-950">{STAFF_TRAINING_LABELS[type]}</h3>
-                  <div className="space-y-2">
+                <div key={type} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3"><CalendarDays className="h-4 w-4 text-sky-700" /><h3 className="text-sm font-bold text-slate-950">{STAFF_TRAINING_LABELS[type]}</h3></div>
+                  <div className="space-y-2 p-3">
                     {descriptions.filter((item) => item.trainingType === type).sort((a, b) => a.sortOrder - b.sortOrder).map((item, index) => (
-                      <div key={item.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-[40px_minmax(0,1fr)_120px_auto] sm:items-center">
+                      <div key={item.id} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[32px_minmax(0,1fr)_110px_auto] sm:items-center xl:grid-cols-[32px_minmax(0,1fr)]">
                         <span className="text-sm font-bold text-slate-400">{index + 1}</span>
                         <input className="h-11 rounded-lg border border-slate-300 px-3 text-sm" value={item.description} onChange={(event) => setDescriptions((current) => current.map((entry) => entry.id === item.id ? { ...entry, description: event.target.value } : entry))} />
-                        <button type="button" onClick={() => setDescriptions((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: entry.status === "active" ? "inactive" : "active" } : entry))} className={`h-10 rounded-lg border px-3 text-xs font-bold ${item.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>{item.status === "active" ? "Active" : "Inactive"}</button>
-                        <IconButton label="Delete description" icon={Trash2} danger onClick={() => void removeDescription(item)} />
+                        <button type="button" onClick={() => setDescriptions((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: entry.status === "active" ? "inactive" : "active" } : entry))} className={`h-10 rounded-lg border px-3 text-xs font-bold xl:col-start-2 ${item.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>{item.status === "active" ? "Active" : "Inactive"}</button>
+                        <div className="xl:col-start-2"><IconButton label="Delete description" icon={Trash2} danger onClick={() => void removeDescription(item)} /></div>
                       </div>
                     ))}
                   </div>
