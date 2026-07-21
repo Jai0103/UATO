@@ -219,7 +219,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <footer className="border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
-          Apollo Global Academy secure access
+          Powered by: Jairus Github
         </footer>
       </section>
     </main>
