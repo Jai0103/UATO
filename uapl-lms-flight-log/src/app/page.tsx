@@ -287,7 +287,7 @@ export default function LoginPage() {
         </div>
 
         <footer className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-center text-xs text-slate-500">
-          Apollo Global Academy
+          Powered by: Jairus Github
         </footer>
       </section>
     </main>
