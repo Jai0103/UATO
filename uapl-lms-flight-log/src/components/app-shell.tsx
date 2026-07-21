@@ -167,8 +167,8 @@ function BrandLogo({ mobile = false }: { mobile?: boolean }) {
         alt="Apollo Global Academy"
         className={
           mobile
-            ? "max-h-10 w-auto max-w-[112px] shrink-0 object-contain"
-            : "max-h-12 w-auto max-w-[116px] shrink-0 object-contain"
+            ? "max-h-9 w-auto max-w-[106px] shrink-0 object-contain"
+            : "max-h-11 w-auto max-w-[120px] shrink-0 object-contain"
         }
       />
       <div className="min-w-0 border-l border-slate-200 pl-3">
@@ -337,7 +337,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (checkingSession || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-lg shadow-slate-200/60">
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-lg shadow-slate-200/60">
           <Loader2 className="h-5 w-5 animate-spin text-sky-700" />
           <div>
             <p className="text-sm font-semibold text-slate-900">
@@ -356,18 +356,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const navigation = (
     <>
-      <div className="mb-5 border-b border-slate-100 px-1 pb-5">
+      <div className="mb-5 border-b border-slate-200 px-1 pb-5">
         <BrandLogo />
       </div>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-sky-800 shadow-sm ring-1 ring-slate-200">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-sky-800 shadow-sm ring-1 ring-slate-200">
             {session.role === "admin" ? (
               <Shield className="h-5 w-5" />
             ) : (
               <UserCircle className="h-5 w-5" />
             )}
+            <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-950">
@@ -406,7 +407,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   }
                   className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                     active
-                      ? "bg-slate-950 text-white shadow-sm"
+                      ? "bg-slate-950 text-white shadow-sm ring-1 ring-slate-800"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                   }`}
                   aria-expanded={expanded}
@@ -441,10 +442,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           onClick={() => setMobileMenuOpen(false)}
                           className={`flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
                             selected
-                              ? "bg-sky-50 text-sky-800"
+                              ? "bg-sky-50 font-semibold text-sky-800 ring-1 ring-inset ring-sky-100"
                               : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           }`}
                         >
+                          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-sky-600" : "bg-slate-300"}`} />
                           <span className="truncate">{child.label}</span>
                         </Link>
                       );
@@ -462,7 +464,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileMenuOpen(false)}
               className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                 active
-                  ? "bg-slate-950 text-white shadow-sm"
+                  ? "bg-slate-950 text-white shadow-sm ring-1 ring-slate-800"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
               }`}
             >
@@ -496,8 +498,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#f3f6fb] md:grid md:grid-cols-[280px_minmax(0,1fr)]">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur md:hidden">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#f3f6fb] lg:grid lg:grid-cols-[288px_minmax(0,1fr)]">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
           <button
@@ -513,14 +515,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close navigation menu"
           />
-          <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-y-auto bg-white p-5 shadow-2xl">
+          <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-2xl">
             <div className="mb-4 flex justify-end">
               <button
                 type="button"
@@ -536,11 +538,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <aside className="sticky top-0 hidden h-screen min-h-0 w-[280px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 md:flex">
+      <aside className="sticky top-0 hidden h-screen min-h-0 w-[288px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-sm lg:flex">
         {navigation}
       </aside>
 
-      <main className="min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8">
+      <main className="min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8 xl:px-10">
         <div className="mx-auto w-full min-w-0 max-w-[1600px]">
           {children}
         </div>
