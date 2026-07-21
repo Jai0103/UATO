@@ -165,18 +165,18 @@ export default function ChangePasswordPage() {
 
   if (checkingSession || !session) {
     return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-[#f4f7fb] px-4">
-        <div className="w-full max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
-          <div className="h-1 bg-sky-600" />
+      <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef3f8] px-4">
+        <div className="app-panel-enter w-full max-w-sm overflow-hidden rounded-lg border border-[#d7e0ea] bg-white shadow-[0_18px_44px_rgba(16,42,67,0.13)]">
+          <div className="grid h-1 grid-cols-[1fr_48px]"><span className="bg-[#075f8f]" /><span className="bg-[#c7353d]" /></div>
           <div className="flex items-center gap-4 p-5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-cyan-300">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8]">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-950">
+              <p className="text-sm font-semibold text-[#16263c]">
                 Checking session
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-[#6b7d92]">
                 Verifying your secure access...
               </p>
             </div>
@@ -187,32 +187,32 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-6 sm:px-6 sm:py-10">
-      <div className="absolute inset-x-0 top-0 h-1 bg-sky-600" />
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#eef3f8] px-4 py-6 sm:px-6 sm:py-10">
+      <div className="absolute inset-x-0 top-0 grid h-1 grid-cols-[1fr_72px]"><span className="bg-[#075f8f]" /><span className="bg-[#c7353d]" /></div>
 
-      <section className="w-full max-w-[560px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-300/50">
-        <header className="border-b border-slate-200 px-5 py-6 text-center sm:px-8">
+      <section className="app-panel-enter w-full max-w-[560px] overflow-hidden rounded-lg border border-[#d4dee8] bg-white shadow-[0_2px_4px_rgba(16,42,67,0.06),0_24px_60px_rgba(16,42,67,0.14)]">
+        <header className="border-b border-[#e1e8ef] px-5 py-7 text-center sm:px-9 sm:py-8">
           <img
             src={LOGO_PATH}
             alt="Apollo Global Academy"
             className="mx-auto h-auto max-h-16 w-auto max-w-[220px] object-contain sm:max-w-[250px]"
           />
-          <div className="mx-auto mt-5 flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-cyan-300">
+          <div className="mx-auto mt-5 flex h-11 w-11 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8] shadow-sm">
             <KeyRound className="h-5 w-5" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-slate-950">
+          <h1 className="mt-4 text-2xl font-bold text-[#16263c]">
             Change your password
           </h1>
-          <p className="mt-1.5 text-sm leading-6 text-slate-500">
+          <p className="mt-1.5 text-sm leading-6 text-[#6b7d92]">
             Create a secure password for{" "}
-            <span className="break-all font-semibold text-slate-700">
+            <span className="break-all font-semibold text-[#405168]">
               {session.email}
             </span>
             .
           </p>
         </header>
 
-        <div className="px-5 py-6 sm:px-8 sm:py-7">
+        <div className="px-5 py-6 sm:px-9 sm:py-8">
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <PasswordField
               label="Current password"
@@ -264,7 +264,7 @@ export default function ChangePasswordPage() {
                 type="button"
                 onClick={() => setShowPasswords((current) => !current)}
                 disabled={saving}
-                className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-sky-700 transition hover:text-sky-900 disabled:opacity-50"
+                className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-[#075f8f] transition hover:text-[#064d75] disabled:opacity-50"
               >
                 {showPasswords ? (
                   <EyeOff className="h-4 w-4" />
@@ -281,23 +281,23 @@ export default function ChangePasswordPage() {
               ) : null}
             </div>
 
-            <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <section className="rounded-lg border border-[#dbe3ec] bg-[#f7f9fb] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-sky-700" />
-                  <p className="text-xs font-bold uppercase text-slate-600">
+                  <ShieldCheck className="h-4 w-4 text-[#075f8f]" />
+                  <p className="text-xs font-bold uppercase text-[#506278]">
                     Password strength
                   </p>
                 </div>
-                <span className="text-xs font-semibold text-slate-500">
+                <span className="text-xs font-semibold text-[#718096]">
                   {passedRuleCount}/{passwordRules.length}
                 </span>
               </div>
 
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#dce5ed]">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    passwordStrong ? "bg-emerald-500" : "bg-sky-600"
+                    passwordStrong ? "bg-emerald-500" : "bg-[#1686b1]"
                   }`}
                   style={{
                     width: `${(passedRuleCount / passwordRules.length) * 100}%`,
@@ -310,7 +310,7 @@ export default function ChangePasswordPage() {
                   <div
                     key={rule.label}
                     className={`flex items-center gap-2 text-xs font-medium ${
-                      rule.passed ? "text-emerald-700" : "text-slate-500"
+                      rule.passed ? "text-emerald-700" : "text-[#718096]"
                     }`}
                   >
                     {rule.passed ? (
@@ -325,7 +325,7 @@ export default function ChangePasswordPage() {
 
               {confirmPassword ? (
                 <div
-                  className={`mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-xs font-semibold ${
+                  className={`mt-3 flex items-center gap-2 border-t border-[#dbe3ec] pt-3 text-xs font-semibold ${
                     passwordsMatch ? "text-emerald-700" : "text-rose-600"
                   }`}
                 >
@@ -381,7 +381,7 @@ export default function ChangePasswordPage() {
           </form>
         </div>
 
-        <footer className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-center text-xs text-slate-500">
+        <footer className="border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
           Changing your password signs out all previous sessions.
         </footer>
       </section>
@@ -412,11 +412,11 @@ function PasswordField({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-semibold text-slate-700">
+      <span className="mb-2 block text-sm font-semibold text-[#405168]">
         {label}
       </span>
       <div className="relative">
-        <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
