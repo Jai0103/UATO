@@ -291,9 +291,20 @@ export default function MasterDataPage() {
         section.key === activeSection
     ) ?? sections[0];
 
+  const ActiveSectionIcon = selectedSection.icon;
+
   const currentItems =
     catalog?.sections[activeSection] ??
     [];
+
+  const sectionTotals = useMemo(
+    () => ({
+      all: currentItems.length,
+      active: currentItems.filter((item) => item.status === "active").length,
+      inactive: currentItems.filter((item) => item.status === "inactive").length,
+    }),
+    [currentItems]
+  );
 
   const filteredItems = useMemo(() => {
     const cleanQuery =
@@ -628,18 +639,16 @@ export default function MasterDataPage() {
         <LoadingOverlay label="Saving Master Data..." />
       ) : null}
 
-      <div className="app-page">
-        <section className="app-card">
+      <div className="app-page mx-auto w-full max-w-[1600px]">
+        <section className="app-card relative overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-1 bg-sky-600" />
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="app-title">
                 Master Data
               </h1>
 
-              <p className="app-subtitle">
-                Control the values available
-                during flight log entry.
-              </p>
+              <p className="app-subtitle">Control active reference values available during flight log entry.</p>
             </div>
 
             <div className="grid grid-cols-3 gap-2 sm:min-w-[330px]">
@@ -674,8 +683,8 @@ export default function MasterDataPage() {
         </section>
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-3">
-            <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="border-b border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
               {sections.map((section) => {
                 const Icon = section.icon;
                 const selected =
@@ -698,10 +707,10 @@ export default function MasterDataPage() {
                       setQuery("");
                       setStatusFilter("all");
                     }}
-                    className={`flex h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition ${
+                    className={`flex h-12 min-w-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${
                       selected
-                        ? "bg-slate-950 text-white"
-                        : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                        ? "border-slate-950 bg-slate-950 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:bg-sky-50/50"
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -726,7 +735,7 @@ export default function MasterDataPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-white">
-                  <selectedSection.icon className="h-5 w-5" />
+                  <ActiveSectionIcon className="h-5 w-5" />
                 </div>
 
                 <div>
@@ -767,9 +776,12 @@ export default function MasterDataPage() {
                       event.target.value
                     )
                   }
-                  className="app-input pl-10"
+                  className="app-input mt-0 pl-10 pr-11"
                   placeholder={`Search ${selectedSection.shortLabel.toLowerCase()}`}
                 />
+                {query ? (
+                  <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Clear search"><X className="h-4 w-4" /></button>
+                ) : null}
               </div>
 
               <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 lg:w-[310px]">
@@ -794,7 +806,7 @@ export default function MasterDataPage() {
                         : "text-slate-500"
                     }`}
                   >
-                    {status}
+                    {status} ({sectionTotals[status]})
                   </button>
                 ))}
               </div>
@@ -869,7 +881,7 @@ export default function MasterDataPage() {
             {filteredItems.map((item) => (
               <article
                 key={item.id}
-                className="p-4"
+                className={`p-4 ${item.status === "inactive" ? "bg-slate-50/70" : "bg-white"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="min-w-0 break-words text-sm font-semibold text-slate-950">
@@ -950,7 +962,7 @@ export default function MasterDataPage() {
 
           <form
             onSubmit={saveEditor}
-            className="relative z-10 w-full rounded-t-2xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-xl sm:p-6"
+            className="relative z-10 w-full rounded-t-lg border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-lg sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -974,7 +986,8 @@ export default function MasterDataPage() {
                 onClick={() =>
                   setEditor(null)
                 }
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500"
+                disabled={saving}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -996,7 +1009,7 @@ export default function MasterDataPage() {
                       event.target.value
                   })
                 }
-                className="app-input"
+                className="app-input mt-0"
                 placeholder={`Enter ${masterDataLabels[
                   editor.section
                 ].toLowerCase()}`}
@@ -1042,6 +1055,7 @@ export default function MasterDataPage() {
                 onClick={() =>
                   setEditor(null)
                 }
+                disabled={saving}
                 className="app-button-secondary justify-center"
               >
                 Cancel
@@ -1049,6 +1063,7 @@ export default function MasterDataPage() {
 
               <button
                 type="submit"
+                disabled={saving}
                 className="app-button-primary justify-center"
               >
                 {editor.mode === "add"
@@ -1108,7 +1123,7 @@ function IconButton({
       title={label}
       aria-label={label}
       onClick={onClick}
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition ${
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white shadow-sm transition ${
         danger
           ? "border-red-200 text-red-600 hover:bg-red-50"
           : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-950"
