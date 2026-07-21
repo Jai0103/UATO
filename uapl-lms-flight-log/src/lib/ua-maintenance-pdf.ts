@@ -203,9 +203,13 @@ function drawFooter(doc: jsPDF) {
   }
 }
 
-export async function createUaMaintenancePdf(record: UaMaintenanceRecord) {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const logo = await loadImage(LOGO_PATH);
+async function appendUaMaintenanceRecord(
+  doc: jsPDF,
+  record: UaMaintenanceRecord,
+  logo: HTMLImageElement | null,
+  addFirstPage: boolean
+) {
+  if (addFirstPage) doc.addPage("a4", "portrait");
 
   function startPage(includeDetails: boolean) {
     drawHeader(doc, logo);
@@ -288,6 +292,25 @@ export async function createUaMaintenancePdf(record: UaMaintenanceRecord) {
   y += 20;
   drawField(doc, "ID No.:", record.checkedByIdNo, MARGIN, y, CONTENT_WIDTH, 10);
 
+}
+
+export async function createUaMaintenancePdf(record: UaMaintenanceRecord) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const logo = await loadImage(LOGO_PATH);
+  await appendUaMaintenanceRecord(doc, record, logo, false);
+  drawFooter(doc);
+  return doc;
+}
+
+export async function createCombinedUaMaintenancePdf(
+  records: UaMaintenanceRecord[]
+) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const logo = await loadImage(LOGO_PATH);
+
+  for (let index = 0; index < records.length; index += 1) {
+    await appendUaMaintenanceRecord(doc, records[index], logo, index > 0);
+  }
   drawFooter(doc);
   return doc;
 }
