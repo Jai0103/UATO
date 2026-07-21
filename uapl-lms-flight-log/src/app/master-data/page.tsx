@@ -640,8 +640,7 @@ export default function MasterDataPage() {
       ) : null}
 
       <div className="app-page mx-auto w-full max-w-[1600px]">
-        <section className="app-card relative overflow-hidden">
-          <div className="absolute inset-y-0 left-0 w-1 bg-sky-600" />
+        <section className="app-page-header">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="app-title">
@@ -652,11 +651,11 @@ export default function MasterDataPage() {
             </div>
 
             <div className="grid grid-cols-3 gap-2 sm:min-w-[330px]">
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-center">
-                <p className="text-xl font-bold text-slate-950">
+              <div className="rounded-lg border border-[#d7e0ea] bg-[#f7f9fb] px-3 py-3 text-center">
+                <p className="text-xl font-bold text-[#16263c]">
                   {totals.all}
                 </p>
-                <p className="text-[11px] font-semibold uppercase text-slate-500">
+                <p className="text-[11px] font-semibold uppercase text-[#718096]">
                   Total
                 </p>
               </div>
@@ -670,11 +669,11 @@ export default function MasterDataPage() {
                 </p>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-3 text-center">
-                <p className="text-xl font-bold text-slate-700">
+              <div className="rounded-lg border border-[#d7e0ea] bg-[#eef2f6] px-3 py-3 text-center">
+                <p className="text-xl font-bold text-[#506278]">
                   {totals.inactive}
                 </p>
-                <p className="text-[11px] font-semibold uppercase text-slate-600">
+                <p className="text-[11px] font-semibold uppercase text-[#607389]">
                   Inactive
                 </p>
               </div>
@@ -682,8 +681,8 @@ export default function MasterDataPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+        <section className="app-table-shell">
+          <div className="border-b border-[#dbe3ec] bg-[#f7f9fb] p-3 sm:p-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
               {sections.map((section) => {
                 const Icon = section.icon;
@@ -709,8 +708,8 @@ export default function MasterDataPage() {
                     }}
                     className={`flex h-12 min-w-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold shadow-sm transition ${
                       selected
-                        ? "border-slate-950 bg-slate-950 text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:bg-sky-50/50"
+                        ? "border-[#102a43] bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.16)]"
+                        : "border-[#d7e0ea] bg-white text-[#506278] hover:border-[#9ec3d7] hover:bg-[#edf5f8] hover:text-[#075f8f]"
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -720,7 +719,7 @@ export default function MasterDataPage() {
                       className={`rounded px-1.5 py-0.5 text-[11px] ${
                         selected
                           ? "bg-white/15 text-white"
-                          : "bg-slate-100 text-slate-500"
+                          : "bg-[#e8eef4] text-[#607389]"
                       }`}
                     >
                       {count}
@@ -731,15 +730,15 @@ export default function MasterDataPage() {
             </div>
           </div>
 
-          <div className="border-b border-slate-200 p-4 sm:p-5">
+          <div className="border-b border-[#dbe3ec] p-4 sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8] shadow-sm">
                   <ActiveSectionIcon className="h-5 w-5" />
                 </div>
 
                 <div>
-                  <h2 className="text-lg font-bold text-slate-950">
+                  <h2 className="text-lg font-bold text-[#16263c]">
                     {
                       masterDataLabels[
                         activeSection
@@ -747,7 +746,7 @@ export default function MasterDataPage() {
                     }
                   </h2>
 
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6b7d92]">
                     {
                       selectedSection.description
                     }
@@ -767,7 +766,7 @@ export default function MasterDataPage() {
 
             <div className="mt-5 flex flex-col gap-3 lg:flex-row">
               <div className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
 
                 <input
                   value={query}
@@ -780,11 +779,11 @@ export default function MasterDataPage() {
                   placeholder={`Search ${selectedSection.shortLabel.toLowerCase()}`}
                 />
                 {query ? (
-                  <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Clear search"><X className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[#8493a5] hover:bg-[#edf3f7] hover:text-[#075f8f]" aria-label="Clear search"><X className="h-4 w-4" /></button>
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 lg:w-[310px]">
+              <div className="grid grid-cols-3 rounded-lg bg-[#e8eef4] p-1 lg:w-[310px]">
                 {(
                   [
                     "all",
@@ -802,8 +801,8 @@ export default function MasterDataPage() {
                     }
                     className={`h-9 rounded-md px-2 text-xs font-semibold capitalize transition ${
                       statusFilter === status
-                        ? "bg-white text-slate-950 shadow-sm"
-                        : "text-slate-500"
+                        ? "bg-white text-[#16263c] shadow-sm"
+                        : "text-[#607389]"
                     }`}
                   >
                     {status} ({sectionTotals[status]})
@@ -814,7 +813,7 @@ export default function MasterDataPage() {
           </div>
 
           <div className="hidden md:block">
-            <div className="grid grid-cols-[minmax(0,1fr)_130px_130px] border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase text-slate-500">
+            <div className="app-table-header grid grid-cols-[minmax(0,1fr)_130px_130px] px-5 py-3">
               <span>Value</span>
               <span>Status</span>
               <span className="text-right">
@@ -825,9 +824,9 @@ export default function MasterDataPage() {
             {filteredItems.map((item) => (
               <div
                 key={item.id}
-                className="grid min-h-[64px] grid-cols-[minmax(0,1fr)_130px_130px] items-center border-b border-slate-100 px-5 last:border-b-0"
+                className="grid min-h-[64px] grid-cols-[minmax(0,1fr)_130px_130px] items-center border-b border-[#e7edf3] px-5 transition last:border-b-0 hover:bg-[#f7fafc]"
               >
-                <p className="truncate pr-4 text-sm font-semibold text-slate-900">
+                <p className="truncate pr-4 text-sm font-semibold text-[#16263c]">
                   {item.value}
                 </p>
 
@@ -877,14 +876,14 @@ export default function MasterDataPage() {
             ))}
           </div>
 
-          <div className="divide-y divide-slate-100 md:hidden">
+          <div className="divide-y divide-[#e4eaf1] md:hidden">
             {filteredItems.map((item) => (
               <article
                 key={item.id}
-                className={`p-4 ${item.status === "inactive" ? "bg-slate-50/70" : "bg-white"}`}
+                className={`border-l-[3px] p-4 ${item.status === "inactive" ? "border-l-[#aab7c5] bg-[#f7f9fb]" : "border-l-[#1686b1] bg-white"}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 break-words text-sm font-semibold text-slate-950">
+                  <p className="min-w-0 break-words text-sm font-semibold text-[#16263c]">
                     {item.value}
                   </p>
 
@@ -933,13 +932,13 @@ export default function MasterDataPage() {
 
           {!filteredItems.length ? (
             <div className="px-5 py-14 text-center">
-              <Boxes className="mx-auto h-9 w-9 text-slate-300" />
+              <Boxes className="mx-auto h-9 w-9 text-[#b7c3d0]" />
 
-              <h3 className="mt-3 text-sm font-bold text-slate-900">
+              <h3 className="mt-3 text-sm font-bold text-[#16263c]">
                 No values found
               </h3>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-[#718096]">
                 Try another search or add a
                 new value.
               </p>
@@ -949,7 +948,7 @@ export default function MasterDataPage() {
       </div>
 
       {editor ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="app-overlay-enter fixed inset-0 z-[80] flex items-end justify-center bg-[#102a43]/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <button
             type="button"
             className="absolute inset-0"
@@ -962,17 +961,17 @@ export default function MasterDataPage() {
 
           <form
             onSubmit={saveEditor}
-            className="relative z-10 w-full rounded-t-lg border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-lg sm:p-6"
+            className="app-panel-enter relative z-10 w-full rounded-t-lg border border-[#d7e0ea] bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:max-w-md sm:rounded-lg sm:p-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-950">
+                <h2 className="text-xl font-bold text-[#16263c]">
                   {editor.mode === "add"
                     ? "Add value"
                     : "Edit value"}
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-[#6b7d92]">
                   {
                     masterDataLabels[
                       editor.section
@@ -987,7 +986,7 @@ export default function MasterDataPage() {
                   setEditor(null)
                 }
                 disabled={saving}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
+                className="app-icon-button"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -995,7 +994,7 @@ export default function MasterDataPage() {
             </div>
 
             <label className="mt-6 block">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">
+              <span className="mb-2 block text-sm font-semibold text-[#405168]">
                 Value
               </span>
 
@@ -1017,11 +1016,11 @@ export default function MasterDataPage() {
             </label>
 
             <div className="mt-5">
-              <span className="mb-2 block text-sm font-semibold text-slate-700">
+              <span className="mb-2 block text-sm font-semibold text-[#405168]">
                 Status
               </span>
 
-              <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
+              <div className="grid grid-cols-2 rounded-lg bg-[#e8eef4] p-1">
                 {(
                   [
                     "active",
@@ -1039,8 +1038,8 @@ export default function MasterDataPage() {
                     }
                     className={`h-10 rounded-md text-sm font-semibold capitalize transition ${
                       editor.status === status
-                        ? "bg-white text-slate-950 shadow-sm"
-                        : "text-slate-500"
+                        ? "bg-white text-[#16263c] shadow-sm"
+                        : "text-[#607389]"
                     }`}
                   >
                     {status}
@@ -1088,14 +1087,14 @@ function StatusLabel({
       className={`inline-flex w-fit items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
         status === "active"
           ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-          : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
+          : "bg-[#eef2f6] text-[#607389] ring-1 ring-[#d7e0ea]"
       }`}
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${
           status === "active"
             ? "bg-emerald-500"
-            : "bg-slate-400"
+            : "bg-[#8b9bad]"
         }`}
       />
 
@@ -1125,8 +1124,8 @@ function IconButton({
       onClick={onClick}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white shadow-sm transition ${
         danger
-          ? "border-red-200 text-red-600 hover:bg-red-50"
-          : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          ? "border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50"
+          : "border-[#d7e0ea] text-[#607389] hover:border-[#9ec3d7] hover:bg-[#f1f8fb] hover:text-[#075f8f]"
       }`}
     >
       {children}
