@@ -22,18 +22,40 @@ const BASE_PATH = "/UATO";
 
 export function PwaManager() {
   const [online, setOnline] = useState(true);
+  const [reconnected, setReconnected] = useState(false);
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [showIosHelp, setShowIosHelp] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const wasOfflineRef = useRef(false);
+  const reconnectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setOnline(navigator.onLine);
+    wasOfflineRef.current = !navigator.onLine;
 
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
+    const handleOnline = () => {
+      setOnline(true);
+      if (wasOfflineRef.current) {
+        setReconnected(true);
+        if (reconnectTimerRef.current !== null) {
+          window.clearTimeout(reconnectTimerRef.current);
+        }
+        reconnectTimerRef.current = window.setTimeout(
+          () => setReconnected(false),
+          3500
+        );
+      }
+      wasOfflineRef.current = false;
+    };
+    const handleOffline = () => {
+      wasOfflineRef.current = true;
+      setReconnected(false);
+      setOnline(false);
+    };
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
@@ -42,6 +64,7 @@ export function PwaManager() {
     const handleInstalled = () => {
       setInstallPrompt(null);
       setShowInstall(false);
+      localStorage.removeItem("uapl-pwa-install-dismissed");
     };
 
     window.addEventListener("online", handleOnline);
@@ -97,6 +120,9 @@ export function PwaManager() {
 
       return () => {
         window.clearInterval(updateTimer);
+        if (reconnectTimerRef.current !== null) {
+          window.clearTimeout(reconnectTimerRef.current);
+        }
         window.removeEventListener("online", handleOnline);
         window.removeEventListener("offline", handleOffline);
         window.removeEventListener(
@@ -112,6 +138,9 @@ export function PwaManager() {
     }
 
     return () => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+      }
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
@@ -128,8 +157,11 @@ export function PwaManager() {
 
     if (standalone) return;
 
-    const dismissed = localStorage.getItem("uapl-pwa-install-dismissed");
-    if (dismissed) return;
+    const dismissed = Number(
+      localStorage.getItem("uapl-pwa-install-dismissed") || 0
+    );
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    if (dismissed && Date.now() - dismissed < thirtyDays) return;
 
     const isIos =
       /iphone|ipad|ipod/i.test(navigator.userAgent) &&
@@ -144,7 +176,13 @@ export function PwaManager() {
   async function installApplication() {
     if (installPrompt) {
       await installPrompt.prompt();
-      await installPrompt.userChoice;
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "dismissed") {
+        localStorage.setItem(
+          "uapl-pwa-install-dismissed",
+          String(Date.now())
+        );
+      }
       setInstallPrompt(null);
       setShowInstall(false);
       return;
@@ -154,7 +192,7 @@ export function PwaManager() {
   }
 
   function dismissInstall() {
-    localStorage.setItem("uapl-pwa-install-dismissed", "true");
+    localStorage.setItem("uapl-pwa-install-dismissed", String(Date.now()));
     setShowInstall(false);
   }
 
@@ -174,7 +212,7 @@ export function PwaManager() {
       {!online ? (
         <div
           role="status"
-          className="fixed inset-x-3 top-3 z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-3 shadow-xl sm:left-auto sm:right-5 sm:mx-0"
+          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-3 shadow-xl sm:left-auto sm:right-5 sm:mx-0"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
             <SignalZero size={18} />
@@ -190,7 +228,19 @@ export function PwaManager() {
         </div>
       ) : null}
 
-      {online && showInstall ? (
+      {online && reconnected ? (
+        <div
+          role="status"
+          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-emerald-200 bg-white px-4 py-3 shadow-xl sm:left-auto sm:right-5 sm:mx-0"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+            <Signal size={18} />
+          </div>
+          <div className="min-w-0"><p className="text-sm font-semibold text-slate-950">Connection restored</p><p className="text-xs leading-5 text-slate-500">Online saving and synchronization are available again.</p></div>
+        </div>
+      ) : null}
+
+      {online && showInstall && !updateReady ? (
         <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[110] mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
@@ -224,7 +274,7 @@ export function PwaManager() {
         </div>
       ) : null}
 
-      {updateReady ? (
+      {updateReady && !updateDismissed ? (
         <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[116] mx-auto max-w-md rounded-lg border border-sky-200 bg-white p-4 shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
@@ -238,6 +288,7 @@ export function PwaManager() {
                 Refresh to use the latest system version.
               </p>
             </div>
+            <button type="button" onClick={() => setUpdateDismissed(true)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Dismiss update notification"><X size={16} /></button>
           </div>
           <button
             type="button"
