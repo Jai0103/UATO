@@ -1084,7 +1084,7 @@ export default function FlightLogsPage() {
 
             <label>
               <span className="text-sm font-semibold text-[#405168]">
-                Last 4 Characters
+                Last 4 Characters (FIN/NRIC)
               </span>
               <input
                 value={student.lastFourCharacters}
@@ -1093,7 +1093,7 @@ export default function FlightLogsPage() {
                 }
                 maxLength={4}
                 className="app-input uppercase"
-                placeholder="A123"
+                placeholder="123A"
               />
             </label>
           </div>
