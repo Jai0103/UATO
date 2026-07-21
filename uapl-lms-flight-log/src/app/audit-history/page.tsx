@@ -251,27 +251,26 @@ export default function AuditHistoryPage() {
       ) : null}
 
       <div className="app-page mx-auto w-full max-w-[1600px]">
-        <section className="app-card relative overflow-hidden">
-          <div className="absolute inset-y-0 left-0 w-1 bg-violet-600" />
+        <section className="app-page-header">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-semibold text-[#075f8f] ring-1 ring-[#d5e9f1]">
                 <ShieldCheck size={14} />
                 Administrator Access
               </div>
-              <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+              <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">
                 Audit History
               </h1>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
+              <p className="mt-1 text-sm leading-6 text-[#6b7d92]">
                 Trace user, operational, master-data, and report activity across {totalRecords.toLocaleString()} recorded {totalRecords === 1 ? "event" : "events"}.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-              <History size={18} className="text-brand-navy" />
+            <div className="flex items-center gap-3 rounded-lg border border-[#d2e6ee] bg-[#f0f7fa] px-4 py-3">
+              <History size={18} className="text-[#075f8f]" />
               <div>
-                <p className="text-xs text-slate-500">Current page</p>
-                <p className="text-sm font-semibold text-slate-900">{page} of {totalPages}</p>
+                <p className="text-xs text-[#718096]">Current page</p>
+                <p className="text-sm font-semibold text-[#16263c]">{page} of {totalPages}</p>
               </div>
             </div>
           </div>
@@ -283,20 +282,20 @@ export default function AuditHistoryPage() {
           <AuditMetric label="Attention" value={pageSummary.attention} icon={<TriangleAlert size={18} />} color="bg-rose-50 text-rose-700" />
         </section>
 
-        <section className="app-card border-slate-200 bg-slate-50/50">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <section className="app-toolbar block">
+          <div className="flex items-center gap-2 text-sm font-semibold text-[#16263c]">
             <Filter size={16} /> Filters
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_210px_180px_155px_155px_auto] xl:items-end">
             <label className="min-w-0">
-              <span className="text-sm font-medium text-slate-700">Search</span>
-              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
-                <Search size={17} className="shrink-0 text-slate-400" />
+              <span className="text-sm font-medium text-[#405168]">Search</span>
+              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-[#c3cfdd] bg-white px-3 shadow-sm transition focus-within:border-[#075f8f] focus-within:ring-2 focus-within:ring-[#d9edf5]">
+                <Search size={17} className="shrink-0 text-[#7e8fa3]" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 md:text-sm"
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-[#16263c] outline-none placeholder:text-[#95a4b7] md:text-sm"
                   placeholder="Person, action, or record"
                 />
               </div>
@@ -330,10 +329,10 @@ export default function AuditHistoryPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="divide-y divide-slate-200 lg:hidden">
+        <section className="app-table-shell">
+          <div className="divide-y divide-[#e4eaf1] lg:hidden">
             {records.map((record) => (
-              <article key={record.id} className={`border-l-4 p-4 ${actionAccent(record.action)}`}>
+              <article key={record.id} className={`border-l-[3px] p-4 transition hover:bg-[#f7fafc] ${actionAccent(record.action)}`}>
                 <div className="flex items-start justify-between gap-3">
                   <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${actionStyle(record.action)}`}>
                     {humanize(record.action)}
@@ -349,11 +348,11 @@ export default function AuditHistoryPage() {
                   </button>
                 </div>
 
-                <p className="mt-3 truncate font-semibold text-slate-950">
+                <p className="mt-3 truncate font-semibold text-[#16263c]">
                   {record.entityName || humanize(record.entityType)}
                 </p>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{humanize(record.entityType)}</p>
-                <div className="mt-3 grid gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                <p className="mt-1 text-xs font-semibold uppercase text-[#718096]">{humanize(record.entityType)}</p>
+                <div className="mt-3 grid gap-2 rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3 text-sm text-[#506278]">
                   <p className="flex items-center gap-2"><UserRound size={15} /> {record.actorName || "System"}</p>
                   <p className="flex items-center gap-2"><CalendarRange size={15} /> {formatDate(record.timestamp)}</p>
                 </div>
@@ -368,7 +367,7 @@ export default function AuditHistoryPage() {
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                <tr className="app-table-header">
                   <th className="px-5 py-3 font-semibold">Date and time</th>
                   <th className="px-5 py-3 font-semibold">User</th>
                   <th className="px-5 py-3 font-semibold">Action</th>
@@ -379,21 +378,21 @@ export default function AuditHistoryPage() {
               </thead>
               <tbody>
                 {records.map((record) => (
-                  <tr key={record.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(record.timestamp)}</td>
+                  <tr key={record.id} className="border-b border-[#e7edf3] transition-colors hover:bg-[#f7fafc]">
+                    <td className="whitespace-nowrap px-5 py-4 text-[#506278]">{formatDate(record.timestamp)}</td>
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-950">{record.actorName || "System"}</p>
-                      <p className="mt-0.5 max-w-[220px] truncate text-xs text-slate-500">{record.actorEmail || record.actorRole}</p>
+                      <p className="font-semibold text-[#16263c]">{record.actorName || "System"}</p>
+                      <p className="mt-0.5 max-w-[220px] truncate text-xs text-[#718096]">{record.actorEmail || record.actorRole}</p>
                     </td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${actionStyle(record.action)}`}>
                         {humanize(record.action)}
                       </span>
                     </td>
-                    <td className="px-5 py-4"><span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">{humanize(record.entityType)}</span></td>
+                    <td className="px-5 py-4"><span className="inline-flex rounded-md border border-[#d7e0ea] bg-[#f7f9fb] px-2.5 py-1 text-xs font-semibold text-[#506278]">{humanize(record.entityType)}</span></td>
                     <td className="px-5 py-4">
-                      <p className="max-w-[240px] truncate font-medium text-slate-900">{record.entityName || "-"}</p>
-                      <p className="mt-0.5 max-w-[240px] truncate text-xs text-slate-500">{record.entityId || "-"}</p>
+                      <p className="max-w-[240px] truncate font-medium text-[#16263c]">{record.entityName || "-"}</p>
+                      <p className="mt-0.5 max-w-[240px] truncate text-xs text-[#718096]">{record.entityId || "-"}</p>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
@@ -416,8 +415,8 @@ export default function AuditHistoryPage() {
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">Showing {records.length} of {totalRecords.toLocaleString()} activities</p>
+          <div className="flex flex-col gap-3 border-t border-[#dbe3ec] bg-[#fbfcfd] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-[#6b7d92]">Showing {records.length} of {totalRecords.toLocaleString()} activities</p>
             <div className="grid grid-cols-2 gap-2 sm:flex">
               <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading} className="app-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-50">
                 <ChevronLeft size={16} /> Previous
@@ -439,8 +438,8 @@ export default function AuditHistoryPage() {
 
 function AuditMetric({ label, value, icon, color }: { label: string; value: number; icon: ReactNode; color: string }) {
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-      <div className="min-w-0"><p className="truncate text-xs font-medium text-slate-500 sm:text-sm">{label}</p><p className="mt-1 text-xl font-semibold text-slate-950 sm:text-2xl">{value}</p></div>
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-[#d7e0ea] bg-white p-3 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_7px_20px_rgba(16,42,67,0.05)] sm:p-4">
+      <div className="min-w-0"><p className="truncate text-xs font-medium text-[#6b7d92] sm:text-sm">{label}</p><p className="mt-1 text-xl font-semibold text-[#16263c] sm:text-2xl">{value}</p></div>
       <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:flex ${color}`}>{icon}</div>
     </div>
   );
@@ -449,7 +448,7 @@ function AuditMetric({ label, value, icon, color }: { label: string; value: numb
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
     <label>
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <span className="text-sm font-medium text-[#405168]">{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="app-input mt-2">
         <option value="">All {label.toLowerCase()}s</option>
         {options.map((option) => <option key={option} value={option}>{humanize(option)}</option>)}
@@ -461,7 +460,7 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
 function DateFilter({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label>
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <span className="text-sm font-medium text-[#405168]">{label}</span>
       <input type="date" value={value} onChange={(event) => onChange(event.target.value)} className="app-input mt-2" />
     </label>
   );
@@ -477,14 +476,14 @@ function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: (
     record.action.trim().toUpperCase().startsWith("FLIGHT_");
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-lg">
-        <div className="relative flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
-          <div className="absolute inset-y-0 left-0 w-1 bg-violet-600" />
+    <div className="app-overlay-enter fixed inset-0 z-[90] flex items-end justify-center bg-[#102a43]/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="app-panel-enter flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-[#d7e0ea] bg-white shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:max-w-5xl sm:rounded-lg">
+        <div className="relative flex items-start justify-between gap-4 border-b border-[#dbe6ed] bg-[#f1f7fa] px-5 py-4 sm:px-6">
+          <div className="absolute inset-y-0 left-0 w-1 bg-[#075f8f]" />
           <div className="min-w-0">
             <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${actionStyle(record.action)}`}>{humanize(record.action)}</span>
-            <h2 className="mt-2 truncate text-lg font-semibold text-slate-950">{record.entityName || humanize(record.entityType)}</h2>
-            <p className="mt-1 text-sm text-slate-500">{formatDate(record.timestamp)}</p>
+            <h2 className="mt-2 truncate text-lg font-semibold text-[#16263c]">{record.entityName || humanize(record.entityType)}</h2>
+            <p className="mt-1 text-sm text-[#6b7d92]">{formatDate(record.timestamp)}</p>
           </div>
           <button type="button" onClick={onClose} className="app-icon-button shrink-0" aria-label="Close details"><X size={18} /></button>
         </div>
@@ -531,7 +530,7 @@ function AuditDetailModal({ record, onClose }: { record: AuditRecord; onClose: (
 }
 
 function InfoItem({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-semibold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
+  return <div className="rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-4"><p className="text-xs font-semibold uppercase text-[#718096]">{label}</p><p className="mt-1 break-words text-sm font-semibold text-[#16263c]">{value || "-"}</p></div>;
 }
 
 type FlightAuditRow = {
@@ -595,8 +594,8 @@ function FlightAuditComparison({
   return (
     <div className="mt-5 space-y-4">
       {student ? (
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <h3 className="text-sm font-semibold text-slate-950">
+        <section className="rounded-lg border border-[#dbe3ec] bg-[#f7f9fb] p-4">
+          <h3 className="text-sm font-semibold text-[#16263c]">
             Student record
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -665,18 +664,18 @@ function FlightRowsPanel({
   changeStyle: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+    <section className="overflow-hidden rounded-lg border border-[#dbe3ec]">
+      <div className="border-b border-[#dbe3ec] bg-[#f7f9fb] px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
-          <span className="text-xs font-medium text-slate-500">
+          <h3 className="text-sm font-semibold text-[#16263c]">{title}</h3>
+          <span className="text-xs font-medium text-[#718096]">
             {rows.length} {rows.length === 1 ? "flight" : "flights"}
           </span>
         </div>
       </div>
 
       {rows.length ? (
-        <div className="divide-y divide-slate-200">
+        <div className="divide-y divide-[#e4eaf1]">
           {rows.map((row, index) => {
             const changed = !comparisonKeys.has(flightRowKey(row));
 
@@ -684,10 +683,10 @@ function FlightRowsPanel({
               <article key={`${flightRowKey(row)}-${index}`} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-950">
+                    <p className="text-sm font-semibold text-[#16263c]">
                       Flight {index + 1}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 text-xs text-[#718096]">
                       {cleanLegacyAuditDate(String(row.date || "-"))}
                       {" at "}
                       {cleanLegacyAuditTime(String(row.startTime || "-"))}
@@ -700,7 +699,7 @@ function FlightRowsPanel({
                       {changeLabel}
                     </span>
                   ) : (
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                    <span className="rounded-full bg-[#eef2f6] px-2 py-1 text-[11px] font-semibold text-[#607389]">
                       Unchanged
                     </span>
                   )}
@@ -736,7 +735,7 @@ function FlightRowsPanel({
           })}
         </div>
       ) : (
-        <p className="p-4 text-sm text-slate-500">{emptyLabel}</p>
+        <p className="p-4 text-sm text-[#718096]">{emptyLabel}</p>
       )}
     </section>
   );
@@ -745,8 +744,8 @@ function FlightRowsPanel({
 function DetailValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-sm font-semibold text-slate-900">
+      <p className="text-xs font-medium text-[#718096]">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-[#16263c]">
         {value || "-"}
       </p>
     </div>
@@ -878,8 +877,8 @@ function ReadableAuditPanel({ title, value, emptyLabel }: { title: string; value
   const entries = flattenAuditValue(displayValue);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3"><h3 className="text-sm font-semibold text-slate-900">{title}</h3></div>
+    <section className="overflow-hidden rounded-lg border border-[#dbe3ec]">
+      <div className="border-b border-[#dbe3ec] bg-[#f7f9fb] px-4 py-3"><h3 className="text-sm font-semibold text-[#16263c]">{title}</h3></div>
       {hasValue && entries.length ? (
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           {entries.map((entry, index) => (
@@ -891,7 +890,7 @@ function ReadableAuditPanel({ title, value, emptyLabel }: { title: string; value
           ))}
         </div>
       ) : (
-        <p className="p-4 text-sm text-slate-500">{emptyLabel}</p>
+        <p className="p-4 text-sm text-[#718096]">{emptyLabel}</p>
       )}
     </section>
   );
