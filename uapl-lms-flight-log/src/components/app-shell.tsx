@@ -167,16 +167,16 @@ function BrandLogo({ mobile = false }: { mobile?: boolean }) {
         alt="Apollo Global Academy"
         className={
           mobile
-            ? "max-h-9 w-auto max-w-[106px] shrink-0 object-contain"
-            : "max-h-11 w-auto max-w-[120px] shrink-0 object-contain"
+            ? "max-h-9 w-auto max-w-[112px] shrink-0 object-contain"
+            : "max-h-12 w-auto max-w-[126px] shrink-0 object-contain"
         }
       />
-      <div className="min-w-0 border-l border-slate-200 pl-3">
+      <div className="min-w-0 border-l border-[#cdd8e4] pl-3">
         <p
           className={
             mobile
-              ? "text-xs font-bold leading-4 text-slate-950"
-              : "text-sm font-bold leading-5 text-slate-950"
+              ? "text-xs font-bold leading-4 text-[#16263c]"
+              : "text-sm font-bold leading-5 text-[#16263c]"
           }
         >
           Flight Management
@@ -336,14 +336,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (checkingSession || !session) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f3f6fb] px-4">
-        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-lg shadow-slate-200/60">
-          <Loader2 className="h-5 w-5 animate-spin text-sky-700" />
+      <div className="flex min-h-screen items-center justify-center bg-[#eef3f8] px-4">
+        <div className="app-panel-enter flex items-center gap-3 rounded-lg border border-[#d7e0ea] bg-white px-5 py-4 shadow-[0_16px_40px_rgba(16,42,67,0.12)]">
+          <Loader2 className="h-5 w-5 animate-spin text-[#075f8f]" />
           <div>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="text-sm font-semibold text-[#16263c]">
               Verifying session
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[#6b7d92]">
               Checking your secure access...
             </p>
           </div>
@@ -356,13 +356,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const navigation = (
     <>
-      <div className="mb-5 border-b border-slate-200 px-1 pb-5">
+      <div className="relative mb-5 border-b border-[#dce4ed] px-1 pb-5">
         <BrandLogo />
+        <span className="absolute -bottom-px left-1 h-0.5 w-10 bg-[#c7353d]" />
       </div>
 
-      <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-sm">
+      <div className="mb-5 rounded-lg border border-[#d9e2eb] bg-[#f5f8fb] p-3">
         <div className="flex items-center gap-3">
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-sky-800 shadow-sm ring-1 ring-slate-200">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#075f8f] shadow-sm ring-1 ring-[#d7e0ea]">
             {session.role === "admin" ? (
               <Shield className="h-5 w-5" />
             ) : (
@@ -371,11 +372,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-950">
+            <p className="truncate text-sm font-semibold text-[#16263c]">
               {session.name}
             </p>
-            <p className="truncate text-xs capitalize text-slate-500">
-              {session.role}
+            <p className="truncate text-xs capitalize text-[#718096]">
+              {session.role} account
             </p>
           </div>
         </div>
@@ -407,14 +408,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   }
                   className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                     active
-                      ? "bg-slate-950 text-white shadow-sm ring-1 ring-slate-800"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                      ? "bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.18)]"
+                      : "text-[#506278] hover:bg-[#edf3f7] hover:text-[#16263c]"
                   }`}
                   aria-expanded={expanded}
                 >
                   <Icon
                     className={`h-[18px] w-[18px] shrink-0 ${
-                      active ? "text-sky-300" : "text-slate-500"
+                      active ? "text-[#6bc4e8]" : "text-[#708399]"
                     }`}
                   />
                   <span className="min-w-0 flex-1 truncate text-left">
@@ -428,7 +429,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
 
                 {expanded ? (
-                  <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                  <div className="ml-5 mt-1 space-y-1 border-l border-[#d6e0e9] pl-3">
                     {item.children.map((child) => {
                       const selected = pathMatches(
                         pathname,
@@ -442,11 +443,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           onClick={() => setMobileMenuOpen(false)}
                           className={`flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
                             selected
-                              ? "bg-sky-50 font-semibold text-sky-800 ring-1 ring-inset ring-sky-100"
-                              : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                              ? "bg-[#eaf4f8] font-semibold text-[#075f8f] ring-1 ring-inset ring-[#d2e9f2]"
+                              : "text-[#66798f] hover:bg-[#f0f4f8] hover:text-[#16263c]"
                           }`}
+                          aria-current={selected ? "page" : undefined}
                         >
-                          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-sky-600" : "bg-slate-300"}`} />
+                          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-[#c7353d]" : "bg-[#bdc9d6]"}`} />
                           <span className="truncate">{child.label}</span>
                         </Link>
                       );
@@ -464,13 +466,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileMenuOpen(false)}
               className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
                 active
-                  ? "bg-slate-950 text-white shadow-sm ring-1 ring-slate-800"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                  ? "bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.18)]"
+                  : "text-[#506278] hover:bg-[#edf3f7] hover:text-[#16263c]"
               }`}
+              aria-current={active ? "page" : undefined}
             >
               <Icon
                 className={`h-[18px] w-[18px] shrink-0 ${
-                  active ? "text-sky-300" : "text-slate-500"
+                  active ? "text-[#6bc4e8]" : "text-[#708399]"
                 }`}
               />
               <span className="truncate">{item.label}</span>
@@ -479,12 +482,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      <div className="mt-auto border-t border-slate-100 pt-4">
+      <div className="mt-auto border-t border-[#e3e9f0] pt-4">
         <button
           type="button"
           onClick={logout}
           disabled={signingOut}
-          className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#5f7187] transition hover:bg-red-50 hover:text-[#b4232d] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {signingOut ? (
             <Loader2 className="h-[18px] w-[18px] animate-spin" />
@@ -498,14 +501,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#f3f6fb] lg:grid lg:grid-cols-[288px_minmax(0,1fr)]">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur lg:hidden">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#eef3f8] lg:grid lg:grid-cols-[288px_minmax(0,1fr)]">
+      <header className="sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] shadow-sm transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f]"
             aria-label="Open navigation menu"
             aria-expanded={mobileMenuOpen}
           >
@@ -518,16 +521,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
+            className="app-overlay-enter absolute inset-0 bg-[#102a43]/55 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close navigation menu"
           />
-          <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-2xl">
+          <aside className="app-panel-enter absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-y-auto border-r border-[#d7e0ea] bg-white p-5 shadow-[0_20px_50px_rgba(16,42,67,0.25)]">
             <div className="mb-4 flex justify-end">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 transition hover:bg-slate-50"
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#d7e0ea] text-[#405168] transition hover:bg-[#f3f8fb] hover:text-[#075f8f]"
                 aria-label="Close navigation menu"
               >
                 <X className="h-5 w-5" />
@@ -538,11 +541,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <aside className="sticky top-0 hidden h-screen min-h-0 w-[288px] flex-col overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-sm lg:flex">
+      <aside className="sticky top-0 hidden h-screen min-h-0 w-[288px] flex-col overflow-y-auto border-r border-[#d4dee8] bg-[#fbfcfe] p-5 shadow-[5px_0_22px_rgba(16,42,67,0.04)] lg:flex">
         {navigation}
       </aside>
 
-      <main className="min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8 xl:px-10">
+      <main className="min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8 xl:px-10 xl:py-8">
         <div className="mx-auto w-full min-w-0 max-w-[1600px]">
           {children}
         </div>
