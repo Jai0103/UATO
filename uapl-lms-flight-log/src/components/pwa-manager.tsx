@@ -212,16 +212,17 @@ export function PwaManager() {
       {!online ? (
         <div
           role="status"
-          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-3 shadow-xl sm:left-auto sm:right-5 sm:mx-0"
+          aria-live="assertive"
+          className="app-panel-enter fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-[#e8d39f] bg-white px-4 py-3.5 shadow-[0_18px_44px_rgba(16,42,67,0.16)] sm:left-auto sm:right-5 sm:mx-0"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#fff8e8] text-[#9a6500]">
             <SignalZero size={18} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-950">
+            <p className="text-sm font-bold text-[#16263c]">
               You are offline
             </p>
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="mt-0.5 text-xs leading-5 text-[#607187]">
               Draft changes remain on this device. Final saving needs internet.
             </p>
           </div>
@@ -231,33 +232,43 @@ export function PwaManager() {
       {online && reconnected ? (
         <div
           role="status"
-          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-emerald-200 bg-white px-4 py-3 shadow-xl sm:left-auto sm:right-5 sm:mx-0"
+          aria-live="polite"
+          className="app-panel-enter fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[115] mx-auto flex max-w-md items-center gap-3 rounded-lg border border-[#b9dfd0] bg-white px-4 py-3.5 shadow-[0_18px_44px_rgba(16,42,67,0.16)] sm:left-auto sm:right-5 sm:mx-0"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#edf9f4] text-[#187154]">
             <Signal size={18} />
           </div>
-          <div className="min-w-0"><p className="text-sm font-semibold text-slate-950">Connection restored</p><p className="text-xs leading-5 text-slate-500">Online saving and synchronization are available again.</p></div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-[#16263c]">Connection restored</p>
+            <p className="mt-0.5 text-xs leading-5 text-[#607187]">Online saving and synchronization are available again.</p>
+          </div>
         </div>
       ) : null}
 
       {online && showInstall && !updateReady ? (
-        <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[110] mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0">
+        <div
+          role="dialog"
+          aria-label="Install application"
+          className="app-panel-enter fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[110] mx-auto max-w-md overflow-hidden rounded-lg border border-[#d4dee8] bg-white shadow-[0_22px_58px_rgba(16,42,67,0.2)] sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0"
+        >
+          <div className="grid h-1 grid-cols-[1fr_56px]"><span className="bg-[#075f8f]" /><span className="bg-[#c7353d]" /></div>
+          <div className="p-4 sm:p-5">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#eaf5fa] text-[#075f8f]">
               <Smartphone size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-950">
+              <p className="font-bold text-[#16263c]">
                 Install Flight Management System
               </p>
-              <p className="mt-1 text-sm leading-5 text-slate-500">
+              <p className="mt-1 text-sm leading-5 text-[#607187]">
                 Add it to your Home Screen for faster repeat access.
               </p>
             </div>
             <button
               type="button"
               onClick={dismissInstall}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#7e8fa3] transition hover:bg-[#eef3f8] hover:text-[#16263c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1686b1]"
               aria-label="Dismiss installation"
             >
               <X size={16} />
@@ -266,79 +277,90 @@ export function PwaManager() {
           <button
             type="button"
             onClick={() => void installApplication()}
-            className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#102a43] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#183b5b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1686b1] focus-visible:ring-offset-2"
           >
             <Download size={17} />
             Install App
           </button>
+          </div>
         </div>
       ) : null}
 
       {updateReady && !updateDismissed ? (
-        <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[116] mx-auto max-w-md rounded-lg border border-sky-200 bg-white p-4 shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0">
+        <div
+          role="dialog"
+          aria-label="Application update available"
+          className="app-panel-enter fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[116] mx-auto max-w-md overflow-hidden rounded-lg border border-[#c8dce7] bg-white shadow-[0_22px_58px_rgba(16,42,67,0.2)] sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0"
+        >
+          <div className="grid h-1 grid-cols-[1fr_56px]"><span className="bg-[#075f8f]" /><span className="bg-[#c7353d]" /></div>
+          <div className="p-4 sm:p-5">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#eaf5fa] text-[#075f8f]">
               <RefreshCw size={19} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-950">
+              <p className="font-bold text-[#16263c]">
                 Application update ready
               </p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm leading-5 text-[#607187]">
                 Refresh to use the latest system version.
               </p>
             </div>
-            <button type="button" onClick={() => setUpdateDismissed(true)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Dismiss update notification"><X size={16} /></button>
+            <button type="button" onClick={() => setUpdateDismissed(true)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#7e8fa3] transition hover:bg-[#eef3f8] hover:text-[#16263c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1686b1]" aria-label="Dismiss update notification"><X size={16} /></button>
           </div>
           <button
             type="button"
             onClick={applyUpdate}
-            className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-sky-700 px-4 text-sm font-semibold text-white hover:bg-sky-800"
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#075f8f] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#064d75] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1686b1] focus-visible:ring-offset-2"
           >
             <RefreshCw size={16} />
             Update Now
           </button>
+          </div>
         </div>
       ) : null}
 
       {showIosHelp ? (
-        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5">
+        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-[#102a43]/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-5">
           <button
             type="button"
             className="absolute inset-0"
             onClick={() => setShowIosHelp(false)}
             aria-label="Close installation instructions"
           />
-          <div className="relative w-full rounded-t-lg bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-lg sm:p-6">
+          <div className="app-panel-enter relative w-full overflow-hidden rounded-t-lg border border-[#d4dee8] bg-white shadow-[0_28px_70px_rgba(16,42,67,0.28)] sm:max-w-md sm:rounded-lg">
+            <div className="grid h-1 grid-cols-[1fr_56px]"><span className="bg-[#075f8f]" /><span className="bg-[#c7353d]" /></div>
+            <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-6">
             <div className="flex items-center justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#eaf5fa] text-[#075f8f]">
                 <Smartphone size={21} />
               </div>
               <button
                 type="button"
                 onClick={() => setShowIosHelp(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-[#6b7d92] transition hover:bg-[#eef3f8] hover:text-[#16263c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1686b1]"
                 aria-label="Close"
               >
                 <X size={18} />
               </button>
             </div>
-            <h2 className="mt-4 text-xl font-semibold text-slate-950">
+            <h2 className="mt-4 text-xl font-bold text-[#16263c]">
               Add to iPhone Home Screen
             </h2>
-            <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-              <li>1. Open this website in Safari.</li>
-              <li>2. Tap the Share button at the bottom of Safari.</li>
-              <li>3. Select <strong>Add to Home Screen</strong>.</li>
-              <li>4. Tap <strong>Add</strong>.</li>
+            <ol className="mt-4 space-y-2.5 text-sm leading-6 text-[#52657b]">
+              <li className="rounded-md border border-[#e1e8ef] bg-[#f7f9fb] px-3 py-2"><strong className="text-[#16263c]">1.</strong> Open this website in Safari.</li>
+              <li className="rounded-md border border-[#e1e8ef] bg-[#f7f9fb] px-3 py-2"><strong className="text-[#16263c]">2.</strong> Tap the Share button at the bottom of Safari.</li>
+              <li className="rounded-md border border-[#e1e8ef] bg-[#f7f9fb] px-3 py-2"><strong className="text-[#16263c]">3.</strong> Select <strong className="text-[#16263c]">Add to Home Screen</strong>.</li>
+              <li className="rounded-md border border-[#e1e8ef] bg-[#f7f9fb] px-3 py-2"><strong className="text-[#16263c]">4.</strong> Tap <strong className="text-[#16263c]">Add</strong>.</li>
             </ol>
             <button
               type="button"
               onClick={() => setShowIosHelp(false)}
-              className="mt-5 h-11 w-full rounded-md bg-slate-950 text-sm font-semibold text-white"
+              className="mt-5 min-h-11 w-full rounded-md bg-[#102a43] text-sm font-bold text-white transition hover:bg-[#183b5b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1686b1] focus-visible:ring-offset-2"
             >
               Done
             </button>
+            </div>
           </div>
         </div>
       ) : null}
