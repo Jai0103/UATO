@@ -231,47 +231,47 @@ export default function RecordsPage() {
       {deleting ? <LoadingOverlay label="Deleting flight record..." /> : null}
 
       <div className="app-page">
-        <section className="app-card border-t-4 border-t-sky-600">
+        <section className="app-page-header">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-100">
+              <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-bold text-[#075f8f] ring-1 ring-[#d5e9f1]">
                 <FileText size={14} />
                 Saved Flight Logs
               </div>
-              <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">Flight Log Records</h1>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
+              <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">Flight Log Records</h1>
+              <p className="mt-1 text-sm leading-6 text-[#6b7d92]">
                 {totalRecords.toLocaleString()} {totalRecords === 1 ? "record" : "records"}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+            <div className="flex items-center gap-2 rounded-lg border border-[#d2e6ee] bg-[#f0f7fa] px-4 py-3 text-sm font-semibold text-[#075f8f]">
               <CalendarDays size={17} />
               Page {page} of {totalPages}
             </div>
           </div>
         </section>
 
-        <section className="app-card">
+        <section className="app-toolbar block">
           <div className="mb-4">
             <p className="app-section-label">Find records</p>
-            <p className="mt-1 text-sm text-slate-500">Search by student identity or narrow the list by month and year.</p>
+            <p className="mt-1 text-sm text-[#6b7d92]">Search by student identity or narrow the list by month and year.</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_180px_160px_auto] lg:items-end">
             <label className="min-w-0">
-              <span className="text-sm font-semibold text-slate-600">Search records</span>
-              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
-                <Search size={17} className="shrink-0 text-slate-400" />
+              <span className="text-sm font-semibold text-[#405168]">Search records</span>
+              <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-[#c3cfdd] bg-white px-3 shadow-sm transition focus-within:border-[#075f8f] focus-within:ring-2 focus-within:ring-[#d9edf5]">
+                <Search size={17} className="shrink-0 text-[#7e8fa3]" />
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-slate-800 outline-none placeholder:text-slate-400 md:text-sm"
+                  className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-[#16263c] outline-none placeholder:text-[#95a4b7] md:text-sm"
                   placeholder="Student, company, or last 4"
                 />
               </div>
             </label>
 
             <label>
-              <span className="text-sm font-semibold text-slate-600">Month</span>
+              <span className="text-sm font-semibold text-[#405168]">Month</span>
               <select
                 value={selectedMonth}
                 onChange={(event) => {
@@ -287,7 +287,7 @@ export default function RecordsPage() {
             </label>
 
             <label>
-              <span className="text-sm font-semibold text-slate-600">Year</span>
+              <span className="text-sm font-semibold text-[#405168]">Year</span>
               <select
                 value={selectedYear}
                 onChange={(event) => {
@@ -310,16 +310,16 @@ export default function RecordsPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="divide-y divide-slate-200 lg:hidden">
+        <section className="app-table-shell">
+          <div className="divide-y divide-[#e4eaf1] lg:hidden">
             {records.map((record) => (
-              <article key={record.id} className="border-l-4 border-l-sky-500 p-4">
+              <article key={record.id} className="border-l-[3px] border-l-[#1686b1] p-4 transition hover:bg-[#f7fafc]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-base font-bold text-slate-800">
+                    <p className="truncate text-base font-bold text-[#16263c]">
                       {record.student.studentName || "-"}
                     </p>
-                    <p className="mt-1 truncate text-sm text-slate-500">
+                    <p className="mt-1 truncate text-sm text-[#6b7d92]">
                       {record.student.company || "-"}
                     </p>
                   </div>
@@ -328,18 +328,18 @@ export default function RecordsPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+                <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-3 text-sm">
                   <div>
-                    <p className="text-xs text-slate-500">Last 4</p>
-                    <p className="mt-1 font-medium text-slate-800">{record.student.lastFourCharacters || "-"}</p>
+                    <p className="text-xs text-[#718096]">Last 4</p>
+                    <p className="mt-1 font-medium text-[#16263c]">{record.student.lastFourCharacters || "-"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">Updated</p>
-                    <p className="mt-1 font-medium text-slate-800">{formatDate(record.updatedAt)}</p>
+                    <p className="text-xs text-[#718096]">Updated</p>
+                    <p className="mt-1 font-medium text-[#16263c]">{formatDate(record.updatedAt)}</p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <div className="mt-4 flex justify-end gap-2 border-t border-[#e5ebf2] pt-3">
                   <ActionButton label="View record" onClick={() => void viewRecord(record.id)}>
                     <Eye size={17} />
                   </ActionButton>
@@ -354,14 +354,14 @@ export default function RecordsPage() {
             ))}
 
             {!records.length && !loading ? (
-              <div className="px-5 py-14 text-center text-sm text-slate-500">No records found.</div>
+              <div className="px-5 py-14 text-center text-sm text-[#718096]">No records found.</div>
             ) : null}
           </div>
 
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[880px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-sky-50 text-xs uppercase text-sky-800">
+                <tr className="app-table-header">
                   <th className="px-5 py-3 font-semibold">Student</th>
                   <th className="px-5 py-3 font-semibold">Company</th>
                   <th className="px-5 py-3 font-semibold">Last 4</th>
@@ -372,12 +372,12 @@ export default function RecordsPage() {
               </thead>
               <tbody>
                 {records.map((record) => (
-                  <tr key={record.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/70">
-                    <td className="px-5 py-4 font-bold text-slate-800">{record.student.studentName || "-"}</td>
-                    <td className="px-5 py-4 text-slate-700">{record.student.company || "-"}</td>
-                    <td className="px-5 py-4 text-slate-700">{record.student.lastFourCharacters || "-"}</td>
+                  <tr key={record.id} className="border-b border-[#e7edf3] transition-colors hover:bg-[#f7fafc]">
+                    <td className="px-5 py-4 font-bold text-[#16263c]">{record.student.studentName || "-"}</td>
+                    <td className="px-5 py-4 text-[#506278]">{record.student.company || "-"}</td>
+                    <td className="px-5 py-4 text-[#506278]">{record.student.lastFourCharacters || "-"}</td>
                     <td className="px-5 py-4"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{record.flightCount}</span></td>
-                    <td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(record.updatedAt)}</td>
+                    <td className="whitespace-nowrap px-5 py-4 text-[#506278]">{formatDate(record.updatedAt)}</td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
                         <ActionButton label="View record" onClick={() => void viewRecord(record.id)}><Eye size={16} /></ActionButton>
@@ -389,14 +389,14 @@ export default function RecordsPage() {
                 ))}
 
                 {!records.length && !loading ? (
-                  <tr><td colSpan={6} className="px-5 py-14 text-center text-slate-500">No records found.</td></tr>
+                  <tr><td colSpan={6} className="px-5 py-14 text-center text-[#718096]">No records found.</td></tr>
                 ) : null}
               </tbody>
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">
+          <div className="flex flex-col gap-3 border-t border-[#dbe3ec] bg-[#fbfcfd] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-[#6b7d92]">
               Showing {records.length} of {totalRecords.toLocaleString()} records
             </p>
             <div className="grid grid-cols-2 gap-2 sm:flex">
@@ -443,10 +443,10 @@ function ActionButton({
   danger?: boolean;
 }) {
   const colors = danger
-    ? "border-rose-200 bg-white text-rose-600 hover:bg-rose-50"
+    ? "border-rose-200 bg-white text-rose-600 hover:border-rose-300 hover:bg-rose-50"
     : primary
-      ? "border-sky-700 bg-sky-700 text-white hover:bg-sky-800"
-      : "border-slate-200 bg-white text-slate-500 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700";
+      ? "border-[#075f8f] bg-[#075f8f] text-white hover:border-[#064d75] hover:bg-[#064d75]"
+      : "border-[#d7e0ea] bg-white text-[#607389] hover:border-[#9ec3d7] hover:bg-[#f1f8fb] hover:text-[#075f8f]";
 
   return (
     <button type="button" onClick={onClick} aria-label={label} title={label} className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border shadow-sm transition-colors ${colors}`}>
@@ -457,13 +457,13 @@ function ActionButton({
 
 function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogRecord; onClose: () => void; onContinue: () => void }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-6xl sm:rounded-lg">
-        <div className="flex items-center justify-between gap-4 border-b border-sky-100 bg-sky-50 px-4 py-4 sm:px-5">
+    <div className="app-overlay-enter fixed inset-0 z-[100] flex items-end justify-center bg-[#102a43]/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+      <div className="app-panel-enter flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-[#d7e0ea] bg-white shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:max-w-6xl sm:rounded-lg">
+        <div className="flex items-center justify-between gap-4 border-b border-[#dbe6ed] bg-[#f1f7fa] px-4 py-4 sm:px-5">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-sky-700">Flight log record</p>
-            <h2 className="mt-0.5 truncate text-lg font-bold text-slate-800">{record.student.studentName || "Student record"}</h2>
-            <p className="mt-0.5 text-sm text-slate-500">{record.rows.length} {record.rows.length === 1 ? "flight" : "flights"}</p>
+            <p className="text-xs font-bold uppercase text-[#075f8f]">Flight log record</p>
+            <h2 className="mt-0.5 truncate text-lg font-bold text-[#16263c]">{record.student.studentName || "Student record"}</h2>
+            <p className="mt-0.5 text-sm text-[#6b7d92]">{record.rows.length} {record.rows.length === 1 ? "flight" : "flights"}</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <ActionButton label="Continue record" primary onClick={onContinue}><FilePenLine size={17} /></ActionButton>
@@ -480,11 +480,11 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
 
           <div className="mt-5 space-y-3 lg:hidden">
             {record.rows.map((row, index) => (
-              <article key={`${record.id}-mobile-${index}`} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
+              <article key={`${record.id}-mobile-${index}`} className="overflow-hidden rounded-lg border border-[#dbe3ec] bg-white shadow-sm">
+                <div className="flex items-center justify-between gap-3 border-b border-[#e5ebf2] bg-[#f7f9fb] px-4 py-3">
                   <div>
-                    <p className="text-xs font-bold uppercase text-sky-700">Flight {index + 1}</p>
-                    <p className="mt-0.5 font-bold text-slate-800">{row.date || "No date"}</p>
+                    <p className="text-xs font-bold uppercase text-[#075f8f]">Flight {index + 1}</p>
+                    <p className="mt-0.5 font-bold text-[#16263c]">{row.date || "No date"}</p>
                   </div>
                   <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
                     {row.duration || "0"} min
@@ -504,9 +504,9 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
             ))}
           </div>
 
-          <div className="mt-5 hidden overflow-x-auto rounded-lg border border-slate-200 lg:block">
+          <div className="mt-5 hidden overflow-x-auto rounded-lg border border-[#dbe3ec] lg:block">
             <table className="w-full min-w-[1120px] text-left text-sm">
-              <thead className="bg-sky-50 text-xs uppercase text-sky-800">
+              <thead className="app-table-header">
                 <tr>
                   {['Date','Location','Start','Minutes','UA Model','Category','Battery','Pilot in Command','AFE / Instructor','Remarks'].map((label) => (
                     <th key={label} className="px-4 py-3 font-semibold">{label}</th>
@@ -515,7 +515,7 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
               </thead>
               <tbody>
                 {record.rows.map((row, index) => (
-                  <tr key={`${record.id}-${index}`} className="border-t border-slate-100 text-slate-700 hover:bg-slate-50">
+                  <tr key={`${record.id}-${index}`} className="border-t border-[#e7edf3] text-[#506278] hover:bg-[#f7fafc]">
                     <td className="px-4 py-3">{row.date || "-"}</td><td className="px-4 py-3">{row.location || "-"}</td><td className="px-4 py-3">{row.startTime || "-"}</td><td className="px-4 py-3">{row.duration || "-"}</td><td className="px-4 py-3">{row.uaModel || "-"}</td><td className="px-4 py-3">{row.uaCategory || "-"}</td><td className="px-4 py-3">{row.batterySn || "-"}</td><td className="px-4 py-3">{row.pilotInCommand || "-"}</td><td className="px-4 py-3">{row.instructorInCommand || "-"}</td><td className="px-4 py-3">{row.remarks || "-"}</td>
                   </tr>
                 ))}
@@ -529,9 +529,9 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border border-slate-100 bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-sky-700">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-700">{value || "-"}</p></div>;
+  return <div className="rounded-lg border border-[#e1e8ef] bg-[#f7f9fb] p-4"><p className="text-xs font-bold uppercase text-[#075f8f]">{label}</p><p className="mt-1 break-words text-sm font-semibold text-[#405168]">{value || "-"}</p></div>;
 }
 
 function MobileDetail({ label, value }: { label: string; value: string }) {
-  return <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-slate-400">{label}</p><p className="mt-1 break-words font-semibold text-slate-700">{value || "-"}</p></div>;
+  return <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-[#8292a4]">{label}</p><p className="mt-1 break-words font-semibold text-[#405168]">{value || "-"}</p></div>;
 }
