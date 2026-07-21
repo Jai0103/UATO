@@ -1,42 +1,40 @@
-const VERSION = "uapl-fms-2026-07-21-v2";
-const STATIC_CACHE = `${VERSION}-static`;
-const PAGE_CACHE = `${VERSION}-pages`;
-const BASE_PATH = "/UATO";
+/* Apollo Flight Management System service worker */
 
-const CORE_ASSETS = [
-  `${BASE_PATH}/`,
+const CACHE_VERSION = "v3";
+const CACHE_NAME = `apollo-fms-static-${CACHE_VERSION}`;
+const APP_SCOPE = new URL(self.registration.scope);
+const BASE_PATH = APP_SCOPE.pathname.replace(/\/$/, "");
+
+const OFFLINE_URL = `${BASE_PATH}/offline.html`;
+const PRECACHE_URLS = [
+  OFFLINE_URL,
   `${BASE_PATH}/manifest.webmanifest`,
-  `${BASE_PATH}/offline.html`,
-  `${BASE_PATH}/apollo-global-academy-logo.png`
+  `${BASE_PATH}/apollo-global-academy-logo.png`,
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) =>
-      Promise.allSettled(
-        CORE_ASSETS.map((asset) => cache.add(asset))
-      )
-    )
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter(
-              (key) =>
-                key.startsWith("uapl-fms-") &&
-                key !== STATIC_CACHE &&
-                key !== PAGE_CACHE
-            )
-            .map((key) => caches.delete(key))
-        )
-      )
-      .then(() => self.clients.claim())
+    Promise.all([
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter(
+                (key) =>
+                  key.startsWith("apollo-fms-") && key !== CACHE_NAME
+              )
+              .map((key) => caches.delete(key))
+          )
+        ),
+      self.clients.claim(),
+    ])
   );
 });
 
@@ -48,62 +46,77 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  const url = new URL(request.url);
 
   if (request.method !== "GET") return;
-  if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith(`${BASE_PATH}/`)) return;
 
-  if (
-    url.pathname.includes("/api/") ||
-    url.hostname.includes("script.google.com")
-  ) {
-    return;
-  }
+  const url = new URL(request.url);
+
+  // Google Apps Script and other external requests must always remain live.
+  if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(PAGE_CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(async () => {
-          return (
-            (await caches.match(request)) ||
-            (await caches.match(`${BASE_PATH}/`)) ||
-            caches.match(`${BASE_PATH}/offline.html`)
-          );
-        })
-    );
+    event.respondWith(networkNavigation(request));
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const networkRequest = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(
-          () =>
-            cached ||
-            new Response("Resource unavailable while offline.", {
-              status: 503,
-              headers: {
-                "Content-Type": "text/plain; charset=utf-8"
-              }
-            })
-        );
-
-      return cached || networkRequest;
-    })
-  );
+  if (isStaticAsset(request, url)) {
+    event.respondWith(staleWhileRevalidate(event, request));
+  }
 });
+
+async function networkNavigation(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return (
+      (await caches.match(OFFLINE_URL)) ||
+      new Response("The application is currently offline.", {
+        status: 503,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      })
+    );
+  }
+}
+
+function isStaticAsset(request, url) {
+  const staticDestinations = new Set([
+    "font",
+    "image",
+    "script",
+    "style",
+    "worker",
+  ]);
+
+  return (
+    staticDestinations.has(request.destination) ||
+    url.pathname.startsWith(`${BASE_PATH}/_next/static/`) ||
+    url.pathname === `${BASE_PATH}/manifest.webmanifest`
+  );
+}
+
+async function staleWhileRevalidate(event, request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cachedResponse = await cache.match(request);
+
+  const networkResponsePromise = fetch(request)
+    .then((response) => {
+      if (response.ok && response.type === "basic") {
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  if (cachedResponse) {
+    event.waitUntil(networkResponsePromise.then(() => undefined));
+    return cachedResponse;
+  }
+
+  const networkResponse = await networkResponsePromise;
+  if (networkResponse) return networkResponse;
+
+  return new Response("Resource unavailable while offline.", {
+    status: 503,
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
