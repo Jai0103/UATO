@@ -51,7 +51,8 @@ const adminOnlyPages = [
   "/users",
   "/audit-history",
   "/staff-training",
-  "/ua-maintenance"
+  "/ua-maintenance",
+  "/inventory"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -67,7 +68,8 @@ const adminLinks: NavigationItem[] = [
     children: [
       { href: "/flight-logs", label: "Flight Logs", exact: true },
       { href: "/staff-training", label: "Staff Training", exact: true },
-      { href: "/ua-maintenance", label: "UA Maintenance", exact: true }
+      { href: "/ua-maintenance", label: "UA Maintenance", exact: true },
+      { href: "/inventory", label: "Inventory", exact: true }
     ]
   },
   {
@@ -84,6 +86,11 @@ const adminLinks: NavigationItem[] = [
       {
         href: "/ua-maintenance/records",
         label: "UA Maintenance Records",
+        exact: true
+      },
+      {
+        href: "/inventory/records",
+        label: "Inventory Activity",
         exact: true
       }
     ]
@@ -102,6 +109,11 @@ const adminLinks: NavigationItem[] = [
       {
         href: "/ua-maintenance/master-data",
         label: "UA Maintenance Data",
+        exact: true
+      },
+      {
+        href: "/inventory/master-data",
+        label: "Inventory Data",
         exact: true
       }
     ]
