@@ -10,6 +10,7 @@ const PRECACHE_URLS = [
   OFFLINE_URL,
   `${BASE_PATH}/manifest.webmanifest`,
   `${BASE_PATH}/apollo-global-academy-logo.png`,
+  `${BASE_PATH}/AGA_Logo_Square%20(1).jpg`,
 ];
 
 self.addEventListener("install", (event) => {
