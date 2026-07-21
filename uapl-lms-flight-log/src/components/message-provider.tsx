@@ -68,6 +68,7 @@ const messageStyles: Record<
     icon: typeof CheckCircle2;
     iconClass: string;
     panelClass: string;
+    barClass: string;
     label: string;
   }
 > = {
@@ -75,30 +76,35 @@ const messageStyles: Record<
     icon: CheckCircle2,
     iconClass: "bg-emerald-50 text-emerald-700 ring-emerald-200",
     panelClass: "border-emerald-200",
+    barClass: "bg-emerald-500",
     label: "Success",
   },
   error: {
     icon: XCircle,
     iconClass: "bg-rose-50 text-rose-700 ring-rose-200",
     panelClass: "border-rose-200",
+    barClass: "bg-rose-500",
     label: "Error",
   },
   warning: {
     icon: AlertTriangle,
     iconClass: "bg-amber-50 text-amber-700 ring-amber-200",
     panelClass: "border-amber-200",
+    barClass: "bg-amber-500",
     label: "Warning",
   },
   info: {
     icon: Info,
     iconClass: "bg-sky-50 text-sky-700 ring-sky-200",
     panelClass: "border-sky-200",
+    barClass: "bg-sky-500",
     label: "Information",
   },
   loading: {
     icon: Loader2,
     iconClass: "bg-slate-100 text-slate-700 ring-slate-200",
     panelClass: "border-slate-200",
+    barClass: "bg-slate-700",
     label: "In progress",
   },
 };
@@ -206,7 +212,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       {children}
 
       <div
-        className="pointer-events-none fixed inset-x-3 top-3 z-[130] flex justify-center sm:inset-x-auto sm:right-5 sm:top-5 sm:block sm:w-[420px]"
+        className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex justify-center sm:inset-x-auto sm:right-5 sm:top-5 sm:block sm:w-[420px]"
         aria-live="polite"
         aria-atomic="true"
       >
@@ -254,6 +260,7 @@ function Toast({
       role={isError ? "alert" : "status"}
       className={`pointer-events-auto w-full overflow-hidden rounded-lg border bg-white shadow-2xl shadow-slate-950/15 ${style.panelClass}`}
     >
+      <div className={`h-1 w-full ${style.barClass}`} />
       <div className="flex items-start gap-3 p-4 sm:p-4">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${style.iconClass}`}
@@ -279,7 +286,7 @@ function Toast({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
             aria-label="Dismiss message"
           >
             <X className="h-4 w-4" />
@@ -323,8 +330,9 @@ function ConfirmationDialog({
         aria-modal="true"
         aria-labelledby="global-confirm-title"
         aria-describedby="global-confirm-message"
-        className="relative w-full rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-md sm:rounded-lg"
+        className="relative max-h-[92dvh] w-full overflow-hidden rounded-t-lg border border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:max-w-md sm:rounded-lg sm:pb-0"
       >
+        <div className={`h-1 w-full ${danger ? "bg-rose-500" : "bg-sky-500"}`} />
         <div className="p-5 sm:p-6">
           <div
             className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 ring-inset ${
