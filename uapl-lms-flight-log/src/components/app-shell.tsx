@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  AuthApiError,
   getSecureSession,
   isSessionExpired,
   logoutSecurely,
@@ -44,6 +45,42 @@ type NavigationItem = {
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 const PASSWORD_PAGE = "/change-password";
+const SESSION_VERIFICATION_INTERVAL_MS = 2 * 60 * 1000;
+
+let lastSessionVerificationAt = 0;
+let sessionVerificationRequest: Promise<SecureSession> | null = null;
+
+function verifySessionOnce(session: SecureSession, force = false) {
+  const recentlyVerified =
+    Date.now() - lastSessionVerificationAt <
+    SESSION_VERIFICATION_INTERVAL_MS;
+
+  if (!force && recentlyVerified) {
+    return Promise.resolve(session);
+  }
+
+  if (sessionVerificationRequest) {
+    return sessionVerificationRequest;
+  }
+
+  sessionVerificationRequest = verifySecureSession(session)
+    .then((verifiedSession) => {
+      lastSessionVerificationAt = Date.now();
+      return verifiedSession;
+    })
+    .finally(() => {
+      sessionVerificationRequest = null;
+    });
+
+  return sessionVerificationRequest;
+}
+
+function isTemporaryVerificationError(error: unknown) {
+  return (
+    error instanceof AuthApiError &&
+    ["NETWORK_ERROR", "HTTP_ERROR", "INVALID_RESPONSE"].includes(error.code)
+  );
+}
 
 const adminOnlyPages = [
   "/admin",
@@ -215,15 +252,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Render immediately from the unexpired local session. Protected API
+      // requests are still authorized independently by Apps Script.
+      if (active) {
+        setSession(storedSession);
+        setCheckingSession(false);
+      }
+
       try {
-        const verified = await verifySecureSession(storedSession);
+        const verified = await verifySessionOnce(storedSession);
         if (!active) return;
         setSession(verified);
-        setCheckingSession(false);
-      } catch {
+      } catch (error) {
         if (!active) return;
+
+        if (isTemporaryVerificationError(error)) {
+          return;
+        }
+
         setSession(null);
-        setCheckingSession(false);
         router.replace("/");
       }
     }
@@ -279,17 +326,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const verified = await verifySecureSession(storedSession);
+        const verified = await verifySessionOnce(storedSession);
         if (active) setSession(verified);
-      } catch {
+      } catch (error) {
         if (active) {
+          if (isTemporaryVerificationError(error)) {
+            return;
+          }
           setSession(null);
           router.replace("/");
         }
       }
     };
 
-    const interval = window.setInterval(verifyWithServer, 5 * 60_000);
+    const interval = window.setInterval(
+      verifyWithServer,
+      SESSION_VERIFICATION_INTERVAL_MS
+    );
     const handleVisibility = () => {
       if (document.visibilityState === "visible") void verifyWithServer();
     };
