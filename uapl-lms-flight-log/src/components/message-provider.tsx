@@ -110,43 +110,35 @@ const messageStyles: Record<
 };
 
 export function MessageProvider({ children }: { children: ReactNode }) {
-  const [activeMessages, setActiveMessages] = useState<ActiveMessage[]>([]);
+  const [activeMessage, setActiveMessage] = useState<ActiveMessage | null>(null);
   const [confirmation, setConfirmation] =
     useState<ActiveConfirmation | null>(null);
   const messageSequence = useRef(0);
-  const dismissTimers = useRef<Map<number, number>>(new Map());
+  const dismissTimer = useRef<number | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const clearMessage = useCallback(() => {
-    dismissTimers.current.forEach((timer) => window.clearTimeout(timer));
-    dismissTimers.current.clear();
-    setActiveMessages([]);
-  }, []);
-
-  const removeMessage = useCallback((id: number) => {
-    const timer = dismissTimers.current.get(id);
-    if (timer !== undefined) window.clearTimeout(timer);
-    dismissTimers.current.delete(id);
-    setActiveMessages((current) =>
-      current.filter((message) => message.id !== id)
-    );
+    if (dismissTimer.current !== null) {
+      window.clearTimeout(dismissTimer.current);
+      dismissTimer.current = null;
+    }
+    setActiveMessage(null);
   }, []);
 
   const notify = useCallback(
     (options: MessageOptions) => {
+      if (dismissTimer.current !== null) {
+        window.clearTimeout(dismissTimer.current);
+        dismissTimer.current = null;
+      }
+
       messageSequence.current += 1;
       const message = {
         ...options,
         id: messageSequence.current,
       };
 
-      setActiveMessages((current) => {
-        const withoutLoading = current.filter(
-          (item) => item.type !== "loading"
-        );
-        const next = [...withoutLoading, message];
-        return next.slice(-4);
-      });
+      setActiveMessage(message);
 
       if (
         (options.type === "error" || options.type === "warning") &&
@@ -159,13 +151,12 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       if (options.type !== "loading") {
         const defaultDuration = 2000;
         const duration = Math.max(1500, options.duration ?? defaultDuration);
-        const timer = window.setTimeout(() => {
-          dismissTimers.current.delete(message.id);
-          setActiveMessages((current) =>
-            current.filter((item) => item.id !== message.id)
+        dismissTimer.current = window.setTimeout(() => {
+          setActiveMessage((current) =>
+            current?.id === message.id ? null : current
           );
+          dismissTimer.current = null;
         }, duration);
-        dismissTimers.current.set(message.id, timer);
       }
     },
     []
@@ -189,8 +180,9 @@ export function MessageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      dismissTimers.current.forEach((timer) => window.clearTimeout(timer));
-      dismissTimers.current.clear();
+      if (dismissTimer.current !== null) {
+        window.clearTimeout(dismissTimer.current);
+      }
     };
   }, []);
 
@@ -229,16 +221,16 @@ export function MessageProvider({ children }: { children: ReactNode }) {
 
       <div
         className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex max-h-[calc(100dvh-1.5rem)] flex-col gap-2 overflow-y-auto sm:inset-x-auto sm:right-5 sm:top-5 sm:w-[420px] sm:gap-3"
-        aria-live={activeMessages.some((message) => message.type === "error" || message.type === "warning") ? "assertive" : "polite"}
-        aria-atomic="false"
+        aria-live={activeMessage?.type === "error" || activeMessage?.type === "warning" ? "assertive" : "polite"}
+        aria-atomic="true"
       >
-        {activeMessages.map((message) => (
+        {activeMessage ? (
           <Toast
-            key={message.id}
-            message={message}
-            onClose={() => removeMessage(message.id)}
+            key={activeMessage.id}
+            message={activeMessage}
+            onClose={clearMessage}
           />
-        ))}
+        ) : null}
       </div>
 
       {confirmation ? (
