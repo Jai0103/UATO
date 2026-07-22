@@ -78,6 +78,7 @@ export type ApprovalRecordSummary = Omit<
 > & {
   locationCount: number;
   activeLocationCount: number;
+  permittedLocations: string[];
   documentCount: number;
   hasCurrentDocument: boolean;
   displayExpiryDate: string;
@@ -293,6 +294,10 @@ export function summarizeApprovalRecord(
     ...summary,
     locationCount: locations.length,
     activeLocationCount,
+    permittedLocations: locations
+      .filter((location) => location.active)
+      .map((location) => location.name.trim())
+      .filter(Boolean),
     documentCount: documents.length,
     hasCurrentDocument: hasCurrentApprovalDocument(record),
     displayExpiryDate,
@@ -379,7 +384,11 @@ export function validateApprovalRecord(
     );
 
     if (!activeLocations.length) {
-      errors.push("Add at least one active permitted location.");
+      errors.push("Enter the permitted location.");
+    }
+
+    if (activeLocations.length > 1) {
+      errors.push("A Class 1 Activity Permit can contain only one permitted location.");
     }
 
     activeLocations.forEach((location, index) => {
