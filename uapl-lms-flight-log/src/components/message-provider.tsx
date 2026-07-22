@@ -110,45 +110,65 @@ const messageStyles: Record<
 };
 
 export function MessageProvider({ children }: { children: ReactNode }) {
-  const [activeMessage, setActiveMessage] = useState<ActiveMessage | null>(null);
+  const [activeMessages, setActiveMessages] = useState<ActiveMessage[]>([]);
   const [confirmation, setConfirmation] =
     useState<ActiveConfirmation | null>(null);
   const messageSequence = useRef(0);
-  const dismissTimer = useRef<number | null>(null);
+  const dismissTimers = useRef<Map<number, number>>(new Map());
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const clearMessage = useCallback(() => {
-    if (dismissTimer.current !== null) {
-      window.clearTimeout(dismissTimer.current);
-      dismissTimer.current = null;
-    }
+    dismissTimers.current.forEach((timer) => window.clearTimeout(timer));
+    dismissTimers.current.clear();
+    setActiveMessages([]);
+  }, []);
 
-    setActiveMessage(null);
+  const removeMessage = useCallback((id: number) => {
+    const timer = dismissTimers.current.get(id);
+    if (timer !== undefined) window.clearTimeout(timer);
+    dismissTimers.current.delete(id);
+    setActiveMessages((current) =>
+      current.filter((message) => message.id !== id)
+    );
   }, []);
 
   const notify = useCallback(
     (options: MessageOptions) => {
-      if (dismissTimer.current !== null) {
-        window.clearTimeout(dismissTimer.current);
-        dismissTimer.current = null;
-      }
-
       messageSequence.current += 1;
       const message = {
         ...options,
         id: messageSequence.current,
       };
 
-      setActiveMessage(message);
+      setActiveMessages((current) => {
+        const withoutLoading = current.filter(
+          (item) => item.type !== "loading"
+        );
+        const next = [...withoutLoading, message];
+        return next.slice(-4);
+      });
+
+      if (
+        (options.type === "error" || options.type === "warning") &&
+        typeof navigator !== "undefined" &&
+        "vibrate" in navigator
+      ) {
+        navigator.vibrate(options.type === "error" ? [80, 50, 80] : 70);
+      }
 
       if (options.type !== "loading") {
-        const duration = Math.max(2500, options.duration ?? 5000);
-        dismissTimer.current = window.setTimeout(() => {
-          setActiveMessage((current) =>
-            current?.id === message.id ? null : current
+        const defaultDuration =
+          options.type === "error" || options.type === "warning"
+            ? 7000
+            : 4500;
+        const duration = Math.max(2500, options.duration ?? defaultDuration);
+        const timer = window.setTimeout(() => {
+          dismissTimers.current.delete(message.id);
+          setActiveMessages((current) =>
+            current.filter((item) => item.id !== message.id)
           );
-          dismissTimer.current = null;
         }, duration);
+        dismissTimers.current.set(message.id, timer);
       }
     },
     []
@@ -172,9 +192,8 @@ export function MessageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      if (dismissTimer.current !== null) {
-        window.clearTimeout(dismissTimer.current);
-      }
+      dismissTimers.current.forEach((timer) => window.clearTimeout(timer));
+      dismissTimers.current.clear();
     };
   }, []);
 
@@ -212,13 +231,17 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       {children}
 
       <div
-        className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex justify-center sm:inset-x-auto sm:right-5 sm:top-5 sm:block sm:w-[420px]"
-        aria-live="polite"
-        aria-atomic="true"
+        className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex max-h-[calc(100dvh-1.5rem)] flex-col gap-2 overflow-y-auto sm:inset-x-auto sm:right-5 sm:top-1/2 sm:w-[420px] sm:-translate-y-1/2 sm:gap-3"
+        aria-live={activeMessages.some((message) => message.type === "error" || message.type === "warning") ? "assertive" : "polite"}
+        aria-atomic="false"
       >
-        {activeMessage ? (
-          <Toast message={activeMessage} onClose={clearMessage} />
-        ) : null}
+        {activeMessages.map((message) => (
+          <Toast
+            key={message.id}
+            message={message}
+            onClose={() => removeMessage(message.id)}
+          />
+        ))}
       </div>
 
       {confirmation ? (
@@ -258,10 +281,10 @@ function Toast({
   return (
     <div
       role={isError ? "alert" : "status"}
-      className={`app-panel-enter pointer-events-auto w-full overflow-hidden rounded-lg border bg-white shadow-[0_18px_44px_rgba(16,42,67,0.18)] ${style.panelClass}`}
+      className={`app-panel-enter pointer-events-auto w-full shrink-0 overflow-hidden rounded-lg border bg-white shadow-2xl shadow-slate-950/15 ${style.panelClass}`}
     >
       <div className={`h-1 w-full ${style.barClass}`} />
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex items-start gap-3 p-4 sm:p-4">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${style.iconClass}`}
         >
@@ -269,14 +292,14 @@ function Toast({
         </div>
 
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="text-[11px] font-semibold uppercase text-[#718096]">
+          <p className="text-[11px] font-semibold uppercase text-slate-500">
             {style.label}
           </p>
-          <p className="mt-0.5 break-words text-sm font-semibold text-[#16263c]">
+          <p className="mt-0.5 break-words text-sm font-semibold text-slate-950">
             {message.title}
           </p>
           {message.message ? (
-            <p className="mt-1 break-words text-sm leading-5 text-[#5f7187]">
+            <p className="mt-1 break-words text-sm leading-5 text-slate-600">
               {message.message}
             </p>
           ) : null}
@@ -286,7 +309,7 @@ function Toast({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-[#8493a5] transition hover:border-[#d7e0ea] hover:bg-[#f3f7fa] hover:text-[#405168]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent text-slate-400 transition hover:border-slate-200 hover:bg-slate-50 hover:text-slate-700"
             aria-label="Dismiss message"
           >
             <X className="h-4 w-4" />
@@ -295,8 +318,8 @@ function Toast({
       </div>
 
       {isLoading ? (
-        <div className="h-1 overflow-hidden bg-[#e8eef4]">
-          <div className="h-full w-1/3 animate-pulse bg-[#075f8f]" />
+        <div className="h-1 overflow-hidden bg-slate-100">
+          <div className="h-full w-1/3 animate-pulse bg-sky-600" />
         </div>
       ) : null}
     </div>
@@ -317,10 +340,10 @@ function ConfirmationDialog({
   const danger = confirmation.variant === "danger";
 
   return (
-    <div className="app-overlay-enter fixed inset-0 z-[140] flex items-end justify-center p-0 sm:items-center sm:p-5">
+    <div className="fixed inset-0 z-[140] flex items-end justify-center p-0 sm:items-center sm:p-5">
       <button
         type="button"
-        className="absolute inset-0 bg-[#102a43]/60 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
         onClick={onCancel}
         aria-label="Cancel confirmation"
       />
@@ -330,15 +353,15 @@ function ConfirmationDialog({
         aria-modal="true"
         aria-labelledby="global-confirm-title"
         aria-describedby="global-confirm-message"
-        className="app-panel-enter relative max-h-[92dvh] w-full overflow-hidden rounded-t-lg border border-[#d7e0ea] bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_24px_64px_rgba(16,42,67,0.3)] sm:max-w-md sm:rounded-lg sm:pb-0"
+        className="relative max-h-[92dvh] w-full overflow-hidden rounded-t-lg border border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl sm:max-w-md sm:rounded-lg sm:pb-0"
       >
-        <div className={`h-1 w-full ${danger ? "bg-rose-600" : "bg-[#075f8f]"}`} />
+        <div className={`h-1 w-full ${danger ? "bg-rose-500" : "bg-sky-500"}`} />
         <div className="p-5 sm:p-6">
           <div
             className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 ring-inset ${
               danger
                 ? "bg-rose-50 text-rose-700 ring-rose-200"
-                : "bg-[#edf5f8] text-[#075f8f] ring-[#cce3ed]"
+                : "bg-sky-50 text-sky-700 ring-sky-200"
             }`}
           >
             {danger ? <ShieldAlert size={22} /> : <Info size={22} />}
@@ -346,23 +369,23 @@ function ConfirmationDialog({
 
           <h2
             id="global-confirm-title"
-            className="mt-4 text-xl font-semibold text-[#16263c]"
+            className="mt-4 text-xl font-semibold text-slate-950"
           >
             {confirmation.title}
           </h2>
           <p
             id="global-confirm-message"
-            className="mt-2 break-words text-sm leading-6 text-[#5f7187]"
+            className="mt-2 break-words text-sm leading-6 text-slate-600"
           >
             {confirmation.message}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 border-t border-[#e1e8ef] bg-[#f7f9fb] p-4 sm:flex sm:justify-end">
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:flex sm:justify-end">
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-12 items-center justify-center rounded-lg border border-[#c3cfdd] bg-white px-4 text-sm font-semibold text-[#405168] shadow-sm transition hover:bg-[#eef3f7] sm:h-11"
+            className="inline-flex h-12 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:h-11"
           >
             {confirmation.cancelLabel || "Cancel"}
           </button>
@@ -373,7 +396,7 @@ function ConfirmationDialog({
             className={`inline-flex h-12 items-center justify-center rounded-md px-4 text-sm font-semibold text-white transition sm:h-11 ${
               danger
                 ? "bg-rose-600 hover:bg-rose-700"
-                : "bg-[#075f8f] shadow-[0_5px_14px_rgba(7,95,143,0.2)] hover:bg-[#064d75]"
+                : "bg-slate-950 hover:bg-slate-800"
             }`}
           >
             {confirmation.confirmLabel || "Confirm"}
