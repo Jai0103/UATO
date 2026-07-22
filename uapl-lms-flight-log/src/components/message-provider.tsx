@@ -157,11 +157,8 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       }
 
       if (options.type !== "loading") {
-        const defaultDuration =
-          options.type === "error" || options.type === "warning"
-            ? 7000
-            : 4500;
-        const duration = Math.max(2500, options.duration ?? defaultDuration);
+        const defaultDuration = 2000;
+        const duration = Math.max(1500, options.duration ?? defaultDuration);
         const timer = window.setTimeout(() => {
           dismissTimers.current.delete(message.id);
           setActiveMessages((current) =>
@@ -231,7 +228,7 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       {children}
 
       <div
-        className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex max-h-[calc(100dvh-1.5rem)] flex-col gap-2 overflow-y-auto sm:inset-x-auto sm:right-5 sm:top-1/2 sm:w-[420px] sm:-translate-y-1/2 sm:gap-3"
+        className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex max-h-[calc(100dvh-1.5rem)] flex-col gap-2 overflow-y-auto sm:inset-x-auto sm:right-5 sm:top-5 sm:w-[420px] sm:gap-3"
         aria-live={activeMessages.some((message) => message.type === "error" || message.type === "warning") ? "assertive" : "polite"}
         aria-atomic="false"
       >
