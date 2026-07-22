@@ -22,6 +22,7 @@ import {
 import { useEffect, useState } from "react";
 import {
   AuthApiError,
+  clearSecureSession,
   getSecureSession,
   isSessionExpired,
   logoutSecurely,
@@ -310,6 +311,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const interval = window.setInterval(checkExpiration, 60_000);
     return () => window.clearInterval(interval);
   }, [router, session]);
+
+  useEffect(() => {
+    const handleAuthenticationExpired = () => {
+      lastSessionVerificationAt = 0;
+      clearSecureSession();
+      setMobileMenuOpen(false);
+      setSession(null);
+      setCheckingSession(false);
+      router.replace("/");
+    };
+
+    window.addEventListener(
+      "uapl-auth-expired",
+      handleAuthenticationExpired
+    );
+
+    return () => {
+      window.removeEventListener(
+        "uapl-auth-expired",
+        handleAuthenticationExpired
+      );
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!session) return;
