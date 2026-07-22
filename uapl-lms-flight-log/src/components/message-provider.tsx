@@ -44,6 +44,7 @@ export type ConfirmOptions = {
 
 type ActiveMessage = MessageOptions & {
   id: number;
+  displayDuration?: number;
 };
 
 type ActiveConfirmation = ConfirmOptions & {
@@ -133,9 +134,14 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       }
 
       messageSequence.current += 1;
+      const displayDuration =
+        options.type === "loading"
+          ? undefined
+          : Math.max(1500, options.duration ?? 2000);
       const message = {
         ...options,
         id: messageSequence.current,
+        displayDuration,
       };
 
       setActiveMessage(message);
@@ -149,14 +155,12 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       }
 
       if (options.type !== "loading") {
-        const defaultDuration = 2000;
-        const duration = Math.max(1500, options.duration ?? defaultDuration);
         dismissTimer.current = window.setTimeout(() => {
           setActiveMessage((current) =>
             current?.id === message.id ? null : current
           );
           dismissTimer.current = null;
-        }, duration);
+        }, displayDuration);
       }
     },
     []
@@ -219,6 +223,39 @@ export function MessageProvider({ children }: { children: ReactNode }) {
     <MessageContext.Provider value={value}>
       {children}
 
+      <style>{`
+        @keyframes app-toast-attention-enter {
+          0% {
+            opacity: 0;
+            transform: translate3d(22px, -4px, 0) scale(0.965);
+          }
+          62% {
+            opacity: 1;
+            transform: translate3d(-3px, 0, 0) scale(1.008);
+          }
+          100% {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+        }
+
+        @keyframes app-toast-progress {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+
+        .app-toast-attention-enter {
+          animation: app-toast-attention-enter 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          will-change: transform, opacity;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .app-toast-attention-enter {
+            animation-duration: 0.01ms;
+          }
+        }
+      `}</style>
+
       <div
         className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] flex max-h-[calc(100dvh-1.5rem)] flex-col gap-2 overflow-y-auto sm:inset-x-auto sm:right-5 sm:top-5 sm:w-[420px] sm:gap-3"
         aria-live={activeMessage?.type === "error" || activeMessage?.type === "warning" ? "assertive" : "polite"}
@@ -270,9 +307,21 @@ function Toast({
   return (
     <div
       role={isError ? "alert" : "status"}
-      className={`app-panel-enter pointer-events-auto w-full shrink-0 overflow-hidden rounded-lg border bg-white shadow-2xl shadow-slate-950/15 ${style.panelClass}`}
+      className={`app-toast-attention-enter pointer-events-auto w-full shrink-0 overflow-hidden rounded-lg border bg-white shadow-2xl shadow-slate-950/15 ${style.panelClass}`}
     >
-      <div className={`h-1 w-full ${style.barClass}`} />
+      <div className="h-1 w-full overflow-hidden bg-slate-100">
+        <div
+          className={`h-full w-full ${style.barClass} ${isLoading ? "animate-pulse" : ""}`}
+          style={
+            !isLoading && message.displayDuration
+              ? {
+                  animation: `app-toast-progress ${message.displayDuration}ms linear forwards`,
+                  transformOrigin: "left center",
+                }
+              : undefined
+          }
+        />
+      </div>
       <div className="flex items-start gap-3 p-4 sm:p-4">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${style.iconClass}`}
