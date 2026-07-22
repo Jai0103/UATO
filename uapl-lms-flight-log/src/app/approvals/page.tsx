@@ -590,7 +590,9 @@ function ApprovalRegister({
               <span>{readableDays(record.daysRemaining)}</span>
               <span className="text-right">{record.documentCount} PDF{record.documentCount === 1 ? "" : "s"}</span>
               {record.approvalType === "class_1_activity_permit" ? (
-                <span className="col-span-2">{record.activeLocationCount} active permitted location{record.activeLocationCount === 1 ? "" : "s"}</span>
+                <span className="col-span-2 break-words">
+                  Permitted Location: {record.permittedLocations[0] || "Not entered"}
+                </span>
               ) : null}
             </div>
             <div className="mt-4 flex justify-end gap-2">
@@ -612,7 +614,7 @@ function ApprovalRegister({
               <Th>Expiry</Th>
               <Th>Status</Th>
               <Th>Responsible Person</Th>
-              <Th>Locations</Th>
+              <Th>Permitted Location</Th>
               <Th>Documents</Th>
               <Th right>Actions</Th>
             </tr>
@@ -634,7 +636,17 @@ function ApprovalRegister({
                   <p>{record.responsiblePerson || "-"}</p>
                   <p className="text-xs text-slate-500">{record.responsibleEmail}</p>
                 </Td>
-                <Td>{record.approvalType === "class_1_activity_permit" ? record.activeLocationCount : "-"}</Td>
+                <Td>
+                  {record.approvalType === "class_1_activity_permit" ? (
+                    <div className="max-w-xs">
+                      <p className="break-words font-semibold text-slate-800">
+                        {record.permittedLocations[0] || "Not entered"}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-slate-400">Not applicable</span>
+                  )}
+                </Td>
                 <Td>
                   <span className={record.hasCurrentDocument ? "font-semibold text-emerald-700" : "font-semibold text-rose-600"}>
                     {record.hasCurrentDocument ? `${record.documentCount} stored` : "PDF missing"}
@@ -685,10 +697,6 @@ function ApprovalEditor({
       )
     });
   };
-  const removeLocation = (id: string) => {
-    patch({ locations: record.locations.filter((location) => location.id !== id) });
-  };
-
   return (
     <Modal
       title={record.approvalNumber || "New Approval"}
@@ -712,7 +720,7 @@ function ApprovalEditor({
                 approvalType,
                 locations:
                   approvalType === "class_1_activity_permit"
-                    ? record.locations.length ? record.locations : [createEmptyApprovalLocation()]
+                    ? record.locations.length ? record.locations.slice(0, 1) : [createEmptyApprovalLocation()]
                     : []
               });
             }}
@@ -762,21 +770,17 @@ function ApprovalEditor({
 
       {record.approvalType === "class_1_activity_permit" ? (
         <section className="mt-6 border-t border-slate-200 pt-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <div>
-              <h3 className="font-bold text-slate-950">Permitted Locations</h3>
-              <p className="text-sm text-slate-500">Each location has independent validity and operating conditions.</p>
+              <h3 className="font-bold text-slate-950">Permitted Location</h3>
+              <p className="text-sm text-slate-500">Enter the single location authorized by this Class 1 Activity Permit.</p>
             </div>
-            <button type="button" onClick={() => patch({ locations: [...record.locations, createEmptyApprovalLocation()] })} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 text-sm font-semibold text-sky-800">
-              <Plus className="h-4 w-4" /> Add location
-            </button>
           </div>
           <div className="mt-4 space-y-4">
-            {record.locations.map((location, index) => (
+            {record.locations.slice(0, 1).map((location) => (
               <div key={location.id} className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 font-bold text-slate-800"><MapPin className="h-4 w-4 text-sky-700" /> Location {index + 1}</div>
-                  <IconButton label="Remove location" icon={Trash2} danger onClick={() => removeLocation(location.id)} />
+                  <div className="flex items-center gap-2 font-bold text-slate-800"><MapPin className="h-4 w-4 text-sky-700" /> Class 1 Activity Permit Location</div>
                 </div>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <Field label="Location Name"><input className={inputClass} value={location.name} onChange={(event) => updateLocation(location.id, { name: event.target.value })} /></Field>
@@ -868,9 +872,9 @@ function ApprovalDetail({
 
       {record.approvalType === "class_1_activity_permit" ? (
         <section className="mt-6">
-          <h3 className="font-bold text-slate-950">Permitted Locations</h3>
+          <h3 className="font-bold text-slate-950">Permitted Location</h3>
           <div className="mt-3 space-y-3">
-            {record.locations.map((location) => {
+            {record.locations.slice(0, 1).map((location) => {
               const documents = record.documents.filter((document) => document.locationId === location.id);
               return (
                 <div key={location.id} className="rounded-lg border border-slate-200 p-4">
