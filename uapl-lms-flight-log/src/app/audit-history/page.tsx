@@ -56,6 +56,9 @@ const actionLabels: Record<string, string> = {
   APPROVAL_ARCHIVED: "Approval archived",
   APPROVAL_DOCUMENT_UPLOADED: "Approval document uploaded",
   APPROVAL_DOCUMENT_DELETED: "Approval document deleted",
+  FATIGUE_RISK_CREATED: "Fatigue-risk checklist created",
+  FATIGUE_RISK_UPDATED: "Fatigue-risk checklist updated",
+  FATIGUE_RISK_DELETED: "Fatigue-risk checklist deleted",
 };
 
 function humanize(value: string) {
