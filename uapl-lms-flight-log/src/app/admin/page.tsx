@@ -173,7 +173,7 @@ export default function AdminPage() {
     void loadDashboard();
   }, [notify]);
 
-  const sixMonthTotal = useMemo(
+  const annualActivityTotal = useMemo(
     () => dashboard.monthlyActivity.reduce((total, month) => total + month.count, 0),
     [dashboard.monthlyActivity]
   );
@@ -293,13 +293,13 @@ export default function AdminPage() {
                 <p className="app-section-label">Activity trend</p>
                 <h2 className="app-section-title">Monthly Activity</h2>
                 <p className="mt-1 text-sm text-[#6b7d92]">
-                  Records updated during the last six months.
+                  Records updated during the latest 12 months.
                 </p>
               </div>
               <div className="w-fit rounded-lg border border-[#d4e7ef] bg-[#f0f7fa] px-4 py-2.5">
-                <p className="text-xl font-bold text-[#075f8f]">{sixMonthTotal}</p>
+                <p className="text-xl font-bold text-[#075f8f]">{annualActivityTotal}</p>
                 <p className="text-[11px] font-bold uppercase text-[#53748a]">
-                  Six-month total
+                  12-month total
                 </p>
               </div>
             </div>
