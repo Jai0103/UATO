@@ -751,45 +751,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 hidden h-dvh min-h-0 flex-col overflow-hidden border-r border-[#d4dee8] bg-[#fbfcfe] shadow-[5px_0_22px_rgba(16,42,67,0.04)] transition-[width] duration-300 ease-out lg:flex ${
+        className={`fixed inset-y-0 left-0 z-40 hidden h-dvh min-h-0 flex-col overflow-visible border-r border-[#d4dee8] bg-[#fbfcfe] shadow-[5px_0_22px_rgba(16,42,67,0.04)] transition-[width] duration-300 ease-out lg:flex ${
           desktopCollapsed ? "w-[84px]" : "w-[288px]"
         }`}
       >
         <div
-          className={`shrink-0 border-b border-[#dce4ed] ${
+          className={`relative shrink-0 border-b border-[#dce4ed] ${
             desktopCollapsed ? "px-3 py-4" : "px-5 py-5"
           }`}
         >
           <div
             className={`flex ${
               desktopCollapsed
-                ? "flex-col items-center gap-3"
-                : "items-center justify-between gap-3"
+                ? "justify-center"
+                : "items-center"
             }`}
           >
             <BrandLogo compact={desktopCollapsed} />
-            <button
-              type="button"
-              onClick={toggleDesktopSidebar}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#60748a] shadow-sm outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
-              aria-label={
-                desktopCollapsed
-                  ? "Expand navigation panel"
-                  : "Collapse navigation panel"
-              }
-              title={
-                desktopCollapsed
-                  ? "Expand navigation"
-                  : "Collapse navigation"
-              }
-            >
-              {desktopCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={toggleDesktopSidebar}
+            className="absolute -right-[17px] top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg border border-[#cbd7e2] bg-white text-[#60748a] shadow-[0_5px_16px_rgba(16,42,67,0.16)] outline-none transition hover:border-[#80b6ce] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
+            aria-label={
+              desktopCollapsed
+                ? "Expand navigation panel"
+                : "Collapse navigation panel"
+            }
+            title={
+              desktopCollapsed
+                ? "Expand navigation"
+                : "Collapse navigation"
+            }
+          >
+            {desktopCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
         </div>
 
         <div
