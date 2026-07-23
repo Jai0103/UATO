@@ -470,7 +470,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const links = session.role === "admin" ? adminLinks : trainerLinks;
+  const activeSession = session;
+  const links =
+    activeSession.role === "admin" ? adminLinks : trainerLinks;
 
   function renderAccount(compact = false) {
     return (
@@ -478,11 +480,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={`rounded-lg border border-[#d9e2eb] bg-[#f5f8fb] ${
           compact ? "flex justify-center p-2" : "p-3"
         }`}
-        title={compact ? `${session.name} - ${session.role} account` : undefined}
+        title={
+          compact
+            ? `${activeSession.name} - ${activeSession.role} account`
+            : undefined
+        }
       >
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#075f8f] shadow-sm ring-1 ring-[#d7e0ea]">
-            {session.role === "admin" ? (
+            {activeSession.role === "admin" ? (
               <Shield className="h-5 w-5" />
             ) : (
               <UserCircle className="h-5 w-5" />
@@ -492,10 +498,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {!compact ? (
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[#16263c]">
-                {session.name}
+                {activeSession.name}
               </p>
               <p className="truncate text-xs capitalize text-[#718096]">
-                {session.role} account
+                {activeSession.role} account
               </p>
             </div>
           ) : null}
