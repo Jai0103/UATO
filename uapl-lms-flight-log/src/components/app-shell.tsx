@@ -6,6 +6,7 @@ import {
   Archive,
   BarChart3,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Database,
@@ -45,7 +46,9 @@ type NavigationItem = {
 };
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
+const SQUARE_LOGO_PATH = "/UATO/AGA_Logo_Square%20(1).jpg";
 const PASSWORD_PAGE = "/change-password";
+const SIDEBAR_STORAGE_KEY = "uapl-desktop-sidebar-collapsed";
 const SESSION_VERIFICATION_INTERVAL_MS = 2 * 60 * 1000;
 
 let lastSessionVerificationAt = 0;
@@ -203,7 +206,23 @@ function pathMatches(pathname: string, href: string, exact = false) {
     : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function BrandLogo({ mobile = false }: { mobile?: boolean }) {
+function BrandLogo({
+  mobile = false,
+  compact = false
+}: {
+  mobile?: boolean;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <img
+        src={SQUARE_LOGO_PATH}
+        alt="Apollo Global Academy"
+        className="h-11 w-11 rounded-lg object-contain"
+      />
+    );
+  }
+
   return (
     <div className="flex min-w-0 items-center gap-3">
       <img
@@ -237,10 +256,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SecureSession | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      setDesktopCollapsed(
+        localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true"
+      );
+    } catch {
+      setDesktopCollapsed(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -253,8 +281,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Render immediately from the unexpired local session. Protected API
-      // requests are still authorized independently by Apps Script.
       if (active) {
         setSession(storedSession);
         setCheckingSession(false);
@@ -266,10 +292,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setSession(verified);
       } catch (error) {
         if (!active) return;
-
-        if (isTemporaryVerificationError(error)) {
-          return;
-        }
+        if (isTemporaryVerificationError(error)) return;
 
         setSession(null);
         router.replace("/");
@@ -353,13 +376,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         const verified = await verifySessionOnce(storedSession);
         if (active) setSession(verified);
       } catch (error) {
-        if (active) {
-          if (isTemporaryVerificationError(error)) {
-            return;
-          }
-          setSession(null);
-          router.replace("/");
-        }
+        if (!active) return;
+        if (isTemporaryVerificationError(error)) return;
+
+        setSession(null);
+        router.replace("/");
       }
     };
 
@@ -368,10 +389,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       SESSION_VERIFICATION_INTERVAL_MS
     );
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") void verifyWithServer();
+      if (document.visibilityState === "visible") {
+        void verifyWithServer();
+      }
     };
-    document.addEventListener("visibilitychange", handleVisibility);
 
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -384,29 +407,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    adminLinks.forEach((item) => {
-      const childActive = item.children?.some((child) =>
+    const links = session?.role === "admin" ? adminLinks : trainerLinks;
+    const activeGroup = links.find((item) =>
+      item.children?.some((child) =>
         pathMatches(pathname, child.href, child.exact)
-      );
-      if (childActive) {
-        setExpandedGroups((current) => ({
-          ...current,
-          [item.href]: true
-        }));
-      }
-    });
-  }, [pathname]);
+      )
+    );
+
+    if (activeGroup) {
+      setExpandedGroup(activeGroup.href);
+    }
+  }, [pathname, session?.role]);
 
   useEffect(() => {
     if (!mobileMenuOpen) {
       document.body.style.overflow = "";
       return;
     }
+
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
+
+  function toggleDesktopSidebar() {
+    setDesktopCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      } catch {
+        // The preference is optional when browser storage is unavailable.
+      }
+      return next;
+    });
+  }
 
   async function logout() {
     if (signingOut) return;
@@ -437,15 +472,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const links = session.role === "admin" ? adminLinks : trainerLinks;
 
-  const navigation = (
-    <>
-      <div className="relative mb-5 border-b border-[#dce4ed] px-1 pb-5">
-        <BrandLogo />
-        <span className="absolute -bottom-px left-1 h-0.5 w-10 bg-[#c7353d]" />
-      </div>
-
-      <div className="mb-5 rounded-lg border border-[#d9e2eb] bg-[#f5f8fb] p-3">
-        <div className="flex items-center gap-3">
+  function renderAccount(compact = false) {
+    return (
+      <div
+        className={`rounded-lg border border-[#d9e2eb] bg-[#f5f8fb] ${
+          compact ? "flex justify-center p-2" : "p-3"
+        }`}
+        title={compact ? `${session.name} - ${session.role} account` : undefined}
+      >
+        <div className="flex min-w-0 items-center gap-3">
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#075f8f] shadow-sm ring-1 ring-[#d7e0ea]">
             {session.role === "admin" ? (
               <Shield className="h-5 w-5" />
@@ -454,18 +489,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
             <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#16263c]">
-              {session.name}
-            </p>
-            <p className="truncate text-xs capitalize text-[#718096]">
-              {session.role} account
-            </p>
-          </div>
+          {!compact ? (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#16263c]">
+                {session.name}
+              </p>
+              <p className="truncate text-xs capitalize text-[#718096]">
+                {session.role} account
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
+    );
+  }
 
-      <nav className="space-y-1">
+  function renderNavigation(compact = false, mobile = false) {
+    return (
+      <nav className="space-y-1" aria-label="Primary navigation">
         {links.map((item) => {
           const Icon = item.icon;
           const childActive = Boolean(
@@ -478,66 +519,104 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             : pathMatches(pathname, item.href, item.exact);
 
           if (item.children) {
-            const expanded = expandedGroups[item.href] ?? childActive;
+            const expanded = expandedGroup === item.href && !compact;
             return (
               <div key={item.href}>
                 <button
                   type="button"
-                  onClick={() =>
-                    setExpandedGroups((current) => ({
-                      ...current,
-                      [item.href]: !(current[item.href] ?? childActive)
-                    }))
-                  }
-                  className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
+                  onClick={() => {
+                    if (compact) {
+                      setDesktopCollapsed(false);
+                      try {
+                        localStorage.setItem(SIDEBAR_STORAGE_KEY, "false");
+                      } catch {
+                        // The navigation still expands without persistence.
+                      }
+                      setExpandedGroup(item.href);
+                      return;
+                    }
+
+                    setExpandedGroup((current) =>
+                      current === item.href ? null : item.href
+                    );
+                  }}
+                  className={`group relative flex h-11 w-full items-center rounded-lg text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#4ba3c7] focus-visible:ring-offset-2 ${
+                    compact ? "justify-center px-2" : "gap-3 px-3"
+                  } ${
                     active
                       ? "bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.18)]"
                       : "text-[#506278] hover:bg-[#edf3f7] hover:text-[#16263c]"
                   }`}
                   aria-expanded={expanded}
+                  title={compact ? item.label : undefined}
                 >
+                  {active ? (
+                    <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#6bc4e8]" />
+                  ) : null}
                   <Icon
                     className={`h-[18px] w-[18px] shrink-0 ${
                       active ? "text-[#6bc4e8]" : "text-[#708399]"
                     }`}
                   />
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {item.label}
-                  </span>
-                  {expanded ? (
-                    <ChevronDown className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0" />
-                  )}
+                  {!compact ? (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-left">
+                        {item.label}
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+                          expanded ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </>
+                  ) : null}
                 </button>
 
-                {expanded ? (
-                  <div className="ml-5 mt-1 space-y-1 border-l border-[#d6e0e9] pl-3">
-                    {item.children.map((child) => {
-                      const selected = pathMatches(
-                        pathname,
-                        child.href,
-                        child.exact
-                      );
-                      return (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium transition ${
-                            selected
-                              ? "bg-[#eaf4f8] font-semibold text-[#075f8f] ring-1 ring-inset ring-[#d2e9f2]"
-                              : "text-[#66798f] hover:bg-[#f0f4f8] hover:text-[#16263c]"
-                          }`}
-                          aria-current={selected ? "page" : undefined}
-                        >
-                          <span className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-[#c7353d]" : "bg-[#bdc9d6]"}`} />
-                          <span className="truncate">{child.label}</span>
-                        </Link>
-                      );
-                    })}
+                <div
+                  className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+                    expanded
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0"
+                  }`}
+                  aria-hidden={!expanded}
+                >
+                  <div className="overflow-hidden">
+                    <div className="ml-5 mt-1 space-y-1 border-l border-[#d6e0e9] pl-3">
+                      {item.children.map((child) => {
+                        const selected = pathMatches(
+                          pathname,
+                          child.href,
+                          child.exact
+                        );
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() => {
+                              if (mobile) setMobileMenuOpen(false);
+                            }}
+                            className={`relative flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-[#4ba3c7] focus-visible:ring-offset-1 ${
+                              selected
+                                ? "bg-[#eaf4f8] font-semibold text-[#075f8f] ring-1 ring-inset ring-[#d2e9f2]"
+                                : "text-[#66798f] hover:bg-[#f0f4f8] hover:text-[#16263c]"
+                            }`}
+                            aria-current={selected ? "page" : undefined}
+                          >
+                            {selected ? (
+                              <span className="absolute -left-[13px] top-2 h-6 w-1 rounded-full bg-[#c7353d]" />
+                            ) : null}
+                            <span
+                              className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${
+                                selected ? "bg-[#c7353d]" : "bg-[#bdc9d6]"
+                              }`}
+                            />
+                            <span className="truncate">{child.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
-                ) : null}
+                </div>
               </div>
             );
           }
@@ -546,52 +625,72 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition ${
+              onClick={() => {
+                if (mobile) setMobileMenuOpen(false);
+              }}
+              className={`group relative flex h-11 items-center rounded-lg text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#4ba3c7] focus-visible:ring-offset-2 ${
+                compact ? "justify-center px-2" : "gap-3 px-3"
+              } ${
                 active
                   ? "bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.18)]"
                   : "text-[#506278] hover:bg-[#edf3f7] hover:text-[#16263c]"
               }`}
               aria-current={active ? "page" : undefined}
+              title={compact ? item.label : undefined}
             >
+              {active ? (
+                <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#6bc4e8]" />
+              ) : null}
               <Icon
                 className={`h-[18px] w-[18px] shrink-0 ${
                   active ? "text-[#6bc4e8]" : "text-[#708399]"
                 }`}
               />
-              <span className="truncate">{item.label}</span>
+              {!compact ? <span className="truncate">{item.label}</span> : null}
             </Link>
           );
         })}
       </nav>
+    );
+  }
 
-      <div className="mt-auto border-t border-[#e3e9f0] pt-4">
-        <button
-          type="button"
-          onClick={logout}
-          disabled={signingOut}
-          className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#5f7187] transition hover:bg-red-50 hover:text-[#b4232d] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {signingOut ? (
-            <Loader2 className="h-[18px] w-[18px] animate-spin" />
-          ) : (
-            <LogOut className="h-[18px] w-[18px]" />
-          )}
-          {signingOut ? "Signing out..." : "Sign out"}
-        </button>
-      </div>
-    </>
-  );
+  function renderLogout(compact = false) {
+    return (
+      <button
+        type="button"
+        onClick={logout}
+        disabled={signingOut}
+        className={`flex h-11 w-full items-center rounded-lg text-sm font-semibold text-[#5f7187] outline-none transition hover:bg-red-50 hover:text-[#b4232d] focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+          compact ? "justify-center px-2" : "gap-3 px-3"
+        }`}
+        title={compact ? (signingOut ? "Signing out..." : "Sign out") : undefined}
+      >
+        {signingOut ? (
+          <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin" />
+        ) : (
+          <LogOut className="h-[18px] w-[18px] shrink-0" />
+        )}
+        {!compact ? (signingOut ? "Signing out..." : "Sign out") : null}
+      </button>
+    );
+  }
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#eef3f8] lg:grid lg:grid-cols-[288px_minmax(0,1fr)]">
+    <div
+      className="min-h-screen w-full overflow-x-hidden bg-[#eef3f8] transition-[grid-template-columns] duration-300 ease-out lg:grid"
+      style={{
+        gridTemplateColumns: desktopCollapsed
+          ? "84px minmax(0, 1fr)"
+          : "288px minmax(0, 1fr)"
+      }}
+    >
       <header className="sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] shadow-sm transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] shadow-sm outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
             aria-label="Open navigation menu"
             aria-expanded={mobileMenuOpen}
           >
@@ -600,32 +699,115 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            className="app-overlay-enter absolute inset-0 bg-[#102a43]/55 backdrop-blur-[2px]"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-label="Close navigation menu"
-          />
-          <aside className="app-panel-enter absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-y-auto border-r border-[#d7e0ea] bg-white p-5 shadow-[0_20px_50px_rgba(16,42,67,0.25)]">
-            <div className="mb-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#d7e0ea] text-[#405168] transition hover:bg-[#f3f8fb] hover:text-[#075f8f]"
-                aria-label="Close navigation menu"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            {navigation}
-          </aside>
-        </div>
-      ) : null}
+      <div
+        className={`fixed inset-0 z-50 transition lg:hidden ${
+          mobileMenuOpen ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+        aria-hidden={!mobileMenuOpen}
+      >
+        <button
+          type="button"
+          className={`absolute inset-0 bg-[#102a43]/55 backdrop-blur-[2px] transition-opacity duration-300 ${
+            mobileMenuOpen ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={() => setMobileMenuOpen(false)}
+          aria-label="Close navigation menu"
+          tabIndex={mobileMenuOpen ? 0 : -1}
+        />
 
-      <aside className="sticky top-0 hidden h-screen min-h-0 w-[288px] flex-col overflow-y-auto border-r border-[#d4dee8] bg-[#fbfcfe] p-5 shadow-[5px_0_22px_rgba(16,42,67,0.04)] lg:flex">
-        {navigation}
+        <aside
+          className={`absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-hidden border-r border-[#d7e0ea] bg-white shadow-[0_20px_50px_rgba(16,42,67,0.25)] transition-transform duration-300 ease-out ${
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#dce4ed] bg-white px-4 py-3">
+            <BrandLogo mobile />
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] text-[#405168] outline-none transition hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
+              aria-label="Close navigation menu"
+              tabIndex={mobileMenuOpen ? 0 : -1}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="shrink-0 px-4 py-3">
+            {renderAccount()}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+            {renderNavigation(false, true)}
+          </div>
+
+          <div className="shrink-0 border-t border-[#e3e9f0] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+            {renderLogout()}
+          </div>
+        </aside>
+      </div>
+
+      <aside className="sticky top-0 hidden h-screen min-h-0 flex-col overflow-hidden border-r border-[#d4dee8] bg-[#fbfcfe] shadow-[5px_0_22px_rgba(16,42,67,0.04)] lg:flex">
+        <div
+          className={`shrink-0 border-b border-[#dce4ed] ${
+            desktopCollapsed ? "px-3 py-4" : "px-5 py-5"
+          }`}
+        >
+          <div
+            className={`flex ${
+              desktopCollapsed
+                ? "flex-col items-center gap-3"
+                : "items-center justify-between gap-3"
+            }`}
+          >
+            <BrandLogo compact={desktopCollapsed} />
+            <button
+              type="button"
+              onClick={toggleDesktopSidebar}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#60748a] shadow-sm outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
+              aria-label={
+                desktopCollapsed
+                  ? "Expand navigation panel"
+                  : "Collapse navigation panel"
+              }
+              title={
+                desktopCollapsed
+                  ? "Expand navigation"
+                  : "Collapse navigation"
+              }
+            >
+              {desktopCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div
+          className={`shrink-0 ${
+            desktopCollapsed ? "px-3 py-3" : "px-5 py-4"
+          }`}
+        >
+          {renderAccount(desktopCollapsed)}
+        </div>
+
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-4 ${
+            desktopCollapsed ? "px-3" : "px-5"
+          }`}
+        >
+          {renderNavigation(desktopCollapsed)}
+        </div>
+
+        <div
+          className={`shrink-0 border-t border-[#e3e9f0] bg-[#fbfcfe] py-3 ${
+            desktopCollapsed ? "px-3" : "px-5"
+          }`}
+        >
+          {renderLogout(desktopCollapsed)}
+        </div>
       </aside>
 
       <main className="min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8 xl:px-10 xl:py-8">
