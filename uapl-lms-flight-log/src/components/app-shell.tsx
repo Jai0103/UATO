@@ -683,12 +683,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="min-h-screen w-full overflow-x-hidden bg-[#eef3f8] transition-[grid-template-columns] duration-300 ease-out lg:grid"
-      style={{
-        gridTemplateColumns: desktopCollapsed
-          ? "84px minmax(0, 1fr)"
-          : "288px minmax(0, 1fr)"
-      }}
+      className={`min-h-screen w-full overflow-x-hidden bg-[#eef3f8] transition-[padding-left] duration-300 ease-out ${
+        desktopCollapsed ? "lg:pl-[84px]" : "lg:pl-[288px]"
+      }`}
     >
       <header className="sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
@@ -753,7 +750,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
       </div>
 
-      <aside className="sticky top-0 hidden h-screen min-h-0 flex-col overflow-hidden border-r border-[#d4dee8] bg-[#fbfcfe] shadow-[5px_0_22px_rgba(16,42,67,0.04)] lg:flex">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 hidden h-dvh min-h-0 flex-col overflow-hidden border-r border-[#d4dee8] bg-[#fbfcfe] shadow-[5px_0_22px_rgba(16,42,67,0.04)] transition-[width] duration-300 ease-out lg:flex ${
+          desktopCollapsed ? "w-[84px]" : "w-[288px]"
+        }`}
+      >
         <div
           className={`shrink-0 border-b border-[#dce4ed] ${
             desktopCollapsed ? "px-3 py-4" : "px-5 py-5"
