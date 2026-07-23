@@ -36,10 +36,19 @@ import {
   fetchFatigueRiskRecord,
   saveFatigueRiskRecord
 } from "@/lib/fatigue-risk-api";
+import { fetchGoogleUsers } from "@/lib/google-api";
 import {
   createFatigueRiskPdf,
   fatigueRiskPdfFileName
 } from "@/lib/fatigue-risk-pdf";
+
+type TrainerOption = {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "trainer";
+  accountStatus?: "active" | "inactive";
+};
 
 function formatDate(value: string) {
   if (!value) return "-";
@@ -71,6 +80,8 @@ export default function FatigueRiskPage() {
   const [loadingLabel, setLoadingLabel] = useState(
     "Loading this week's checklist..."
   );
+  const [trainerOptions, setTrainerOptions] = useState<TrainerOption[]>([]);
+  const [loadingTrainers, setLoadingTrainers] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -80,6 +91,36 @@ export default function FatigueRiskPage() {
       const storedSession = getSecureSession();
       if (!storedSession) return;
       setSession(storedSession);
+
+      void fetchGoogleUsers()
+        .then((users) => {
+          if (!active) return;
+          const activeUsers = (users as TrainerOption[])
+            .filter(
+              (user) =>
+                user.accountStatus !== "inactive" &&
+                Boolean(user.name?.trim()) &&
+                Boolean(user.email?.trim())
+            )
+            .sort((first, second) =>
+              first.name.localeCompare(second.name, undefined, {
+                sensitivity: "base"
+              })
+            );
+          setTrainerOptions(activeUsers);
+        })
+        .catch((error) => {
+          if (!active) return;
+          message.error(
+            "User list could not be loaded",
+            error instanceof Error
+              ? error.message
+              : "Active users are temporarily unavailable."
+          );
+        })
+        .finally(() => {
+          if (active) setLoadingTrainers(false);
+        });
 
       try {
         const recordId = new URLSearchParams(window.location.search).get("id");
@@ -396,19 +437,49 @@ export default function FatigueRiskPage() {
         <section className="app-card">
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
             <div>
-              <label className="text-sm font-semibold text-slate-800">
-                Instructor / AFE Name
+              <label
+                htmlFor="fatigue-instructor"
+                className="text-sm font-semibold text-slate-800"
+              >
+                Trainer / AFE Name
               </label>
-              <input
-                value={record.instructorName}
-                onChange={(event) =>
-                  updateRecord({ instructorName: event.target.value })
-                }
-                placeholder="Enter the Instructor or AFE name"
-                className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
-              />
+              <select
+                id="fatigue-instructor"
+                value={record.instructorEmail}
+                disabled={loadingTrainers}
+                onChange={(event) => {
+                  const selected = trainerOptions.find(
+                    (user) => user.email === event.target.value
+                  );
+                  updateRecord({
+                    instructorName: selected?.name || "",
+                    instructorEmail: selected?.email || ""
+                  });
+                }}
+                className="mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none transition focus:border-sky-600 focus:ring-2 focus:ring-sky-100 disabled:cursor-wait disabled:bg-slate-100 disabled:text-slate-500"
+              >
+                <option value="">
+                  {loadingTrainers
+                    ? "Loading active users..."
+                    : "Select a trainer or AFE"}
+                </option>
+                {record.instructorEmail &&
+                !trainerOptions.some(
+                  (user) => user.email === record.instructorEmail
+                ) ? (
+                  <option value={record.instructorEmail}>
+                    {record.instructorName} (saved account)
+                  </option>
+                ) : null}
+                {trainerOptions.map((user) => (
+                  <option key={user.id || user.email} value={user.email}>
+                    {user.name} - {user.role === "admin" ? "Admin" : "Trainer"}
+                  </option>
+                ))}
+              </select>
               <p className="mt-1.5 text-xs text-slate-500">
-                Enter the person being assessed for this training week.
+                Active accounts are loaded from User Management. Selecting a
+                user also records their email.
               </p>
             </div>
             <div>
