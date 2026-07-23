@@ -161,6 +161,29 @@ export default function FatigueRiskPage() {
     }));
   }
 
+  async function markAllNo() {
+    const confirmed = await message.confirm({
+      title: "Mark every item No?",
+      message:
+        "This will replace every current checklist answer with No, indicating that no fatigue risks were identified.",
+      confirmLabel: "Mark all No",
+      cancelLabel: "Cancel"
+    });
+    if (!confirmed) return;
+
+    setRecord((current) => ({
+      ...current,
+      responses: current.responses.map((item) => ({
+        ...item,
+        response: "no"
+      }))
+    }));
+    message.success(
+      "All items marked No",
+      `${FATIGUE_RISK_QUESTIONS.length} checklist items were completed. Review the answers before saving.`
+    );
+  }
+
   function validationError() {
     if (!record.instructorName.trim()) {
       return "The instructor or AFE name is required.";
@@ -424,6 +447,26 @@ export default function FatigueRiskPage() {
               />
             </div>
           </div>
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-900">
+              Bulk checklist action
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Use this only when every checklist item should be recorded as
+              No. You can still change individual answers afterward.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void markAllNo()}
+            className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 sm:w-auto"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Mark all No
+          </button>
         </section>
 
         {FATIGUE_RISK_SECTIONS.map((section, sectionIndex) => {
