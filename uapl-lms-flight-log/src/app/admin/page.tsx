@@ -13,23 +13,16 @@ import { postToGoogle } from "@/lib/google-api";
 import {
   AlertTriangle,
   BellRing,
-  BookOpenCheck,
-  Boxes,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
   Clock,
   Database,
   ExternalLink,
-  FileBarChart,
-  FileText,
   GraduationCap,
-  Settings,
   ShieldCheck,
   Timer,
-  UserCog,
   Users,
-  Wrench
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -84,39 +77,6 @@ const emptyApprovalDashboard: ApprovalDashboardSummary = {
   missingDocuments: 0,
   nextExpiry: null
 };
-
-const monthlyActivityColors = [
-  {
-    bar: "bg-sky-500",
-    track: "bg-sky-50",
-    badge: "bg-sky-50 text-sky-700 ring-sky-200"
-  },
-  {
-    bar: "bg-emerald-500",
-    track: "bg-emerald-50",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-200"
-  },
-  {
-    bar: "bg-amber-500",
-    track: "bg-amber-50",
-    badge: "bg-amber-50 text-amber-700 ring-amber-200"
-  },
-  {
-    bar: "bg-rose-500",
-    track: "bg-rose-50",
-    badge: "bg-rose-50 text-rose-700 ring-rose-200"
-  },
-  {
-    bar: "bg-indigo-500",
-    track: "bg-indigo-50",
-    badge: "bg-indigo-50 text-indigo-700 ring-indigo-200"
-  },
-  {
-    bar: "bg-teal-500",
-    track: "bg-teal-50",
-    badge: "bg-teal-50 text-teal-700 ring-teal-200"
-  }
-];
 
 function formatDate(value: string) {
   if (!value) return "-";
@@ -213,11 +173,6 @@ export default function AdminPage() {
     void loadDashboard();
   }, [notify]);
 
-  const highestMonthlyCount = useMemo(
-    () => Math.max(1, ...dashboard.monthlyActivity.map((month) => month.count)),
-    [dashboard.monthlyActivity]
-  );
-
   const sixMonthTotal = useMemo(
     () => dashboard.monthlyActivity.reduce((total, month) => total + month.count, 0),
     [dashboard.monthlyActivity]
@@ -265,72 +220,6 @@ export default function AdminPage() {
       icon: Timer,
       description: "Combined recorded duration",
       tone: "border-t-teal-500 bg-teal-50 text-teal-700"
-    }
-  ];
-
-  const quickActions = [
-    {
-      title: "Flight Logs",
-      description: "Create or continue student flight logs.",
-      href: "/flight-logs",
-      icon: ClipboardList,
-      tone: "bg-sky-50 text-sky-700 ring-sky-100"
-    },
-    {
-      title: "Staff Training",
-      description: "Manage internal staff training records.",
-      href: "/staff-training",
-      icon: BookOpenCheck,
-      tone: "bg-violet-50 text-violet-700 ring-violet-100"
-    },
-    {
-      title: "UA Maintenance",
-      description: "Complete aircraft maintenance checks.",
-      href: "/ua-maintenance",
-      icon: Wrench,
-      tone: "bg-amber-50 text-amber-700 ring-amber-100"
-    },
-    {
-      title: "Inventory",
-      description: "Control equipment, batteries, and movements.",
-      href: "/inventory",
-      icon: Boxes,
-      tone: "bg-emerald-50 text-emerald-700 ring-emerald-100"
-    },
-    {
-      title: "AGA Approvals",
-      description: "Monitor approvals, permits, locations, and renewals.",
-      href: "/approvals",
-      icon: ShieldCheck,
-      tone: "bg-cyan-50 text-cyan-700 ring-cyan-100"
-    },
-    {
-      title: "Records",
-      description: "View paginated student records.",
-      href: "/records",
-      icon: FileText,
-      tone: "bg-indigo-50 text-indigo-700 ring-indigo-100"
-    },
-    {
-      title: "Reports",
-      description: "Prepare and download combined reports.",
-      href: "/reports",
-      icon: FileBarChart,
-      tone: "bg-rose-50 text-rose-700 ring-rose-100"
-    },
-    {
-      title: "Master Data",
-      description: "Manage active reference values.",
-      href: "/master-data",
-      icon: Settings,
-      tone: "bg-cyan-50 text-cyan-700 ring-cyan-100"
-    },
-    {
-      title: "Users",
-      description: "Manage secure user accounts.",
-      href: "/users",
-      icon: UserCog,
-      tone: "bg-slate-100 text-slate-700 ring-slate-200"
     }
   ];
 
@@ -415,55 +304,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="mt-5 space-y-4">
-              {dashboard.monthlyActivity.map((month, index) => {
-                const color = monthlyActivityColors[index % monthlyActivityColors.length];
-                const percentage =
-                  month.count > 0
-                    ? Math.max(10, Math.round((month.count / highestMonthlyCount) * 100))
-                    : 0;
-
-                return (
-                  <div
-                    key={month.key}
-                    className="grid grid-cols-[64px_minmax(0,1fr)_40px] items-center gap-2 sm:grid-cols-[88px_minmax(0,1fr)_52px] sm:gap-3"
-                  >
-                    <p className="truncate text-xs font-semibold text-[#506278] sm:text-sm">
-                      {month.label}
-                    </p>
-                    <div className={`relative h-9 overflow-hidden rounded-lg ${color.track}`}>
-                      {month.count > 0 ? (
-                        <div
-                          className={`flex h-full items-center rounded-lg px-3 text-xs font-bold text-white transition-all duration-500 ${color.bar}`}
-                          style={{ width: `${percentage}%` }}
-                          title={`${month.count} updated records`}
-                        >
-                          <span className="truncate">{month.count}</span>
-                        </div>
-                      ) : (
-                        <div className="flex h-full items-center px-3 text-xs font-medium text-slate-400">
-                          No activity
-                        </div>
-                      )}
-                    </div>
-                    <span className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-bold ring-1 ${color.badge}`}>
-                      {month.count}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {!dashboard.monthlyActivity.length ? (
-                <div className="app-empty-state">
-                  <p className="text-sm font-semibold text-[#405168]">
-                    No monthly activity available
-                  </p>
-                  <p className="mt-1 text-sm text-[#718096]">
-                    Updated flight records will appear here.
-                  </p>
-                </div>
-              ) : null}
-            </div>
+            <MonthlyActivityChart data={dashboard.monthlyActivity} />
           </article>
 
           <article className="app-card min-w-0">
@@ -514,45 +355,178 @@ export default function AdminPage() {
           </article>
         </section>
 
-        <section>
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="app-section-label">Shortcuts</p>
-              <h2 className="app-section-title">Quick Actions</h2>
-              <p className="mt-1 text-sm text-[#6b7d92]">
-                Open common operational and administration workflows.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {quickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="group flex min-w-0 items-start gap-3 rounded-lg border border-[#d7e0ea] bg-white p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_6px_18px_rgba(16,42,67,0.04)] transition hover:-translate-y-0.5 hover:border-[#a8c8d8] hover:shadow-[0_2px_4px_rgba(16,42,67,0.05),0_12px_28px_rgba(16,42,67,0.09)]"
-                >
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ring-1 ${action.tone}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-[#16263c]">{action.title}</p>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-[#b7c3d0] transition group-hover:translate-x-0.5 group-hover:text-[#075f8f]" />
-                    </div>
-                    <p className="mt-1 text-sm leading-5 text-[#6b7d92]">
-                      {action.description}
-                    </p>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
       </div>
     </AppShell>
+  );
+}
+
+function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  if (!data.length) {
+    return (
+      <div className="app-empty-state mt-5">
+        <p className="text-sm font-semibold text-[#405168]">
+          No monthly activity available
+        </p>
+        <p className="mt-1 text-sm text-[#718096]">
+          Updated flight records will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  const width = 720;
+  const height = 286;
+  const padding = { top: 24, right: 22, bottom: 48, left: 44 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const maximum = Math.max(1, ...data.map((month) => month.count));
+  const points = data.map((month, index) => ({
+    ...month,
+    x:
+      padding.left +
+      (data.length === 1 ? chartWidth / 2 : (index / (data.length - 1)) * chartWidth),
+    y: padding.top + chartHeight - (month.count / maximum) * chartHeight
+  }));
+  const linePath = points
+    .map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`)
+    .join(" ");
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${
+    padding.top + chartHeight
+  } L ${points[0].x} ${padding.top + chartHeight} Z`;
+  const activePoint = activeIndex === null ? null : points[activeIndex];
+  const pointColors = ["#0284c7", "#059669", "#d97706", "#e11d48", "#4f46e5", "#0d9488"];
+
+  return (
+    <div className="relative mt-5 min-w-0 rounded-lg border border-[#e1e8ef] bg-[#fbfdfe] p-2 sm:p-4">
+      {activePoint ? (
+        <div
+          className={`pointer-events-none absolute z-20 min-w-[132px] -translate-y-full rounded-lg bg-[#16263c] px-3 py-2 text-center shadow-xl transition-all duration-150 ${
+            activeIndex === 0
+              ? "translate-x-0"
+              : activeIndex === points.length - 1
+                ? "-translate-x-full"
+                : "-translate-x-1/2"
+          }`}
+          style={{
+            left: `${(activePoint.x / width) * 100}%`,
+            top: `${(activePoint.y / height) * 100}%`
+          }}
+        >
+          <p className="text-[11px] font-semibold text-slate-300">{activePoint.label}</p>
+          <p className="mt-0.5 text-sm font-bold text-white">
+            {activePoint.count} {activePoint.count === 1 ? "updated record" : "updated records"}
+          </p>
+          <span
+            className={`absolute top-full h-2 w-2 -translate-y-1/2 rotate-45 bg-[#16263c] ${
+              activeIndex === 0
+                ? "left-4"
+                : activeIndex === points.length - 1
+                  ? "right-4"
+                  : "left-1/2 -translate-x-1/2"
+            }`}
+          />
+        </div>
+      ) : null}
+
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="block h-auto w-full overflow-visible"
+        role="img"
+        aria-label="Monthly record activity chart"
+        onMouseLeave={() => setActiveIndex(null)}
+      >
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+          const y = padding.top + chartHeight * ratio;
+          const value = Math.round(maximum * (1 - ratio));
+          return (
+            <g key={ratio}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y}
+                y2={y}
+                stroke="#dfe7ee"
+                strokeDasharray={ratio === 1 ? undefined : "4 6"}
+              />
+              <text
+                x={padding.left - 12}
+                y={y + 4}
+                textAnchor="end"
+                fill="#7b8ca0"
+                fontSize="11"
+                fontWeight="600"
+              >
+                {value}
+              </text>
+            </g>
+          );
+        })}
+
+        <path d={areaPath} fill="#dff1f6" opacity="0.72" />
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#075f8f"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {points.map((point, index) => {
+          const active = activeIndex === index;
+          return (
+            <g
+              key={point.key}
+              role="button"
+              tabIndex={0}
+              aria-label={`${point.label}: ${point.count} updated records`}
+              className="cursor-pointer outline-none"
+              onMouseEnter={() => setActiveIndex(index)}
+              onFocus={() => setActiveIndex(index)}
+              onBlur={() => setActiveIndex(null)}
+              onClick={() => setActiveIndex(active ? null : index)}
+            >
+              {active ? (
+                <line
+                  x1={point.x}
+                  x2={point.x}
+                  y1={padding.top}
+                  y2={padding.top + chartHeight}
+                  stroke="#9fb5c5"
+                  strokeDasharray="3 5"
+                />
+              ) : null}
+              <circle cx={point.x} cy={point.y} r="18" fill="transparent" />
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={active ? 7 : 5.5}
+                fill={pointColors[index % pointColors.length]}
+                stroke="white"
+                strokeWidth="3"
+                className="transition-all duration-150"
+              />
+              <text
+                x={point.x}
+                y={height - 18}
+                textAnchor="middle"
+                fill={active ? "#075f8f" : "#60748a"}
+                fontSize="12"
+                fontWeight={active ? "700" : "600"}
+              >
+                {point.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <p className="px-2 pb-1 text-center text-xs text-[#7b8ca0] sm:text-left">
+        Point to a month to view its updated record count.
+      </p>
+    </div>
   );
 }
 
