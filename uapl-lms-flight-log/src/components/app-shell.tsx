@@ -94,7 +94,8 @@ const adminOnlyPages = [
   "/audit-history",
   "/staff-training",
   "/ua-maintenance",
-  "/inventory"
+  "/inventory",
+  "/fatigue-risk"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -116,6 +117,11 @@ const adminLinks: NavigationItem[] = [
       { href: "/flight-logs", label: "Flight Logs", exact: true },
       { href: "/staff-training", label: "Staff Training", exact: true },
       { href: "/ua-maintenance", label: "UA Maintenance", exact: true },
+      {
+        href: "/fatigue-risk",
+        label: "Fatigue Risk Identification",
+        exact: true
+      },
       { href: "/inventory", label: "Inventory", exact: true }
     ]
   },
@@ -133,6 +139,11 @@ const adminLinks: NavigationItem[] = [
       {
         href: "/ua-maintenance/records",
         label: "UA Maintenance Records",
+        exact: true
+      },
+      {
+        href: "/fatigue-risk/records",
+        label: "Fatigue Risk Records",
         exact: true
       },
       {
