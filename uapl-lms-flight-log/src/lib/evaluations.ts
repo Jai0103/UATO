@@ -1,4 +1,8 @@
-import { googleAppsScriptUrl } from "@/lib/google-api";
+import {
+  googleAppsScriptUrl,
+  invalidateGoogleApiCache,
+  postToGoogle,
+} from "@/lib/google-api";
 
 export const evaluationRatingFields = [
   "objectivesClear",
@@ -46,6 +50,86 @@ export type PublicEvaluationReceipt = {
   responseId: string;
   submittedAt: string;
   message: string;
+};
+
+export type EvaluationSessionStatus = "draft" | "open" | "closed";
+
+export type EvaluationSession = {
+  id: string;
+  token: string;
+  courseName: string;
+  trainerName: string;
+  trainerEmail: string;
+  trainingDate: string;
+  location: string;
+  status: EvaluationSessionStatus;
+  opensAt: string;
+  closesAt: string;
+  createdByName: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  responseCount: number;
+};
+
+export type EvaluationSessionInput = Pick<
+  EvaluationSession,
+  | "id"
+  | "courseName"
+  | "trainerName"
+  | "trainerEmail"
+  | "trainingDate"
+  | "location"
+  | "status"
+  | "opensAt"
+  | "closesAt"
+>;
+
+export type EvaluationDashboard = {
+  totalSessions: number;
+  openSessions: number;
+  closedSessions: number;
+  totalResponses: number;
+  averageRating: number;
+};
+
+export type EvaluationSessionsPage = {
+  sessions: EvaluationSession[];
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+};
+
+export type EvaluationResponse = {
+  id: string;
+  sessionId: string;
+  studentName: string;
+  company: string;
+  recommendTraining: "" | "yes" | "no";
+  mostUseful: string;
+  improvements: string;
+  additionalComments: string;
+  submittedAt: string;
+} & EvaluationRatings;
+
+export type EvaluationResponseSummary = {
+  responseCount: number;
+  averages: EvaluationRatings;
+  recommendPercentage: number;
+};
+
+export type EvaluationResponsesPage = {
+  responses: EvaluationResponse[];
+  summary: EvaluationResponseSummary;
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
 };
 
 type ApiEnvelope<T> = {
@@ -123,4 +207,76 @@ export async function submitPublicEvaluation(
   });
 
   return data.submission;
+}
+
+export async function fetchEvaluationDashboard() {
+  const data = await postToGoogle<{
+    dashboard: EvaluationDashboard;
+  }>({
+    action: "getEvaluationDashboard",
+  });
+
+  return data.dashboard;
+}
+
+export async function fetchEvaluationSessionsPage(request: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  status?: EvaluationSessionStatus | "";
+  year?: string;
+}) {
+  return postToGoogle<EvaluationSessionsPage>({
+    action: "getEvaluationSessionsPage",
+    ...request,
+  });
+}
+
+export async function fetchEvaluationSession(sessionId: string) {
+  const data = await postToGoogle<{
+    session: EvaluationSession;
+  }>({
+    action: "getEvaluationSession",
+    sessionId,
+  });
+
+  return data.session;
+}
+
+export async function saveEvaluationSession(
+  session: EvaluationSessionInput
+) {
+  const data = await postToGoogle<{
+    session: EvaluationSession;
+  }>({
+    action: "saveEvaluationSession",
+    session,
+  });
+
+  invalidateGoogleApiCache();
+  return data.session;
+}
+
+export async function closeEvaluationSession(sessionId: string) {
+  const data = await postToGoogle<{
+    session: EvaluationSession;
+  }>({
+    action: "closeEvaluationSession",
+    sessionId,
+  });
+
+  invalidateGoogleApiCache();
+  return data.session;
+}
+
+export async function fetchEvaluationResponsesPage(request: {
+  sessionId: string;
+  page?: number;
+  pageSize?: number;
+  query?: string;
+}) {
+  return postToGoogle<EvaluationResponsesPage>({
+    action: "getEvaluationResponsesPage",
+    ...request,
+  });
 }
