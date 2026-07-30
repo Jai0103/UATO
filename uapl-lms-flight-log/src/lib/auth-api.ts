@@ -1,5 +1,8 @@
 import { sessionKey } from "@/lib/demo-auth";
-import { googleAppsScriptUrl } from "@/lib/google-api";
+import {
+  googleAppsScriptUrl,
+  invalidateGoogleApiCache
+} from "@/lib/google-api";
 
 export type SecureUserRole =
   | "admin"
@@ -393,6 +396,7 @@ export function clearSecureSession() {
   localStorage.removeItem(
     sessionKey
   );
+  invalidateGoogleApiCache();
 }
 
 export function isSessionExpired(
