@@ -20,7 +20,7 @@ import {
   UserCog,
   X
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AuthApiError,
   clearSecureSession,
@@ -270,6 +270,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const prefetchedRoutes = useRef(new Set<string>());
 
   useEffect(() => {
     try {
@@ -454,6 +455,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   }
 
+  function warmRoute(href: string) {
+    if (
+      pathMatches(pathname, href, true) ||
+      prefetchedRoutes.current.has(href)
+    ) {
+      return;
+    }
+
+    prefetchedRoutes.current.add(href);
+    router.prefetch(href);
+  }
+
   async function logout() {
     if (signingOut) return;
     setSigningOut(true);
@@ -609,6 +622,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           <Link
                             key={child.href}
                             href={child.href}
+                            prefetch={false}
+                            onPointerEnter={() => warmRoute(child.href)}
+                            onFocus={() => warmRoute(child.href)}
+                            onTouchStart={() => warmRoute(child.href)}
                             onClick={() => {
                               if (mobile) setMobileMenuOpen(false);
                             }}
@@ -642,6 +659,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
+              onPointerEnter={() => warmRoute(item.href)}
+              onFocus={() => warmRoute(item.href)}
+              onTouchStart={() => warmRoute(item.href)}
               onClick={() => {
                 if (mobile) setMobileMenuOpen(false);
               }}
