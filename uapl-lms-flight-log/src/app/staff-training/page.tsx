@@ -50,11 +50,6 @@ import {
   type StaffTrainingRecordSummary,
   type StaffTrainingType
 } from "@/lib/staff-training";
-import {
-  createStaffTrainingPdf,
-  staffTrainingPdfFileName
-} from "@/lib/staff-training-pdf";
-
 type PageMode = "checklist" | "records" | "descriptions";
 
 const inputClass =
@@ -484,8 +479,9 @@ export default function StaffTrainingPage() {
 
     setWorking("Preparing staff training PDF...");
     try {
-      const doc = await createStaffTrainingPdf(target);
-      doc.save(staffTrainingPdfFileName(target));
+      const pdfModule = await import("@/lib/staff-training-pdf");
+      const doc = await pdfModule.createStaffTrainingPdf(target);
+      doc.save(pdfModule.staffTrainingPdfFileName(target));
     } catch (error) {
       message.error(
         "PDF could not be generated",
@@ -522,9 +518,10 @@ export default function StaffTrainingPage() {
     const previewWindow = download ? null : window.open("", "_blank");
     setWorking(download ? "Preparing PDF download..." : "Preparing PDF preview...");
     try {
-      const doc = await createStaffTrainingPdf(record);
+      const pdfModule = await import("@/lib/staff-training-pdf");
+      const doc = await pdfModule.createStaffTrainingPdf(record);
       if (download) {
-        doc.save(staffTrainingPdfFileName(record));
+        doc.save(pdfModule.staffTrainingPdfFileName(record));
       } else {
         const url = URL.createObjectURL(doc.output("blob"));
         if (previewWindow) previewWindow.location.href = url;
