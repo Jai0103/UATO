@@ -17,7 +17,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
@@ -108,9 +108,11 @@ export default function FatigueRiskRecordsPage() {
   const [year, setYear] = useState("");
   const [month, setMonth] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
   const [workingLabel, setWorkingLabel] = useState("");
   const [viewingRecord, setViewingRecord] =
     useState<FatigueRiskRecord | null>(null);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -121,18 +123,34 @@ export default function FatigueRiskRecordsPage() {
   }, [query]);
 
   const loadPage = useCallback(async () => {
+    const requestId = ++requestSequence.current;
+    const request = {
+      page,
+      pageSize: PAGE_SIZE,
+      query: debouncedQuery,
+      year,
+      month
+    };
+
     setLoading(true);
     try {
-      const result = await fetchFatigueRiskRecordsPage({
-        page,
-        pageSize: PAGE_SIZE,
-        query: debouncedQuery,
-        year,
-        month
-      });
+      const result = await fetchFatigueRiskRecordsPage(request);
+      if (requestId !== requestSequence.current) return;
+
       setRecordsPage(result);
       if (page > result.totalPages) setPage(result.totalPages);
+
+      if (result.hasNextPage) {
+        void fetchFatigueRiskRecordsPage({
+          ...request,
+          page: result.page + 1
+        }).catch(() => {
+          // Preloading is optional; the normal page request remains the fallback.
+        });
+      }
     } catch (error) {
+      if (requestId !== requestSequence.current) return;
+
       setRecordsPage(emptyPage);
       message.error(
         "Records could not be loaded",
@@ -141,13 +159,30 @@ export default function FatigueRiskRecordsPage() {
           : "The fatigue-risk register is temporarily unavailable."
       );
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, [debouncedQuery, month, page, year]);
 
   useEffect(() => {
     void loadPage();
   }, [loadPage]);
+
+  useEffect(() => {
+    if (!loading) {
+      setShowLoadingOverlay(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowLoadingOverlay(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
+
+  useEffect(
+    () => () => {
+      requestSequence.current += 1;
+    },
+    []
+  );
 
   const years = useMemo(() => {
     const current = new Date().getFullYear();
@@ -230,7 +265,9 @@ export default function FatigueRiskRecordsPage() {
 
   return (
     <AppShell>
-      {loading ? <LoadingOverlay label="Loading fatigue-risk records..." /> : null}
+      {showLoadingOverlay ? (
+        <LoadingOverlay label="Loading fatigue-risk records..." />
+      ) : null}
       {workingLabel ? <LoadingOverlay label={workingLabel} /> : null}
 
       <div className="app-page">
