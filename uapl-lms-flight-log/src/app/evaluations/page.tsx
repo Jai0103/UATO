@@ -251,7 +251,7 @@ export default function EvaluationsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, message, status, year]);
+  }, [debouncedSearch, status, year]);
 
   async function refreshAfterChange() {
     await Promise.all([loadDashboard(), loadSessions(sessionsPage.page, true)]);
