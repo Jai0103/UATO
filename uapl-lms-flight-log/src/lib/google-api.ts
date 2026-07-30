@@ -48,6 +48,7 @@ const API_READ_CACHE: Record<string, ApiCacheConfig> = {
   getApprovalDashboardSummary: { ttlMs: 60_000, persist: true },
   getFatigueRiskWeeklyStatus: { ttlMs: 60_000, persist: true },
   getMasterData: { ttlMs: 5 * 60_000, persist: true },
+  getMasterDataCatalog: { ttlMs: 5 * 60_000, persist: true },
   getInventoryMasterData: { ttlMs: 5 * 60_000, persist: true },
   getInventoryDashboard: { ttlMs: 60_000, persist: true },
   getUaMaintenanceMasterData: { ttlMs: 5 * 60_000, persist: true },
