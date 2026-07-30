@@ -10,7 +10,7 @@ import {
   Plane,
   Search,
   Wrench
-} from "lucide-react";XXXXX
+} from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAppMessage } from "@/components/message-provider";
