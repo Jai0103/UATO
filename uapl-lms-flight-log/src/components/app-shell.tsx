@@ -15,6 +15,7 @@ import {
   Loader2,
   LogOut,
   Menu,
+  MessageSquareText,
   Shield,
   UserCircle,
   UserCog,
@@ -95,7 +96,8 @@ const adminOnlyPages = [
   "/staff-training",
   "/ua-maintenance",
   "/inventory",
-  "/fatigue-risk"
+  "/fatigue-risk",
+  "/evaluations"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -180,6 +182,11 @@ const adminLinks: NavigationItem[] = [
     href: "/reports",
     label: "Reports",
     icon: FileText
+  },
+  {
+    href: "/evaluations",
+    label: "Student Evaluations",
+    icon: MessageSquareText
   },
   {
     href: "/users",
