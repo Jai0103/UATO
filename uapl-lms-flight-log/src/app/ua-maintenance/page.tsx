@@ -51,11 +51,6 @@ import {
   type UaMaintenanceRecordSummary,
   type UaMaintenanceStatus
 } from "@/lib/ua-maintenance";
-import {
-  createUaMaintenancePdf,
-  uaMaintenancePdfFileName
-} from "@/lib/ua-maintenance-pdf";
-
 type PageMode = "checklist" | "records" | "masterData";
 
 const inputClass =
@@ -388,9 +383,10 @@ export default function UaMaintenancePage() {
     const previewWindow = action === "download" ? null : window.open("", "_blank");
     setWorking(action === "print" ? "Preparing print view..." : "Preparing PDF...");
     try {
-      const doc = await createUaMaintenancePdf(target);
+      const pdfModule = await import("@/lib/ua-maintenance-pdf");
+      const doc = await pdfModule.createUaMaintenancePdf(target);
       if (action === "download") {
-        doc.save(uaMaintenancePdfFileName(target));
+        doc.save(pdfModule.uaMaintenancePdfFileName(target));
       } else {
         if (action === "print") doc.autoPrint();
         const url = URL.createObjectURL(doc.output("blob"));
@@ -417,8 +413,9 @@ export default function UaMaintenancePage() {
         message.warning("Report is not ready", "Upload the checker signature first.");
         return;
       }
-      const doc = await createUaMaintenancePdf(saved);
-      doc.save(uaMaintenancePdfFileName(saved));
+      const pdfModule = await import("@/lib/ua-maintenance-pdf");
+      const doc = await pdfModule.createUaMaintenancePdf(saved);
+      doc.save(pdfModule.uaMaintenancePdfFileName(saved));
     } catch (error) {
       message.error(
         "Maintenance PDF could not be downloaded",
@@ -645,4 +642,3 @@ function MaintenanceModal({ record, onClose, onDownload, onPrint }: { record: Ua
 function Detail({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-[11px] font-bold uppercase text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-900">{value || "-"}</p></div>;
 }
-
