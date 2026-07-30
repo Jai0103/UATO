@@ -280,3 +280,28 @@ export async function fetchEvaluationResponsesPage(request: {
     ...request,
   });
 }
+
+export async function fetchAllEvaluationResponses(sessionId: string) {
+  const firstPage = await fetchEvaluationResponsesPage({
+    sessionId,
+    page: 1,
+    pageSize: 25,
+    query: "",
+  });
+  const responses = [...firstPage.responses];
+
+  for (let page = 2; page <= firstPage.totalPages; page += 1) {
+    const nextPage = await fetchEvaluationResponsesPage({
+      sessionId,
+      page,
+      pageSize: 25,
+      query: "",
+    });
+    responses.push(...nextPage.responses);
+  }
+
+  return {
+    responses,
+    summary: firstPage.summary,
+  };
+}
