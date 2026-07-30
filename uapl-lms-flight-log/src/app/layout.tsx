@@ -19,8 +19,25 @@ export const metadata: Metadata = {
     title: "Flight Manager",
   },
   icons: {
-    icon: "/UATO/AGA_Logo_Square%20(1).jpg",
-    apple: "/UATO/AGA_Logo_Square%20(1).jpg",
+    icon: [
+      {
+        url: "/UATO/app-icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+      {
+        url: "/UATO/app-icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ],
+    apple: [
+      {
+        url: "/UATO/app-icon-180.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
   },
   formatDetection: {
     telephone: false,
