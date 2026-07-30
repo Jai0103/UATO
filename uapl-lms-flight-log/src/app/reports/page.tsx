@@ -3,13 +3,15 @@
 import {
   CalendarRange,
   Download,
+  FileSpreadsheet,
   GraduationCap,
   Loader2,
+  MessageSquareText,
   Plane,
   Search,
   Wrench
-} from "lucide-react";
-import { useState, type ReactNode } from "react";
+} from "lucide-react";XXXXX
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
@@ -18,8 +20,22 @@ import {
   fetchBulkStaffTrainingReportRecords,
   fetchBulkUaMaintenanceReportRecords
 } from "@/lib/bulk-report-api";
+import {
+  fetchAllEvaluationResponses,
+  fetchEvaluationSessionsPage,
+  type EvaluationSession
+} from "@/lib/evaluations";
+import {
+  downloadEvaluationCsv,
+  downloadEvaluationPdf
+} from "@/lib/evaluation-report";
 
-type ReportType = "flight" | "staff" | "maintenance";
+type ReportType =
+  | "flight"
+  | "staff"
+  | "maintenance"
+  | "evaluation-pdf"
+  | "evaluation-csv";
 
 const fieldClass =
   "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
@@ -63,6 +79,68 @@ export default function ReportsPage() {
   const [staffMonthTo, setStaffMonthTo] = useState(currentMonth());
   const [maintenanceFrom, setMaintenanceFrom] = useState(firstDayOfMonth());
   const [maintenanceTo, setMaintenanceTo] = useState(today());
+  const [evaluationSearch, setEvaluationSearch] = useState("");
+  const [evaluationYear, setEvaluationYear] = useState("");
+  const [evaluationSessions, setEvaluationSessions] = useState<
+    EvaluationSession[]
+  >([]);
+  const [selectedEvaluationId, setSelectedEvaluationId] = useState("");
+  const [evaluationSessionsLoading, setEvaluationSessionsLoading] =
+    useState(false);
+  const [evaluationLoadError, setEvaluationLoadError] = useState("");
+
+  const evaluationYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from(
+      { length: 8 },
+      (_, index) => String(currentYear - index)
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setEvaluationSessionsLoading(true);
+      setEvaluationLoadError("");
+
+      try {
+        const result = await fetchEvaluationSessionsPage({
+          page: 1,
+          pageSize: 25,
+          query: evaluationSearch.trim(),
+          status: "",
+          year: evaluationYear
+        });
+        if (!active) return;
+
+        setEvaluationSessions(result.sessions);
+        setSelectedEvaluationId((current) => {
+          if (result.sessions.some((session) => session.id === current)) {
+            return current;
+          }
+          return result.sessions[0]?.id || "";
+        });
+      } catch (error) {
+        if (!active) return;
+        setEvaluationSessions([]);
+        setSelectedEvaluationId("");
+        setEvaluationLoadError(
+          error instanceof Error
+            ? error.message
+            : "Evaluation sessions could not be loaded."
+        );
+      } finally {
+        if (active) setEvaluationSessionsLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [evaluationSearch, evaluationYear, isAdmin]);
 
   async function generateFlightReport() {
     if (working) return;
@@ -206,6 +284,72 @@ export default function ReportsPage() {
     }
   }
 
+  async function generateEvaluationReport(format: "pdf" | "csv") {
+    if (working) return;
+    const selectedSession = evaluationSessions.find(
+      (evaluation) => evaluation.id === selectedEvaluationId
+    );
+
+    if (!selectedSession) {
+      message.warning(
+        "Select an evaluation session",
+        "Search for and select the training evaluation to export."
+      );
+      return;
+    }
+
+    const workType =
+      format === "pdf" ? "evaluation-pdf" : "evaluation-csv";
+    setWorking(workType);
+    setWorkingLabel("Loading all evaluation responses...");
+
+    try {
+      const complete = await fetchAllEvaluationResponses(selectedSession.id);
+
+      if (!complete.responses.length) {
+        message.warning(
+          "No evaluation responses found",
+          "The selected session does not have any submitted responses."
+        );
+        return;
+      }
+
+      setWorkingLabel(
+        format === "pdf"
+          ? "Building evaluation PDF..."
+          : "Preparing evaluation CSV..."
+      );
+      await allowBrowserPaint();
+
+      if (format === "pdf") {
+        await downloadEvaluationPdf(
+          selectedSession,
+          complete.responses,
+          complete.summary
+        );
+      } else {
+        downloadEvaluationCsv(selectedSession, complete.responses);
+      }
+
+      message.success(
+        format === "pdf"
+          ? "Evaluation PDF downloaded"
+          : "Evaluation CSV downloaded",
+        `${complete.responses.length} response${
+          complete.responses.length === 1 ? "" : "s"
+        } included.`
+      );
+    } catch (error) {
+      message.error(
+        "Evaluation report could not be generated",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking(null);
+      setWorkingLabel("");
+    }
+  }
+
   return (
     <AppShell>
       <div className="app-page">
@@ -221,7 +365,11 @@ export default function ReportsPage() {
           </p>
         </header>
 
-        <div className={`grid gap-5 ${isAdmin ? "xl:grid-cols-3" : "max-w-2xl"}`}>
+        <div
+          className={`grid gap-5 ${
+            isAdmin ? "xl:grid-cols-2 2xl:grid-cols-4" : "max-w-2xl"
+          }`}
+        >
           <ReportCard
             icon={<Plane className="h-5 w-5" />}
             title="Flight Logs"
@@ -347,6 +495,114 @@ export default function ReportsPage() {
               />
             </ReportCard>
           ) : null}
+
+          {isAdmin ? (
+            <ReportCard
+              icon={<MessageSquareText className="h-5 w-5" />}
+              title="Student Evaluations"
+              description="Training feedback summary and response data"
+              accent="violet"
+            >
+              <Field label="Search training or trainer">
+                <div className="relative">
+                  <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
+                  <input
+                    className={`${fieldClass} pl-10`}
+                    value={evaluationSearch}
+                    onChange={(event) =>
+                      setEvaluationSearch(event.target.value)
+                    }
+                    placeholder="Search evaluation sessions"
+                  />
+                </div>
+              </Field>
+
+              <Field label="Training year">
+                <select
+                  className={fieldClass}
+                  value={evaluationYear}
+                  onChange={(event) =>
+                    setEvaluationYear(event.target.value)
+                  }
+                >
+                  <option value="">All years</option>
+                  {evaluationYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Evaluation session">
+                <select
+                  className={fieldClass}
+                  value={selectedEvaluationId}
+                  onChange={(event) =>
+                    setSelectedEvaluationId(event.target.value)
+                  }
+                  disabled={evaluationSessionsLoading}
+                >
+                  {evaluationSessionsLoading ? (
+                    <option value="">Loading sessions...</option>
+                  ) : null}
+                  {!evaluationSessionsLoading &&
+                  !evaluationSessions.length ? (
+                    <option value="">No sessions found</option>
+                  ) : null}
+                  {evaluationSessions.map((evaluation) => (
+                    <option key={evaluation.id} value={evaluation.id}>
+                      {evaluation.trainingDate} - {evaluation.courseName} -{" "}
+                      {evaluation.responseCount} response
+                      {evaluation.responseCount === 1 ? "" : "s"}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {evaluationLoadError ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                  {evaluationLoadError}
+                </p>
+              ) : null}
+
+              <div className="mt-auto grid grid-cols-2 gap-2">
+                <GenerateButton
+                  accent="violet"
+                  busy={working === "evaluation-pdf"}
+                  busyLabel={workingLabel}
+                  disabled={
+                    working !== null ||
+                    evaluationSessionsLoading ||
+                    !selectedEvaluationId
+                  }
+                  label="PDF report"
+                  onClick={() => void generateEvaluationReport("pdf")}
+                />
+                <button
+                  type="button"
+                  onClick={() => void generateEvaluationReport("csv")}
+                  disabled={
+                    working !== null ||
+                    evaluationSessionsLoading ||
+                    !selectedEvaluationId
+                  }
+                  className="mt-auto inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {working === "evaluation-csv" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-4 w-4" />
+                  )}
+                  <span className="truncate">
+                    {working === "evaluation-csv"
+                      ? workingLabel || "Preparing CSV..."
+                      : "CSV data"}
+                  </span>
+                </button>
+              </div>
+            </ReportCard>
+          ) : null}
         </div>
       </div>
     </AppShell>
@@ -372,13 +628,14 @@ function ReportCard({
   icon: ReactNode;
   title: string;
   description: string;
-  accent: "sky" | "emerald" | "amber";
+  accent: "sky" | "emerald" | "amber" | "violet";
   children: ReactNode;
 }) {
   const colors = {
     sky: "border-t-sky-600 bg-sky-50 text-sky-700",
     emerald: "border-t-emerald-600 bg-emerald-50 text-emerald-700",
-    amber: "border-t-amber-500 bg-amber-50 text-amber-700"
+    amber: "border-t-amber-500 bg-amber-50 text-amber-700",
+    violet: "border-t-violet-600 bg-violet-50 text-violet-700"
   }[accent];
 
   return (
@@ -402,7 +659,7 @@ function GenerateButton({
   label,
   onClick
 }: {
-  accent: "sky" | "emerald" | "amber";
+  accent: "sky" | "emerald" | "amber" | "violet";
   busy: boolean;
   busyLabel: string;
   disabled: boolean;
@@ -412,7 +669,8 @@ function GenerateButton({
   const buttonColor = {
     sky: "bg-sky-700 hover:bg-sky-800 focus-visible:ring-sky-200",
     emerald: "bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-200",
-    amber: "bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-200"
+    amber: "bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-200",
+    violet: "bg-violet-700 hover:bg-violet-800 focus-visible:ring-violet-200"
   }[accent];
 
   return (
