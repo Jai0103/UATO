@@ -23,7 +23,7 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
@@ -133,6 +133,7 @@ export default function ApprovalsPage() {
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
+  const [showTableLoading, setShowTableLoading] = useState(false);
   const [working, setWorking] = useState("");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<ApprovalType | "">("");
@@ -142,36 +143,57 @@ export default function ApprovalsPage() {
   const [formDocument, setFormDocument] = useState<File | null>(null);
   const [viewing, setViewing] = useState<ApprovalRecord | null>(null);
   const [preview, setPreview] = useState<{ name: string; dataUrl: string } | null>(null);
+  const initializeSequence = useRef(0);
+  const pageRequestSequence = useRef(0);
+  const documentCache = useRef(
+    new Map<string, { name: string; dataUrl: string }>()
+  );
 
   async function loadDashboard() {
     setDashboard(await fetchApprovalDashboardSummary());
   }
 
   async function loadPage(requestedPage = 1, quiet = false) {
+    const requestId = ++pageRequestSequence.current;
+    const request = {
+      page: requestedPage,
+      pageSize: 10,
+      search,
+      approvalType: typeFilter,
+      expiryStatus: statusFilter,
+      includeArchived
+    };
+
     if (!quiet) setTableLoading(true);
     try {
-      setPage(
-        await fetchApprovalsPage({
-          page: requestedPage,
-          pageSize: 10,
-          search,
-          approvalType: typeFilter,
-          expiryStatus: statusFilter,
-          includeArchived
-        })
-      );
+      const result = await fetchApprovalsPage(request);
+      if (requestId !== pageRequestSequence.current) return;
+
+      setPage(result);
+      if (result.hasNextPage) {
+        void fetchApprovalsPage({
+          ...request,
+          page: result.page + 1
+        }).catch(() => {
+          // Preloading is optional; normal pagination remains the fallback.
+        });
+      }
     } catch (error) {
+      if (requestId !== pageRequestSequence.current) return;
       message.error(
         "Approvals could not be loaded",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
-      if (!quiet) setTableLoading(false);
+      if (requestId === pageRequestSequence.current) {
+        setTableLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    let active = true;
+    const requestId = ++initializeSequence.current;
+
     async function initialize() {
       setLoading(true);
       try {
@@ -179,21 +201,32 @@ export default function ApprovalsPage() {
           fetchApprovalsPage({ page: 1, pageSize: 10 }),
           fetchApprovalDashboardSummary()
         ]);
-        if (!active) return;
+        if (requestId !== initializeSequence.current) return;
         setPage(records);
         setDashboard(summary);
+        if (records.hasNextPage) {
+          void fetchApprovalsPage({
+            page: records.page + 1,
+            pageSize: 10
+          }).catch(() => {
+            // Preloading is optional; normal pagination remains the fallback.
+          });
+        }
       } catch (error) {
+        if (requestId !== initializeSequence.current) return;
         message.error(
           "Approval monitoring could not be loaded",
           error instanceof Error ? error.message : "Please try again."
         );
       } finally {
-        if (active) setLoading(false);
+        if (requestId === initializeSequence.current) setLoading(false);
       }
     }
     void initialize();
     return () => {
-      active = false;
+      initializeSequence.current += 1;
+      pageRequestSequence.current += 1;
+      documentCache.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -204,6 +237,16 @@ export default function ApprovalsPage() {
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, typeFilter, statusFilter, includeArchived]);
+
+  useEffect(() => {
+    if (!tableLoading) {
+      setShowTableLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowTableLoading(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [tableLoading]);
 
   function openNew() {
     setForm(createEmptyApprovalRecord());
@@ -314,10 +357,28 @@ export default function ApprovalsPage() {
   }
 
   async function openDocument(document: ApprovalDocument) {
+    const cached = documentCache.current.get(document.id);
+    if (cached) {
+      setPreview(cached);
+      return;
+    }
+
     setWorking("Opening approval PDF...");
     try {
       const file = await fetchApprovalDocumentFile(document.id);
-      setPreview({ name: file.document.fileName, dataUrl: file.dataUrl });
+      const preparedPreview = {
+        name: file.document.fileName,
+        dataUrl: file.dataUrl
+      };
+      documentCache.current.set(document.id, preparedPreview);
+
+      while (documentCache.current.size > 2) {
+        const oldestDocumentId = documentCache.current.keys().next().value;
+        if (!oldestDocumentId) break;
+        documentCache.current.delete(oldestDocumentId);
+      }
+
+      setPreview(preparedPreview);
     } catch (error) {
       message.error(
         "PDF could not be opened",
@@ -341,6 +402,7 @@ export default function ApprovalsPage() {
     setWorking("Deleting approval PDF...");
     try {
       await deleteApprovalDocument(document.id);
+      documentCache.current.delete(document.id);
       const refreshed = await fetchApprovalRecord(viewing.id);
       setViewing(refreshed);
       await Promise.all([loadPage(page.page, true), loadDashboard()]);
@@ -472,6 +534,7 @@ export default function ApprovalsPage() {
           <ApprovalRegister
             page={page}
             loading={tableLoading}
+            showLoading={showTableLoading}
             onPage={loadPage}
             onView={(id) => void openRecord(id)}
             onEdit={(id) => void openRecord(id, true)}
@@ -558,6 +621,7 @@ function SummaryGrid({ dashboard }: { dashboard: ApprovalDashboardSummary }) {
 function ApprovalRegister({
   page,
   loading,
+  showLoading,
   onPage,
   onView,
   onEdit,
@@ -565,6 +629,7 @@ function ApprovalRegister({
 }: {
   page: ApprovalsPage;
   loading: boolean;
+  showLoading: boolean;
   onPage: (page: number) => Promise<void>;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
@@ -668,7 +733,7 @@ function ApprovalRegister({
         </table>
       </div>
 
-      {loading ? <TableLoading /> : null}
+      {showLoading ? <TableLoading /> : null}
       <Pagination page={page} loading={loading} onPage={onPage} />
     </div>
   );
