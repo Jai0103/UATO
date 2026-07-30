@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
-import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
 import {
@@ -19,13 +18,11 @@ import {
   fetchBulkStaffTrainingReportRecords,
   fetchBulkUaMaintenanceReportRecords
 } from "@/lib/bulk-report-api";
-import { createCombinedFlightLogPdf } from "@/lib/pdf";
-import { createCombinedStaffTrainingPdf } from "@/lib/staff-training-pdf";
-import { createCombinedUaMaintenancePdf } from "@/lib/ua-maintenance-pdf";
 
 type ReportType = "flight" | "staff" | "maintenance";
 
-const fieldClass = "app-input";
+const fieldClass =
+  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -45,11 +42,20 @@ function validateRange(start: string, end: string, label: string) {
   return "";
 }
 
+function allowBrowserPaint() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 export default function ReportsPage() {
   const message = useAppMessage();
   const session = getSecureSession();
   const isAdmin = session?.role === "admin";
   const [working, setWorking] = useState<ReportType | null>(null);
+  const [workingLabel, setWorkingLabel] = useState("");
   const [flightFrom, setFlightFrom] = useState(firstDayOfMonth());
   const [flightTo, setFlightTo] = useState(today());
   const [staffName, setStaffName] = useState("");
@@ -59,22 +65,33 @@ export default function ReportsPage() {
   const [maintenanceTo, setMaintenanceTo] = useState(today());
 
   async function generateFlightReport() {
+    if (working) return;
     const validation = validateRange(flightFrom, flightTo, "flight date range");
     if (validation) {
       message.warning("Select a valid date range", validation);
       return;
     }
     setWorking("flight");
+    setWorkingLabel("Loading Flight Log records...");
     try {
-      const records = await fetchBulkFlightReportRecords({
-        dateFrom: flightFrom,
-        dateTo: flightTo
-      });
+      const [records, pdfModule] = await Promise.all([
+        fetchBulkFlightReportRecords({
+          dateFrom: flightFrom,
+          dateTo: flightTo
+        }),
+        import("@/lib/pdf")
+      ]);
       if (!records.length) {
         message.warning("No Flight Logs found", "Try a different date range.");
         return;
       }
-      const doc = createCombinedFlightLogPdf(records);
+
+      setWorkingLabel(`Building ${records.length} Flight Log report(s)...`);
+      await allowBrowserPaint();
+      const doc = pdfModule.createCombinedFlightLogPdf(records);
+
+      setWorkingLabel("Starting PDF download...");
+      await allowBrowserPaint();
       doc.save(`FLIGHT LOGS - ${flightFrom} TO ${flightTo}.pdf`);
       message.success(`${records.length} Flight Log report(s) combined`);
     } catch (error) {
@@ -84,10 +101,12 @@ export default function ReportsPage() {
       );
     } finally {
       setWorking(null);
+      setWorkingLabel("");
     }
   }
 
   async function generateStaffReport() {
+    if (working) return;
     const validation = validateRange(
       staffMonthFrom,
       staffMonthTo,
@@ -98,12 +117,16 @@ export default function ReportsPage() {
       return;
     }
     setWorking("staff");
+    setWorkingLabel("Loading Staff Training records...");
     try {
-      const records = await fetchBulkStaffTrainingReportRecords({
-        staffName: staffName.trim(),
-        monthFrom: staffMonthFrom,
-        monthTo: staffMonthTo
-      });
+      const [records, pdfModule] = await Promise.all([
+        fetchBulkStaffTrainingReportRecords({
+          staffName: staffName.trim(),
+          monthFrom: staffMonthFrom,
+          monthTo: staffMonthTo
+        }),
+        import("@/lib/staff-training-pdf")
+      ]);
       if (!records.length) {
         message.warning(
           "No Staff Training records found",
@@ -111,7 +134,13 @@ export default function ReportsPage() {
         );
         return;
       }
-      const doc = await createCombinedStaffTrainingPdf(records);
+
+      setWorkingLabel(`Building ${records.length} Staff Training report(s)...`);
+      await allowBrowserPaint();
+      const doc = await pdfModule.createCombinedStaffTrainingPdf(records);
+
+      setWorkingLabel("Starting PDF download...");
+      await allowBrowserPaint();
       doc.save(
         `STAFF TRAINING - ${staffMonthFrom} TO ${staffMonthTo}.pdf`
       );
@@ -123,10 +152,12 @@ export default function ReportsPage() {
       );
     } finally {
       setWorking(null);
+      setWorkingLabel("");
     }
   }
 
   async function generateMaintenanceReport() {
+    if (working) return;
     const validation = validateRange(
       maintenanceFrom,
       maintenanceTo,
@@ -137,11 +168,15 @@ export default function ReportsPage() {
       return;
     }
     setWorking("maintenance");
+    setWorkingLabel("Loading UA Maintenance records...");
     try {
-      const records = await fetchBulkUaMaintenanceReportRecords({
-        dateFrom: maintenanceFrom,
-        dateTo: maintenanceTo
-      });
+      const [records, pdfModule] = await Promise.all([
+        fetchBulkUaMaintenanceReportRecords({
+          dateFrom: maintenanceFrom,
+          dateTo: maintenanceTo
+        }),
+        import("@/lib/ua-maintenance-pdf")
+      ]);
       if (!records.length) {
         message.warning(
           "No UA Maintenance records found",
@@ -149,7 +184,13 @@ export default function ReportsPage() {
         );
         return;
       }
-      const doc = await createCombinedUaMaintenancePdf(records);
+
+      setWorkingLabel(`Building ${records.length} UA Maintenance report(s)...`);
+      await allowBrowserPaint();
+      const doc = await pdfModule.createCombinedUaMaintenancePdf(records);
+
+      setWorkingLabel("Starting PDF download...");
+      await allowBrowserPaint();
       doc.save(
         `UA MAINTENANCE - ${maintenanceFrom} TO ${maintenanceTo}.pdf`
       );
@@ -161,34 +202,21 @@ export default function ReportsPage() {
       );
     } finally {
       setWorking(null);
+      setWorkingLabel("");
     }
   }
 
   return (
     <AppShell>
-      {working ? (
-        <LoadingOverlay
-          label={
-            working === "flight"
-              ? "Preparing Flight Log reports..."
-              : working === "staff"
-                ? "Preparing Staff Training reports..."
-                : "Preparing UA Maintenance reports..."
-          }
-          description="Collecting the selected records and building your combined PDF."
-          delay={180}
-        />
-      ) : null}
-
       <div className="app-page">
-        <header className="app-page-header">
-          <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-bold uppercase text-[#075f8f] ring-1 ring-[#d5e9f1]">
+        <header className="rounded-lg border border-slate-200 border-t-4 border-t-sky-600 bg-white p-4 shadow-sm sm:p-5">
+          <div className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold uppercase text-sky-700 ring-1 ring-sky-100">
             <CalendarRange className="h-4 w-4" /> Report Centre
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">
+          <h1 className="mt-3 text-2xl font-bold text-slate-800 sm:text-3xl">
             Combined Reports
           </h1>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-[#6b7d92]">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
             Generate operational report batches for the selected reporting period.
           </p>
         </header>
@@ -224,6 +252,7 @@ export default function ReportsPage() {
             <GenerateButton
               accent="sky"
               busy={working === "flight"}
+              busyLabel={workingLabel}
               disabled={working !== null}
               label="Download combined PDF"
               onClick={() => void generateFlightReport()}
@@ -238,10 +267,10 @@ export default function ReportsPage() {
               accent="emerald"
             >
               <Field label="Staff name">
-                <div className="relative mt-2">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
+                <div className="relative">
+                  <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
                   <input
-                    className={`${fieldClass} mt-0 pl-10`}
+                    className={`${fieldClass} pl-10`}
                     value={staffName}
                     onChange={(event) => setStaffName(event.target.value)}
                     placeholder="All staff or search by name"
@@ -272,6 +301,7 @@ export default function ReportsPage() {
               <GenerateButton
                 accent="emerald"
                 busy={working === "staff"}
+                busyLabel={workingLabel}
                 disabled={working !== null}
                 label="Download combined PDF"
                 onClick={() => void generateStaffReport()}
@@ -310,6 +340,7 @@ export default function ReportsPage() {
               <GenerateButton
                 accent="amber"
                 busy={working === "maintenance"}
+                busyLabel={workingLabel}
                 disabled={working !== null}
                 label="Download combined PDF"
                 onClick={() => void generateMaintenanceReport()}
@@ -324,7 +355,7 @@ export default function ReportsPage() {
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block text-sm font-semibold text-[#405168]">
+    <label className="block text-sm font-semibold text-slate-600">
       {label}
       {children}
     </label>
@@ -345,28 +376,19 @@ function ReportCard({
   children: ReactNode;
 }) {
   const colors = {
-    sky: {
-      border: "border-t-[#1686b1]",
-      icon: "bg-[#edf5f8] text-[#075f8f] ring-[#d5e9f1]"
-    },
-    emerald: {
-      border: "border-t-emerald-600",
-      icon: "bg-emerald-50 text-emerald-700 ring-emerald-200"
-    },
-    amber: {
-      border: "border-t-amber-500",
-      icon: "bg-amber-50 text-amber-700 ring-amber-200"
-    }
+    sky: "border-t-sky-600 bg-sky-50 text-sky-700",
+    emerald: "border-t-emerald-600 bg-emerald-50 text-emerald-700",
+    amber: "border-t-amber-500 bg-amber-50 text-amber-700"
   }[accent];
 
   return (
-    <section className={`group flex min-w-0 flex-col rounded-lg border border-t-[3px] border-[#d7e0ea] bg-white p-5 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_8px_24px_rgba(16,42,67,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,42,67,0.06),0_16px_36px_rgba(16,42,67,0.1)] sm:p-6 xl:min-h-[390px] ${colors.border}`}>
-      <div className={`flex h-11 w-11 items-center justify-center rounded-lg ring-1 transition group-hover:scale-105 ${colors.icon}`}>
+    <section className={`flex min-w-0 flex-col rounded-lg border border-t-4 border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md sm:p-6 xl:min-h-[390px] ${colors.split(" ")[0]}`}>
+      <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${colors}`}>
         {icon}
       </div>
-      <h2 className="mt-4 text-xl font-bold text-[#16263c]">{title}</h2>
-      <p className="mt-1 text-sm leading-5 text-[#6b7d92]">{description}</p>
-      <div className="mt-4 h-px bg-[#e5ebf2]" />
+      <h2 className="mt-4 text-xl font-bold text-slate-800">{title}</h2>
+      <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
+      <div className="mt-4 h-px bg-slate-100" />
       <div className="mt-5 flex flex-1 flex-col gap-4">{children}</div>
     </section>
   );
@@ -375,18 +397,20 @@ function ReportCard({
 function GenerateButton({
   accent,
   busy,
+  busyLabel,
   disabled,
   label,
   onClick
 }: {
   accent: "sky" | "emerald" | "amber";
   busy: boolean;
+  busyLabel: string;
   disabled: boolean;
   label: string;
   onClick: () => void;
 }) {
   const buttonColor = {
-    sky: "bg-[#075f8f] hover:bg-[#064d75] focus-visible:ring-[#cce5ef]",
+    sky: "bg-sky-700 hover:bg-sky-800 focus-visible:ring-sky-200",
     emerald: "bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-200",
     amber: "bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-200"
   }[accent];
@@ -396,14 +420,16 @@ function GenerateButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold text-white shadow-[0_1px_2px_rgba(16,42,67,0.12),0_6px_16px_rgba(16,42,67,0.12)] transition hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${buttonColor}`}
+      className={`mt-auto inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold text-white shadow-sm transition focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${buttonColor}`}
     >
       {busy ? (
         <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
         <Download className="h-4 w-4" />
       )}
-      {busy ? "Preparing combined PDF..." : label}
+      <span className="truncate">
+        {busy ? busyLabel || "Preparing combined PDF..." : label}
+      </span>
     </button>
   );
 }
