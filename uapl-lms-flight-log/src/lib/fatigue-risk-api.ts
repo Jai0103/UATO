@@ -14,6 +14,15 @@ export type FatigueRiskRecordsPage = {
   hasNextPage: boolean;
 };
 
+export type FatigueRiskWeeklyStatus = {
+  assessmentDate: string;
+  today: string;
+  completedCount: number;
+  completedTrainerNames: string[];
+  latestCompletedAt: string;
+  latestEvaluator: string;
+};
+
 export async function fetchFatigueRiskRecordsPage(
   request: {
     page?: number;
@@ -49,6 +58,16 @@ export async function fetchFatigueRiskRecord(recordId: string) {
     recordId
   });
   return data.record;
+}
+
+export async function fetchFatigueRiskWeeklyStatus() {
+  const data = await postToGoogle<{
+    status: FatigueRiskWeeklyStatus;
+  }>({
+    action: "getFatigueRiskWeeklyStatus"
+  });
+
+  return data.status;
 }
 
 export async function saveFatigueRiskRecord(record: FatigueRiskRecord) {
