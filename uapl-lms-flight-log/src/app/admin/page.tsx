@@ -8,7 +8,6 @@ import {
   CAAS_ESOMS_URL,
   type ApprovalDashboardSummary
 } from "@/lib/approvals";
-import type { FatigueRiskWeeklyStatus } from "@/lib/fatigue-risk-api";
 import { postToGoogle } from "@/lib/google-api";
 import {
   AlertTriangle,
@@ -63,7 +62,6 @@ type DashboardBundleSection<T> = {
 type AdminDashboardBundle = {
   dashboard: DashboardData;
   approvals: DashboardBundleSection<ApprovalDashboardSummary>;
-  fatigueRisk: DashboardBundleSection<FatigueRiskWeeklyStatus>;
   generatedAt: string;
 };
 
@@ -89,15 +87,6 @@ const emptyApprovalDashboard: ApprovalDashboardSummary = {
   expired: 0,
   missingDocuments: 0,
   nextExpiry: null
-};
-
-const emptyFatigueRiskStatus: FatigueRiskWeeklyStatus = {
-  assessmentDate: "",
-  today: "",
-  completedCount: 0,
-  completedTrainerNames: [],
-  latestCompletedAt: "",
-  latestEvaluator: ""
 };
 
 function formatDate(value: string) {
@@ -143,10 +132,6 @@ export default function AdminPage() {
     useState<ApprovalDashboardSummary>(emptyApprovalDashboard);
   const [approvalMonitoringAvailable, setApprovalMonitoringAvailable] =
     useState(true);
-  const [fatigueRiskStatus, setFatigueRiskStatus] =
-    useState<FatigueRiskWeeklyStatus>(emptyFatigueRiskStatus);
-  const [fatigueRiskMonitoringAvailable, setFatigueRiskMonitoringAvailable] =
-    useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -179,22 +164,6 @@ export default function AdminPage() {
           });
         }
 
-        if (bundle?.fatigueRisk?.available) {
-          setFatigueRiskStatus(
-            bundle.fatigueRisk.data || emptyFatigueRiskStatus
-          );
-          setFatigueRiskMonitoringAvailable(true);
-        } else {
-          setFatigueRiskStatus(emptyFatigueRiskStatus);
-          setFatigueRiskMonitoringAvailable(false);
-          notify({
-            type: "warning",
-            title: "Fatigue Risk reminder unavailable",
-            message:
-              bundle?.fatigueRisk?.error ||
-              "The weekly checklist status could not be loaded."
-          });
-        }
       } catch (error) {
         setDashboard(emptyDashboard);
         notify({
@@ -293,12 +262,6 @@ export default function AdminPage() {
         <ApprovalMonitoringPanel
           dashboard={approvalDashboard}
           available={approvalMonitoringAvailable}
-        />
-
-        <FatigueRiskWeeklyPanel
-          status={fatigueRiskStatus}
-          expectedTrainers={dashboard.activeTrainers}
-          available={fatigueRiskMonitoringAvailable}
         />
 
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
@@ -403,111 +366,6 @@ export default function AdminPage() {
 
       </div>
     </AppShell>
-  );
-}
-
-function FatigueRiskWeeklyPanel({
-  status,
-  expectedTrainers,
-  available
-}: {
-  status: FatigueRiskWeeklyStatus;
-  expectedTrainers: number;
-  available: boolean;
-}) {
-  const completed = Math.max(0, status.completedCount || 0);
-  const expected = Math.max(0, expectedTrainers || 0);
-  const missing = Math.max(0, expected - completed);
-  const isComplete = expected > 0 && missing === 0;
-  const isDueToday =
-    Boolean(status.today) && status.today === status.assessmentDate;
-  const state = !available
-    ? "unavailable"
-    : expected === 0
-      ? "not-configured"
-      : isComplete
-        ? "complete"
-        : isDueToday
-          ? "due"
-          : "overdue";
-
-  const panelTone =
-    state === "complete"
-      ? "border-emerald-200 bg-emerald-50/75"
-      : state === "due"
-        ? "border-amber-200 bg-amber-50/80"
-        : state === "overdue"
-          ? "border-rose-200 bg-rose-50/80"
-          : "border-slate-200 bg-slate-50";
-  const iconTone =
-    state === "complete"
-      ? "bg-emerald-100 text-emerald-700"
-      : state === "due"
-        ? "bg-amber-100 text-amber-700"
-        : state === "overdue"
-          ? "bg-rose-100 text-rose-700"
-          : "bg-slate-200 text-slate-600";
-
-  const title =
-    state === "complete"
-      ? "This week's Fatigue Risk checks are complete"
-      : state === "due"
-        ? "Fatigue Risk checks are due today"
-        : state === "overdue"
-          ? `${missing} Fatigue Risk ${missing === 1 ? "check is" : "checks are"} overdue`
-          : state === "not-configured"
-            ? "No active trainer accounts to assess"
-            : "Fatigue Risk reminder is temporarily unavailable";
-
-  return (
-    <section className={`rounded-lg border p-4 sm:p-5 ${panelTone}`}>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconTone}`}
-          >
-            {state === "complete" ? (
-              <ClipboardCheck className="h-5 w-5" />
-            ) : state === "overdue" ? (
-              <AlertTriangle className="h-5 w-5" />
-            ) : (
-              <BellRing className="h-5 w-5" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-[#53748a]">
-              Weekly safety control
-            </p>
-            <h2 className="mt-1 text-base font-bold text-[#16263c] sm:text-lg">
-              {title}
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-[#63758a]">
-              {available && status.assessmentDate
-                ? `Week commencing ${formatApprovalDate(status.assessmentDate)}. ${completed} of ${expected} active trainer ${expected === 1 ? "account" : "accounts"} completed.`
-                : "Open the checklist page to retry the weekly status."}
-            </p>
-            {status.latestCompletedAt ? (
-              <p className="mt-1 text-xs text-[#7c8da0]">
-                Latest completion: {formatDate(status.latestCompletedAt)}
-                {status.latestEvaluator
-                  ? ` by ${status.latestEvaluator}`
-                  : ""}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <Link
-          href="/fatigue-risk"
-          className={`app-button-primary w-full xl:w-auto ${
-            state === "overdue" ? "bg-rose-700 hover:bg-rose-800" : ""
-          }`}
-        >
-          <ClipboardCheck className="h-4 w-4" />
-          {isComplete ? "View checklist" : "Complete checklist"}
-        </Link>
-      </div>
-    </section>
   );
 }
 
