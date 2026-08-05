@@ -1,709 +1,1070 @@
 "use client";
 
-import Link from "next/link";
 import {
   AlertTriangle,
-  CalendarDays,
+  Archive,
+  BadgeCheck,
+  BellRing,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
-  ClipboardCheck,
-  Download,
   Edit3,
+  ExternalLink,
   Eye,
-  FilePlus2,
+  FileText,
+  FolderOpen,
+  Loader2,
+  MapPin,
+  Plus,
+  Save,
   Search,
   ShieldCheck,
   Trash2,
+  Upload,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import {
-  FATIGUE_RISK_QUESTIONS,
-  FATIGUE_RISK_SECTIONS,
-  type FatigueRiskRecord,
-  type FatigueRiskRecordSummary
-} from "@/lib/fatigue-risk";
+  archiveApprovalRecord,
+  deleteApprovalDocument,
+  fetchApprovalDashboardSummary,
+  fetchApprovalDocumentFile,
+  fetchApprovalRecord,
+  fetchApprovalsPage,
+  saveApprovalRecord,
+  uploadApprovalDocument,
+  type ApprovalsPage
+} from "@/lib/approvals-api";
 import {
-  deleteFatigueRiskRecord,
-  fetchFatigueRiskRecord,
-  fetchFatigueRiskRecordsPage,
-  type FatigueRiskRecordsPage
-} from "@/lib/fatigue-risk-api";
-import {
-  createFatigueRiskPdf,
-  fatigueRiskPdfFileName
-} from "@/lib/fatigue-risk-pdf";
+  APPROVAL_EXPIRY_LABELS,
+  APPROVAL_RENEWAL_LABELS,
+  APPROVAL_TYPE_LABELS,
+  APPROVAL_TYPE_OPTIONS,
+  CAAS_ESOMS_URL,
+  createEmptyApprovalLocation,
+  createEmptyApprovalRecord,
+  summarizeApprovalRecord,
+  validateApprovalRecord,
+  type ApprovalDashboardSummary,
+  type ApprovalDocument,
+  type ApprovalExpiryStatus,
+  type ApprovalLocation,
+  type ApprovalRecord,
+  type ApprovalRecordSummary,
+  type ApprovalRenewalStatus,
+  type ApprovalType
+} from "@/lib/approvals";
 
-const PAGE_SIZE = 10;
+const inputClass =
+  "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:h-11 md:text-sm";
 
-const emptyPage: FatigueRiskRecordsPage = {
+const emptyPage: ApprovalsPage = {
   records: [],
   page: 1,
-  pageSize: PAGE_SIZE,
-  totalRecords: 0,
+  pageSize: 10,
+  total: 0,
   totalPages: 1,
   hasPreviousPage: false,
   hasNextPage: false
 };
 
+const emptyDashboard: ApprovalDashboardSummary = {
+  totalApprovals: 0,
+  activeApprovals: 0,
+  renewalUpcoming: 0,
+  dueSoon: 0,
+  urgent: 0,
+  expiringToday: 0,
+  expired: 0,
+  missingDocuments: 0,
+  nextExpiry: null
+};
+
 function formatDate(value: string) {
   if (!value) return "-";
-  const [year, month, day] = value.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-SG", {
+  const parts = value.slice(0, 10).split("-");
+  if (parts.length !== 3) return value;
+  const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return date.toLocaleDateString("en-SG", {
     day: "2-digit",
     month: "short",
     year: "numeric"
-  }).format(new Date(year, month - 1, day));
+  });
 }
 
-function formatTimestamp(value: string) {
+function formatDateTime(value: string) {
   if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-SG", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("en-SG", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
 }
 
-function IconButton({
-  label,
-  icon: Icon,
-  onClick,
-  tone = "default"
-}: {
-  label: string;
-  icon: typeof Eye;
-  onClick: () => void;
-  tone?: "default" | "danger";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white outline-none transition focus-visible:ring-2 focus-visible:ring-sky-400 ${
-        tone === "danger"
-          ? "border-rose-200 text-rose-600 hover:bg-rose-50"
-          : "border-slate-200 text-slate-600 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-      }`}
-      aria-label={label}
-      title={label}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
-  );
+function expiryTone(status: ApprovalExpiryStatus) {
+  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "renewal_upcoming") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (status === "due_soon") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "urgent" || status === "expires_today") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (status === "expired") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-100 text-slate-600";
 }
 
-export default function FatigueRiskRecordsPage() {
+function readableDays(days: number | null) {
+  if (days === null) return "Expiry date required";
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
+  if (days === 0) return "Expires today";
+  return `${days} day${days === 1 ? "" : "s"} remaining`;
+}
+
+export default function ApprovalsPage() {
   const message = useAppMessage();
-  const [recordsPage, setRecordsPage] =
-    useState<FatigueRiskRecordsPage>(emptyPage);
-  const [page, setPage] = useState(1);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [year, setYear] = useState("");
-  const [month, setMonth] = useState("");
+  const [page, setPage] = useState(emptyPage);
+  const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
-  const [workingLabel, setWorkingLabel] = useState("");
-  const [viewingRecord, setViewingRecord] =
-    useState<FatigueRiskRecord | null>(null);
-  const requestSequence = useRef(0);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [showTableLoading, setShowTableLoading] = useState(false);
+  const [working, setWorking] = useState("");
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<ApprovalType | "">("");
+  const [statusFilter, setStatusFilter] = useState<ApprovalExpiryStatus | "">("");
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [form, setForm] = useState<ApprovalRecord | null>(null);
+  const [formDocument, setFormDocument] = useState<File | null>(null);
+  const [viewing, setViewing] = useState<ApprovalRecord | null>(null);
+  const [preview, setPreview] = useState<{ name: string; dataUrl: string } | null>(null);
+  const initializeSequence = useRef(0);
+  const pageRequestSequence = useRef(0);
+  const documentCache = useRef(
+    new Map<string, { name: string; dataUrl: string }>()
+  );
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedQuery(query.trim());
-      setPage(1);
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [query]);
+  async function loadDashboard() {
+    setDashboard(await fetchApprovalDashboardSummary());
+  }
 
-  const loadPage = useCallback(async () => {
-    const requestId = ++requestSequence.current;
+  async function loadPage(requestedPage = 1, quiet = false) {
+    const requestId = ++pageRequestSequence.current;
     const request = {
-      page,
-      pageSize: PAGE_SIZE,
-      query: debouncedQuery,
-      year,
-      month
+      page: requestedPage,
+      pageSize: 10,
+      search,
+      approvalType: typeFilter,
+      expiryStatus: statusFilter,
+      includeArchived
     };
 
-    setLoading(true);
+    if (!quiet) setTableLoading(true);
     try {
-      const result = await fetchFatigueRiskRecordsPage(request);
-      if (requestId !== requestSequence.current) return;
+      const result = await fetchApprovalsPage(request);
+      if (requestId !== pageRequestSequence.current) return;
 
-      setRecordsPage(result);
-      if (page > result.totalPages) setPage(result.totalPages);
-
+      setPage(result);
     } catch (error) {
-      if (requestId !== requestSequence.current) return;
-
-      setRecordsPage(emptyPage);
+      if (requestId !== pageRequestSequence.current) return;
       message.error(
-        "Records could not be loaded",
-        error instanceof Error
-          ? error.message
-          : "The fatigue-risk register is temporarily unavailable."
+        "Approvals could not be loaded",
+        error instanceof Error ? error.message : "Please try again."
       );
     } finally {
-      if (requestId === requestSequence.current) setLoading(false);
+      if (requestId === pageRequestSequence.current) {
+        setTableLoading(false);
+      }
     }
-  }, [debouncedQuery, month, page, year]);
+  }
 
   useEffect(() => {
-    void loadPage();
-  }, [loadPage]);
+    const requestId = ++initializeSequence.current;
+
+    async function initialize() {
+      setLoading(true);
+      try {
+        const [records, summary] = await Promise.all([
+          fetchApprovalsPage({ page: 1, pageSize: 10 }),
+          fetchApprovalDashboardSummary()
+        ]);
+        if (requestId !== initializeSequence.current) return;
+        setPage(records);
+        setDashboard(summary);
+      } catch (error) {
+        if (requestId !== initializeSequence.current) return;
+        message.error(
+          "Approval monitoring could not be loaded",
+          error instanceof Error ? error.message : "Please try again."
+        );
+      } finally {
+        if (requestId === initializeSequence.current) setLoading(false);
+      }
+    }
+    void initialize();
+    return () => {
+      initializeSequence.current += 1;
+      pageRequestSequence.current += 1;
+      documentCache.current.clear();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (!loading) {
-      setShowLoadingOverlay(false);
+    if (loading) return;
+    const timer = window.setTimeout(() => void loadPage(1), 350);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, typeFilter, statusFilter, includeArchived]);
+
+  useEffect(() => {
+    if (!tableLoading) {
+      setShowTableLoading(false);
       return;
     }
 
-    const timer = window.setTimeout(() => setShowLoadingOverlay(true), 180);
+    const timer = window.setTimeout(() => setShowTableLoading(true), 180);
     return () => window.clearTimeout(timer);
-  }, [loading]);
+  }, [tableLoading]);
 
-  useEffect(
-    () => () => {
-      requestSequence.current += 1;
-    },
-    []
-  );
-
-  const years = useMemo(() => {
-    const current = new Date().getFullYear();
-    return Array.from({ length: 8 }, (_, index) => String(current - index));
-  }, []);
-
-  async function loadRecord(recordId: string) {
-    setWorkingLabel("Loading checklist details...");
-    try {
-      return await fetchFatigueRiskRecord(recordId);
-    } catch (error) {
-      message.error(
-        "Checklist could not be opened",
-        error instanceof Error ? error.message : "Please try again."
-      );
-      return null;
-    } finally {
-      setWorkingLabel("");
-    }
+  function openNew() {
+    setForm(createEmptyApprovalRecord());
+    setFormDocument(null);
   }
 
-  async function viewRecord(recordId: string) {
-    const record = await loadRecord(recordId);
-    if (record) setViewingRecord(record);
-  }
-
-  async function downloadRecord(recordId: string) {
-    const record = await loadRecord(recordId);
-    if (!record) return;
-
-    setWorkingLabel("Preparing fatigue-risk report...");
+  async function openRecord(id: string, edit = false) {
+    setWorking(edit ? "Opening approval for editing..." : "Loading approval details...");
     try {
-      const doc = await createFatigueRiskPdf(record);
-      doc.save(fatigueRiskPdfFileName(record));
+      const record = await fetchApprovalRecord(id);
+      if (edit) {
+        setForm(record);
+        setFormDocument(null);
+      } else {
+        setViewing(record);
+      }
     } catch (error) {
       message.error(
-        "PDF generation failed",
+        "Approval could not be opened",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
-      setWorkingLabel("");
+      setWorking("");
     }
   }
 
-  async function removeRecord(record: FatigueRiskRecordSummary) {
+  async function submitRecord() {
+    if (!form) return;
+    const validation = validateApprovalRecord(form, false);
+    if (!validation.valid) {
+      message.warning("Check the approval details", validation.errors[0]);
+      return;
+    }
+    const isNew = !page.records.some((record) => record.id === form.id);
+    const hasCurrentDocument = form.documents.some(
+      (document) => document.status === "current" && document.driveFileId
+    );
+    if (isNew && !hasCurrentDocument && !formDocument) {
+      message.warning("Approval PDF required", "Upload the current approval document before saving.");
+      return;
+    }
+
+    setWorking(formDocument ? "Saving approval and uploading PDF..." : "Saving approval...");
+    try {
+      let saved = await saveApprovalRecord(form);
+      if (formDocument) {
+        await uploadApprovalDocument({ approvalId: saved.id, file: formDocument });
+        saved = await fetchApprovalRecord(saved.id);
+      }
+      setForm(null);
+      setFormDocument(null);
+      await Promise.all([loadPage(1, true), loadDashboard()]);
+      message.success(
+        isNew ? "Approval created" : "Approval updated",
+        `${APPROVAL_TYPE_LABELS[saved.approvalType]} has been saved.`
+      );
+    } catch (error) {
+      message.error(
+        "Approval was not saved",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function archiveRecord(record: ApprovalRecordSummary) {
     const confirmed = await message.confirm({
-      title: "Delete this weekly checklist?",
-      message: `${record.instructorName} - ${formatDate(record.assessmentDate)} will be permanently removed.`,
-      confirmLabel: "Delete checklist",
+      title: "Archive approval?",
+      message: `${APPROVAL_TYPE_LABELS[record.approvalType]} ${record.approvalNumber} will leave the active register. Its audit history and documents will remain available.`,
+      confirmLabel: "Archive approval",
       variant: "danger"
     });
     if (!confirmed) return;
 
-    setWorkingLabel("Deleting fatigue-risk checklist...");
+    setWorking("Archiving approval...");
     try {
-      await deleteFatigueRiskRecord(record.id);
-      message.success(
-        "Checklist deleted",
-        "The weekly record was removed from the register."
-      );
-      if (viewingRecord?.id === record.id) setViewingRecord(null);
-      await loadPage();
+      await archiveApprovalRecord(record.id);
+      await Promise.all([loadPage(1, true), loadDashboard()]);
+      message.success("Approval archived", "The approval has been removed from the active register.");
     } catch (error) {
       message.error(
-        "Delete failed",
+        "Approval was not archived",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
-      setWorkingLabel("");
+      setWorking("");
     }
   }
 
-  const firstRecord = recordsPage.totalRecords
-    ? (recordsPage.page - 1) * recordsPage.pageSize + 1
-    : 0;
-  const lastRecord = Math.min(
-    recordsPage.page * recordsPage.pageSize,
-    recordsPage.totalRecords
-  );
+  async function uploadDocument(file: File | undefined, locationId = "") {
+    if (!file || !viewing) return;
+    setWorking("Uploading approval PDF to Google Drive...");
+    try {
+      await uploadApprovalDocument({ approvalId: viewing.id, locationId, file });
+      const refreshed = await fetchApprovalRecord(viewing.id);
+      setViewing(refreshed);
+      await Promise.all([loadPage(page.page, true), loadDashboard()]);
+      message.success("Document uploaded", "The previous current PDF is retained as superseded history.");
+    } catch (error) {
+      message.error(
+        "PDF upload failed",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function openDocument(document: ApprovalDocument) {
+    const cached = documentCache.current.get(document.id);
+    if (cached) {
+      setPreview(cached);
+      return;
+    }
+
+    setWorking("Opening approval PDF...");
+    try {
+      const file = await fetchApprovalDocumentFile(document.id);
+      const preparedPreview = {
+        name: file.document.fileName,
+        dataUrl: file.dataUrl
+      };
+      documentCache.current.set(document.id, preparedPreview);
+
+      while (documentCache.current.size > 2) {
+        const oldestDocumentId = documentCache.current.keys().next().value;
+        if (!oldestDocumentId) break;
+        documentCache.current.delete(oldestDocumentId);
+      }
+
+      setPreview(preparedPreview);
+    } catch (error) {
+      message.error(
+        "PDF could not be opened",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function removeDocument(document: ApprovalDocument) {
+    if (!viewing) return;
+    const confirmed = await message.confirm({
+      title: "Delete this PDF?",
+      message: `${document.fileName} will be removed from the register and moved to Google Drive trash.`,
+      confirmLabel: "Delete PDF",
+      variant: "danger"
+    });
+    if (!confirmed) return;
+
+    setWorking("Deleting approval PDF...");
+    try {
+      await deleteApprovalDocument(document.id);
+      documentCache.current.delete(document.id);
+      const refreshed = await fetchApprovalRecord(viewing.id);
+      setViewing(refreshed);
+      await Promise.all([loadPage(page.page, true), loadDashboard()]);
+      message.success("Document deleted");
+    } catch (error) {
+      message.error(
+        "PDF was not deleted",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  const filtersActive = Boolean(search || typeFilter || statusFilter || includeArchived);
+
+  if (loading) {
+    return (
+      <AppShell>
+        <CenteredLoading label="Loading approval monitoring..." />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
-      {showLoadingOverlay ? (
-        <LoadingOverlay label="Loading fatigue-risk records..." />
-      ) : null}
-      {workingLabel ? <LoadingOverlay label={workingLabel} /> : null}
-
-      <div className="app-page">
-        <section className="app-page-header">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 ring-1 ring-indigo-100">
-                <ClipboardCheck className="h-3.5 w-3.5" />
-                Weekly compliance register
-              </div>
-              <h1 className="mt-3 text-2xl font-bold text-slate-950 sm:text-3xl">
-                Fatigue Risk Records
-              </h1>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                Review and manage weekly checklists completed by the Head of
-                Training.
-              </p>
+      <div className="space-y-6">
+        <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase text-sky-700">
+              <ShieldCheck className="h-4 w-4" /> Compliance Control
             </div>
-
-            <Link
-              href="/fatigue-risk"
-              className="app-button-primary w-full sm:w-auto"
-            >
-              <FilePlus2 className="h-4 w-4" />
-              Weekly checklist
-            </Link>
+            <h1 className="mt-2 text-2xl font-bold text-slate-800 sm:text-3xl">
+              AGA Approvals
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Monitor regulatory approvals, permitted locations, renewal progress, and controlled PDF documents.
+            </p>
           </div>
-        </section>
+          <button
+            type="button"
+            onClick={openNew}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 lg:h-11"
+          >
+            <Plus className="h-4 w-4" /> Add approval
+          </button>
+        </header>
 
-        <section className="app-card">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_170px_170px]">
-            <label className="relative block">
-              <span className="sr-only">Search records</span>
-              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+        <SummaryGrid dashboard={dashboard} />
+
+        {dashboard.nextExpiry ? (
+          <section className="flex flex-col gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                <BellRing className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900">Next regulatory expiry</p>
+                <p className="mt-0.5 text-sm text-slate-700">
+                  {APPROVAL_TYPE_LABELS[dashboard.nextExpiry.approvalType]} {dashboard.nextExpiry.approvalNumber} expires on {formatDate(dashboard.nextExpiry.displayExpiryDate)}.
+                </p>
+              </div>
+            </div>
+            <a
+              href={CAAS_ESOMS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-4 text-sm font-semibold text-white hover:bg-amber-800"
+            >
+              Renew in CAAS eSOMS <ExternalLink className="h-4 w-4" />
+            </a>
+          </section>
+        ) : null}
+
+        <section>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_220px_190px_auto]">
+            <label className="relative md:col-span-2 xl:col-span-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search trainer name or email"
-                className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-base outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:text-sm"
+                className={`${inputClass} mt-0 pl-10`}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search number, authority, or responsible person"
               />
             </label>
             <select
-              value={month}
-              onChange={(event) => {
-                setMonth(event.target.value);
-                setPage(1);
-              }}
-              className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-sky-600 md:text-sm"
-              aria-label="Filter by month"
+              className={`${inputClass} mt-0`}
+              value={typeFilter}
+              onChange={(event) => setTypeFilter(event.target.value as ApprovalType | "")}
             >
-              <option value="">All months</option>
-              {Array.from({ length: 12 }, (_, index) => (
-                <option key={index + 1} value={String(index + 1).padStart(2, "0")}>
-                  {new Intl.DateTimeFormat("en-SG", { month: "long" }).format(
-                    new Date(2026, index, 1)
-                  )}
-                </option>
+              <option value="">All approval types</option>
+              {APPROVAL_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
             <select
-              value={year}
-              onChange={(event) => {
-                setYear(event.target.value);
-                setPage(1);
-              }}
-              className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-sky-600 md:text-sm"
-              aria-label="Filter by year"
+              className={`${inputClass} mt-0`}
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as ApprovalExpiryStatus | "")}
             >
-              <option value="">All years</option>
-              {years.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+              <option value="">All expiry statuses</option>
+              {Object.entries(APPROVAL_EXPIRY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              disabled={!filtersActive}
+              onClick={() => {
+                setSearch("");
+                setTypeFilter("");
+                setStatusFilter("");
+                setIncludeArchived(false);
+              }}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40 md:h-11"
+            >
+              <X className="h-4 w-4" /> Clear
+            </button>
           </div>
-        </section>
+          <label className="mt-3 inline-flex h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(event) => setIncludeArchived(event.target.checked)}
+            />
+            Include archived approvals
+          </label>
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full min-w-[940px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
-                <tr>
-                  <th className="px-5 py-4">Week</th>
-                  <th className="px-5 py-4">Instructor / AFE</th>
-                  <th className="px-5 py-4">Completion</th>
-                  <th className="px-5 py-4">Risks</th>
-                  <th className="px-5 py-4">Review</th>
-                  <th className="px-5 py-4">Updated</th>
-                  <th className="px-5 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {recordsPage.records.map((record) => (
-                  <tr key={record.id} className="transition hover:bg-slate-50">
-                    <td className="px-5 py-4 font-semibold text-slate-900">
-                      {formatDate(record.assessmentDate)}
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-900">
-                        {record.instructorName}
-                      </p>
-                      {record.instructorEmail ? (
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {record.instructorEmail}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-5 py-4">
-                      {record.answeredCount}/{record.totalQuestions}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${
-                          record.riskCount
-                            ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-                            : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
-                        }`}
-                      >
-                        {record.riskCount ? (
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                        ) : (
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        )}
-                        {record.riskCount}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-                          record.status === "reviewed"
-                            ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100"
-                            : "bg-amber-50 text-amber-700 ring-1 ring-amber-100"
-                        }`}
-                      >
-                        {record.status === "reviewed"
-                          ? "Reviewed"
-                          : "Awaiting review"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-slate-500">
-                      {formatTimestamp(record.updatedAt)}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
-                        <IconButton
-                          label="View checklist"
-                          icon={Eye}
-                          onClick={() => void viewRecord(record.id)}
-                        />
-                        <Link
-                          href={`/fatigue-risk?id=${encodeURIComponent(record.id)}`}
-                          className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
-                          aria-label="Edit checklist"
-                          title="Edit checklist"
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </Link>
-                        <IconButton
-                          label="Download PDF"
-                          icon={Download}
-                          onClick={() => void downloadRecord(record.id)}
-                        />
-                        <IconButton
-                          label="Delete checklist"
-                          icon={Trash2}
-                          tone="danger"
-                          onClick={() => void removeRecord(record)}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="divide-y divide-slate-100 lg:hidden">
-            {recordsPage.records.map((record) => (
-              <article key={record.id} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-950">
-                      {record.instructorName}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                      <CalendarDays className="h-4 w-4" />
-                      {formatDate(record.assessmentDate)}
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
-                      record.status === "reviewed"
-                        ? "bg-indigo-50 text-indigo-700"
-                        : "bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {record.status === "reviewed" ? "Reviewed" : "Pending"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-lg font-bold text-slate-950">
-                      {record.answeredCount}/{record.totalQuestions}
-                    </p>
-                    <p className="text-xs text-slate-500">Answered</p>
-                  </div>
-                  <div
-                    className={`rounded-lg p-3 ${
-                      record.riskCount ? "bg-rose-50" : "bg-emerald-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-lg font-bold ${
-                        record.riskCount ? "text-rose-700" : "text-emerald-700"
-                      }`}
-                    >
-                      {record.riskCount}
-                    </p>
-                    <p className="text-xs text-slate-500">Risks identified</p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-4 gap-2">
-                  <IconButton
-                    label="View checklist"
-                    icon={Eye}
-                    onClick={() => void viewRecord(record.id)}
-                  />
-                  <Link
-                    href={`/fatigue-risk?id=${encodeURIComponent(record.id)}`}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600"
-                    aria-label="Edit checklist"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                  </Link>
-                  <IconButton
-                    label="Download PDF"
-                    icon={Download}
-                    onClick={() => void downloadRecord(record.id)}
-                  />
-                  <IconButton
-                    label="Delete checklist"
-                    icon={Trash2}
-                    tone="danger"
-                    onClick={() => void removeRecord(record)}
-                  />
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {!recordsPage.records.length && !loading ? (
-            <div className="p-10 text-center">
-              <ClipboardCheck className="mx-auto h-8 w-8 text-slate-300" />
-              <p className="mt-3 font-semibold text-slate-700">
-                No fatigue-risk records found
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Adjust the filters or complete the weekly checklist.
-              </p>
-            </div>
-          ) : null}
-
-          <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-slate-500">
-              Showing {firstRecord}-{lastRecord} of {recordsPage.totalRecords}
-            </p>
-            <div className="flex items-center justify-between gap-2 sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={!recordsPage.hasPreviousPage}
-                className="flex h-10 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 disabled:opacity-40"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </button>
-              <span className="px-2 text-sm font-semibold text-slate-600">
-                {recordsPage.page} / {recordsPage.totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  setPage((current) =>
-                    Math.min(recordsPage.totalPages, current + 1)
-                  )
-                }
-                disabled={!recordsPage.hasNextPage}
-                className="flex h-10 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </footer>
+          <ApprovalRegister
+            page={page}
+            loading={tableLoading}
+            showLoading={showTableLoading}
+            onPage={loadPage}
+            onView={(id) => void openRecord(id)}
+            onEdit={(id) => void openRecord(id, true)}
+            onArchive={(record) => void archiveRecord(record)}
+          />
         </section>
       </div>
 
-      {viewingRecord ? (
-        <RecordModal
-          record={viewingRecord}
-          onClose={() => setViewingRecord(null)}
-          onDownload={() => void downloadRecord(viewingRecord.id)}
+      {form ? (
+        <ApprovalEditor
+          record={form}
+          document={formDocument}
+          setRecord={setForm}
+          setDocument={setFormDocument}
+          onClose={() => {
+            setForm(null);
+            setFormDocument(null);
+          }}
+          onSave={() => void submitRecord()}
+        />
+      ) : null}
+
+      {viewing ? (
+        <ApprovalDetail
+          record={viewing}
+          onClose={() => setViewing(null)}
+          onEdit={() => {
+            setForm(viewing);
+            setFormDocument(null);
+            setViewing(null);
+          }}
+          onOpen={(document) => void openDocument(document)}
+          onDelete={(document) => void removeDocument(document)}
+          onUpload={(file, locationId) => void uploadDocument(file, locationId)}
+        />
+      ) : null}
+
+      {preview ? (
+        <PdfPreview
+          name={preview.name}
+          dataUrl={preview.dataUrl}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
+
+      {working ? (
+        <LoadingOverlay
+          label={working}
+          description="Your request is being completed securely."
+          delay={100}
         />
       ) : null}
     </AppShell>
   );
 }
 
-function RecordModal({
-  record,
-  onClose,
-  onDownload
-}: {
-  record: FatigueRiskRecord;
-  onClose: () => void;
-  onDownload: () => void;
-}) {
-  const responseMap = new Map(
-    record.responses.map((response) => [
-      response.questionId,
-      response.response
-    ])
-  );
+function SummaryGrid({ dashboard }: { dashboard: ApprovalDashboardSummary }) {
+  const cards = [
+    ["Tracked", dashboard.totalApprovals, ShieldCheck, "bg-sky-50 text-sky-700"],
+    ["Active", dashboard.activeApprovals, BadgeCheck, "bg-emerald-50 text-emerald-700"],
+    ["Renewal Window", dashboard.renewalUpcoming + dashboard.dueSoon, CalendarClock, "bg-amber-50 text-amber-700"],
+    ["Urgent / Expired", dashboard.urgent + dashboard.expiringToday + dashboard.expired, AlertTriangle, "bg-rose-50 text-rose-700"],
+    ["Missing PDF", dashboard.missingDocuments, FileText, "bg-violet-50 text-violet-700"]
+  ] as const;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5">
-      <button
-        type="button"
-        className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
-        onClick={onClose}
-        aria-label="Close record"
-      />
-      <div className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-lg">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 sm:px-6">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase text-sky-700">
-              ADA-UATO-2G
-            </p>
-            <h2 className="mt-1 truncate text-xl font-bold text-slate-950">
-              {record.instructorName}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Week commencing {formatDate(record.assessmentDate)}
-            </p>
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      {cards.map(([label, value, Icon, tone], index) => (
+        <div
+          key={label}
+          className={`min-w-0 rounded-lg border bg-white p-4 shadow-sm ${index === 4 ? "col-span-2 md:col-span-1" : "border-slate-200"}`}
+        >
+          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}>
+            <Icon className="h-4 w-4" />
           </div>
+          <p className="mt-4 text-2xl font-bold text-slate-950">{value}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function ApprovalRegister({
+  page,
+  loading,
+  showLoading,
+  onPage,
+  onView,
+  onEdit,
+  onArchive
+}: {
+  page: ApprovalsPage;
+  loading: boolean;
+  showLoading: boolean;
+  onPage: (page: number) => Promise<void>;
+  onView: (id: string) => void;
+  onEdit: (id: string) => void;
+  onArchive: (record: ApprovalRecordSummary) => void;
+}) {
+  return (
+    <div className="relative mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="divide-y divide-slate-200 lg:hidden">
+        {page.records.map((record) => (
+          <article key={record.id} className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+                {record.approvalType === "class_1_activity_permit" ? <MapPin className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-slate-950">{APPROVAL_TYPE_LABELS[record.approvalType]}</p>
+                <p className="truncate text-sm text-slate-600">{record.approvalNumber}</p>
+                <p className="mt-1 text-xs text-slate-500">Expires {formatDate(record.displayExpiryDate)}</p>
+              </div>
+              <ExpiryBadge status={record.expiryStatus} />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+              <span>{readableDays(record.daysRemaining)}</span>
+              <span className="text-right">{record.documentCount} PDF{record.documentCount === 1 ? "" : "s"}</span>
+              {record.approvalType === "class_1_activity_permit" ? (
+                <span className="col-span-2 break-words">
+                  Permitted Location: {record.permittedLocations[0] || "Not entered"}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <IconButton label="View approval" icon={Eye} onClick={() => onView(record.id)} />
+              <IconButton label="Edit approval" icon={Edit3} onClick={() => onEdit(record.id)} />
+              {!record.archived ? <IconButton label="Archive approval" icon={Archive} danger onClick={() => onArchive(record)} /> : null}
+            </div>
+          </article>
+        ))}
+        {!page.records.length && !loading ? <EmptyState /> : null}
+      </div>
+
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full min-w-[1100px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+              <Th>Approval</Th>
+              <Th>Effective</Th>
+              <Th>Expiry</Th>
+              <Th>Status</Th>
+              <Th>Responsible Person</Th>
+              <Th>Permitted Location</Th>
+              <Th>Documents</Th>
+              <Th right>Actions</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {page.records.map((record) => (
+              <tr key={record.id} className="border-b border-slate-100 transition hover:bg-slate-50/70">
+                <Td>
+                  <p className="font-bold text-slate-950">{APPROVAL_TYPE_LABELS[record.approvalType]}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{record.approvalNumber}</p>
+                </Td>
+                <Td>{formatDate(record.effectiveDate)}</Td>
+                <Td>
+                  <p className="font-semibold text-slate-800">{formatDate(record.displayExpiryDate)}</p>
+                  <p className="text-xs text-slate-500">{readableDays(record.daysRemaining)}</p>
+                </Td>
+                <Td><ExpiryBadge status={record.expiryStatus} /></Td>
+                <Td>
+                  <p>{record.responsiblePerson || "-"}</p>
+                  <p className="text-xs text-slate-500">{record.responsibleEmail}</p>
+                </Td>
+                <Td>
+                  {record.approvalType === "class_1_activity_permit" ? (
+                    <div className="max-w-xs">
+                      <p className="break-words font-semibold text-slate-800">
+                        {record.permittedLocations[0] || "Not entered"}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-slate-400">Not applicable</span>
+                  )}
+                </Td>
+                <Td>
+                  <span className={record.hasCurrentDocument ? "font-semibold text-emerald-700" : "font-semibold text-rose-600"}>
+                    {record.hasCurrentDocument ? `${record.documentCount} stored` : "PDF missing"}
+                  </span>
+                </Td>
+                <Td>
+                  <div className="flex justify-end gap-2">
+                    <IconButton label="View approval" icon={Eye} onClick={() => onView(record.id)} />
+                    <IconButton label="Edit approval" icon={Edit3} onClick={() => onEdit(record.id)} />
+                    {!record.archived ? <IconButton label="Archive approval" icon={Archive} danger onClick={() => onArchive(record)} /> : null}
+                  </div>
+                </Td>
+              </tr>
+            ))}
+            {!page.records.length && !loading ? (
+              <tr><td colSpan={8}><EmptyState /></td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      {showLoading ? <TableLoading /> : null}
+      <Pagination page={page} loading={loading} onPage={onPage} />
+    </div>
+  );
+}
+
+function ApprovalEditor({
+  record,
+  document,
+  setRecord,
+  setDocument,
+  onClose,
+  onSave
+}: {
+  record: ApprovalRecord;
+  document: File | null;
+  setRecord: (record: ApprovalRecord | null) => void;
+  setDocument: (file: File | null) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const patch = (changes: Partial<ApprovalRecord>) => setRecord({ ...record, ...changes });
+  const updateLocation = (id: string, changes: Partial<ApprovalLocation>) => {
+    patch({
+      locations: record.locations.map((location) =>
+        location.id === id ? { ...location, ...changes } : location
+      )
+    });
+  };
+  return (
+    <Modal
+      title={record.approvalNumber || "New Approval"}
+      subtitle="Approval Register"
+      onClose={onClose}
+      footer={
+        <>
+          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+          <PrimaryButton onClick={onSave}><Save className="h-4 w-4" /> Save approval</PrimaryButton>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label="Approval Type">
+          <select
+            className={inputClass}
+            value={record.approvalType}
+            onChange={(event) => {
+              const approvalType = event.target.value as ApprovalType;
+              patch({
+                approvalType,
+                locations:
+                  approvalType === "class_1_activity_permit"
+                    ? record.locations.length ? record.locations.slice(0, 1) : [createEmptyApprovalLocation()]
+                    : []
+              });
+            }}
+          >
+            {APPROVAL_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Approval / Permit Number">
+          <input className={inputClass} value={record.approvalNumber} onChange={(event) => patch({ approvalNumber: event.target.value })} />
+        </Field>
+        <Field label="Issuing Authority">
+          <input className={inputClass} value={record.issuingAuthority} onChange={(event) => patch({ issuingAuthority: event.target.value })} />
+        </Field>
+        <Field label="Effective Date">
+          <input type="date" className={inputClass} value={record.effectiveDate} onChange={(event) => patch({ effectiveDate: event.target.value })} />
+        </Field>
+        <Field label="Expiry Date">
+          <input type="date" className={inputClass} value={record.expiryDate} onChange={(event) => patch({ expiryDate: event.target.value })} />
+        </Field>
+        <Field label="Renewal Lead Time (Days)">
+          <input type="number" min={1} max={365} className={inputClass} value={record.renewalLeadDays} onChange={(event) => patch({ renewalLeadDays: Number(event.target.value) || 90 })} />
+        </Field>
+        <Field label="Responsible Person">
+          <input className={inputClass} value={record.responsiblePerson} onChange={(event) => patch({ responsiblePerson: event.target.value })} />
+        </Field>
+        <Field label="Responsible Email">
+          <input type="email" className={inputClass} value={record.responsibleEmail} onChange={(event) => patch({ responsibleEmail: event.target.value })} />
+        </Field>
+        <Field label="Renewal Status">
+          <select className={inputClass} value={record.renewalStatus} onChange={(event) => patch({ renewalStatus: event.target.value as ApprovalRenewalStatus })}>
+            {Object.entries(APPROVAL_RENEWAL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </Field>
+        {record.renewalStatus === "submitted" ? (
+          <>
+            <Field label="Submitted Date">
+              <input type="date" className={inputClass} value={record.renewalSubmittedAt.slice(0, 10)} onChange={(event) => patch({ renewalSubmittedAt: event.target.value })} />
+            </Field>
+            <Field label="Submission Reference">
+              <input className={inputClass} value={record.renewalReference} onChange={(event) => patch({ renewalReference: event.target.value })} />
+            </Field>
+          </>
+        ) : null}
+      </div>
+
+      {record.approvalType === "class_1_activity_permit" ? (
+        <section className="mt-6 border-t border-slate-200 pt-5">
+          <div>
+            <div>
+              <h3 className="font-bold text-slate-950">Permitted Location</h3>
+              <p className="text-sm text-slate-500">Enter the single location authorized by this Class 1 Activity Permit.</p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-4">
+            {record.locations.slice(0, 1).map((location) => (
+              <div key={location.id} className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 font-bold text-slate-800"><MapPin className="h-4 w-4 text-sky-700" /> Class 1 Activity Permit Location</div>
+                </div>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Location Name"><input className={inputClass} value={location.name} onChange={(event) => updateLocation(location.id, { name: event.target.value })} /></Field>
+                  <Field label="Location Code"><input className={inputClass} value={location.code} onChange={(event) => updateLocation(location.id, { code: event.target.value })} /></Field>
+                  <Field label="Coordinates"><input className={inputClass} value={location.coordinates} onChange={(event) => updateLocation(location.id, { coordinates: event.target.value })} placeholder="1.3521, 103.8198" /></Field>
+                  <Field label="Effective Date"><input type="date" className={inputClass} value={location.effectiveDate} onChange={(event) => updateLocation(location.id, { effectiveDate: event.target.value })} /></Field>
+                  <Field label="Expiry Date"><input type="date" className={inputClass} value={location.expiryDate} onChange={(event) => updateLocation(location.id, { expiryDate: event.target.value })} /></Field>
+                  <Field label="Status"><select className={inputClass} value={location.active ? "active" : "inactive"} onChange={(event) => updateLocation(location.id, { active: event.target.value === "active" })}><option value="active">Active</option><option value="inactive">Inactive</option></select></Field>
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <Field label="Address"><textarea className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm" value={location.address} onChange={(event) => updateLocation(location.id, { address: event.target.value })} /></Field>
+                  <Field label="Operational Limitations"><textarea className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm" value={location.operationalLimitations} onChange={(event) => updateLocation(location.id, { operationalLimitations: event.target.value })} /></Field>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Field label="General Conditions"><textarea className="mt-2 min-h-28 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm" value={record.generalConditions} onChange={(event) => patch({ generalConditions: event.target.value })} /></Field>
+        <Field label="Remarks"><textarea className="mt-2 min-h-28 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm" value={record.remarks} onChange={(event) => patch({ remarks: event.target.value })} /></Field>
+      </div>
+
+      <label className="mt-5 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-sky-300 bg-sky-50/50 p-4 text-center">
+        <Upload className="h-5 w-5 text-sky-700" />
+        <span className="mt-2 text-sm font-semibold text-slate-800">{document?.name || "Upload current approval PDF"}</span>
+        <span className="mt-1 text-xs text-slate-500">PDF only, maximum 10 MB. Existing PDF history will be retained.</span>
+        <input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => setDocument(event.target.files?.[0] || null)} />
+      </label>
+    </Modal>
+  );
+}
+
+function ApprovalDetail({
+  record,
+  onClose,
+  onEdit,
+  onOpen,
+  onDelete,
+  onUpload
+}: {
+  record: ApprovalRecord;
+  onClose: () => void;
+  onEdit: () => void;
+  onOpen: (document: ApprovalDocument) => void;
+  onDelete: (document: ApprovalDocument) => void;
+  onUpload: (file: File | undefined, locationId?: string) => void;
+}) {
+  const summaryStatus = useMemo(
+    () => summarizeApprovalRecord(record).expiryStatus,
+    [record]
+  );
+
+  const generalDocuments = record.documents.filter((document) => !document.locationId);
+
+  return (
+    <Modal
+      title={record.approvalNumber}
+      subtitle={APPROVAL_TYPE_LABELS[record.approvalType]}
+      onClose={onClose}
+      footer={
+        <>
+          <SecondaryButton onClick={onClose}>Close</SecondaryButton>
+          <PrimaryButton onClick={onEdit}><Edit3 className="h-4 w-4" /> Edit approval</PrimaryButton>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <ExpiryBadge status={summaryStatus} />
+          <p className="mt-2 text-sm text-slate-600">Valid {formatDate(record.effectiveDate)} to {formatDate(record.expiryDate)}</p>
+        </div>
+        <a href={CAAS_ESOMS_URL} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white">
+          Open CAAS eSOMS <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Detail label="Issuing Authority" value={record.issuingAuthority} />
+        <Detail label="Responsible Person" value={record.responsiblePerson} />
+        <Detail label="Responsible Email" value={record.responsibleEmail} />
+        <Detail label="Renewal Status" value={APPROVAL_RENEWAL_LABELS[record.renewalStatus]} />
+        <Detail label="Lead Time" value={`${record.renewalLeadDays} days`} />
+        <Detail label="Submission Date" value={formatDate(record.renewalSubmittedAt)} />
+        <Detail label="Submission Reference" value={record.renewalReference} />
+        <Detail label="Last Updated" value={formatDateTime(record.updatedAt)} />
+      </div>
+
+      {record.approvalType === "class_1_activity_permit" ? (
+        <section className="mt-6">
+          <h3 className="font-bold text-slate-950">Permitted Location</h3>
+          <div className="mt-3 space-y-3">
+            {record.locations.slice(0, 1).map((location) => {
+              const documents = record.documents.filter((document) => document.locationId === location.id);
+              return (
+                <div key={location.id} className="rounded-lg border border-slate-200 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-sky-700" /><p className="font-bold text-slate-900">{location.name}</p></div>
+                      <p className="mt-1 text-sm text-slate-500">{location.address || "No address entered"}</p>
+                      <p className="mt-1 text-xs text-slate-500">Valid to {formatDate(location.expiryDate)} / {location.active ? "Active" : "Inactive"}</p>
+                    </div>
+                    <UploadButton label="Upload location PDF" onFile={(file) => onUpload(file, location.id)} />
+                  </div>
+                  {location.operationalLimitations ? <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{location.operationalLimitations}</p> : null}
+                  <DocumentList documents={documents} onOpen={onOpen} onDelete={onDelete} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mt-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-bold text-slate-950">Controlled Documents</h3>
+            <p className="text-sm text-slate-500">Current and superseded versions remain traceable.</p>
+          </div>
+          <UploadButton label="Upload new PDF" onFile={(file) => onUpload(file)} />
+        </div>
+        <DocumentList documents={generalDocuments} onOpen={onOpen} onDelete={onDelete} />
+      </section>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <DetailBlock label="General Conditions" value={record.generalConditions} />
+        <DetailBlock label="Remarks" value={record.remarks} />
+      </div>
+    </Modal>
+  );
+}
+
+function DocumentList({ documents, onOpen, onDelete }: { documents: ApprovalDocument[]; onOpen: (document: ApprovalDocument) => void; onDelete: (document: ApprovalDocument) => void }) {
+  return (
+    <div className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+      {documents.map((document) => (
+        <div key={document.id} className="flex items-center gap-3 p-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-700"><FileText className="h-5 w-5" /></div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-slate-900">{document.fileName}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{document.status === "current" ? "Current version" : "Superseded"} / {formatDateTime(document.uploadedAt)}</p>
+          </div>
+          <IconButton label="View PDF" icon={Eye} onClick={() => onOpen(document)} />
+          <IconButton label="Delete PDF" icon={Trash2} danger onClick={() => onDelete(document)} />
+        </div>
+      ))}
+      {!documents.length ? <div className="p-5 text-center text-sm text-slate-500">No PDFs uploaded for this section.</div> : null}
+    </div>
+  );
+}
+
+function PdfPreview({ name, dataUrl, onClose }: { name: string; dataUrl: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[125] flex flex-col bg-slate-950/95 p-3 sm:p-5">
+      <header className="flex items-center justify-between gap-3 rounded-t-lg bg-white px-4 py-3">
+        <div className="min-w-0"><p className="truncate font-bold text-slate-900">{name}</p><p className="text-xs text-slate-500">Approval document preview</p></div>
+        <div className="flex gap-2">
+          <a href={dataUrl} download={name} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-sky-700 px-3 text-sm font-semibold text-white"><FolderOpen className="h-4 w-4" /> <span className="hidden sm:inline">Download</span></a>
+          <IconButton label="Close preview" icon={X} onClick={onClose} />
+        </div>
+      </header>
+      <iframe title={name} src={dataUrl} className="min-h-0 flex-1 rounded-b-lg bg-white" />
+    </div>
+  );
+}
+
+function Modal({ title, subtitle, onClose, children, footer }: { title: string; subtitle: string; onClose: () => void; children: ReactNode; footer: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-5">
+      <button type="button" className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" onClick={onClose} aria-label="Close dialog" />
+      <div className="relative flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-6xl sm:rounded-lg">
+        <header className="flex items-start justify-between gap-4 border-b border-sky-100 bg-sky-50 p-4 sm:px-6">
+          <div className="min-w-0"><p className="text-xs font-bold uppercase text-sky-700">{subtitle}</p><h2 className="mt-1 truncate text-xl font-bold text-slate-800">{title}</h2></div>
           <IconButton label="Close" icon={X} onClick={onClose} />
         </header>
-
-        <div className="overflow-y-auto p-4 sm:p-6">
-          {FATIGUE_RISK_SECTIONS.map((section) => (
-            <section key={section.id} className="mb-5">
-              <h3 className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-800">
-                {section.label}
-              </h3>
-              <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-                {FATIGUE_RISK_QUESTIONS.filter(
-                  (question) => question.sectionId === section.id
-                ).map((question) => {
-                  const response = responseMap.get(question.id);
-                  return (
-                    <div
-                      key={question.id}
-                      className="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_90px] sm:items-center"
-                    >
-                      <p className="text-sm leading-5 text-slate-700">
-                        {question.question}
-                      </p>
-                      <span
-                        className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${
-                          response === "yes"
-                            ? "bg-rose-50 text-rose-700"
-                            : "bg-emerald-50 text-emerald-700"
-                        }`}
-                      >
-                        {response === "yes" ? "Yes" : "No"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-
-          <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-indigo-700" />
-              <h3 className="font-bold text-slate-950">
-                Head of Training review
-              </h3>
-            </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-              {record.recommendation || "Awaiting recommendation."}
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-500">
-                  Evaluated by
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {record.evaluatedBy || "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-500">
-                  Position
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {record.evaluatorPosition || "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase text-slate-500">
-                  Signature
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">
-                  {record.signatureDataUrl ? "Captured" : "Not captured"}
-                </p>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-12 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700"
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={onDownload}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-slate-950 text-sm font-semibold text-white"
-          >
-            <Download className="h-4 w-4" />
-            Download PDF
-          </button>
-        </footer>
+        <div className="overflow-y-auto p-4 text-slate-700 sm:p-6">{children}</div>
+        <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:flex sm:justify-end">{footer}</footer>
       </div>
     </div>
   );
+}
+
+function ExpiryBadge({ status }: { status: ApprovalExpiryStatus }) {
+  return <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold ${expiryTone(status)}`}>{APPROVAL_EXPIRY_LABELS[status]}</span>;
+}
+
+function UploadButton({ label, onFile }: { label: string; onFile: (file?: File) => void }) {
+  return <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 text-sm font-semibold text-sky-800"><Upload className="h-4 w-4" /> {label}<input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => { onFile(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label>;
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="block text-sm font-semibold text-slate-600">{label}{children}</label>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] font-bold uppercase text-sky-700">{label}</p><p className="mt-1 break-words text-sm font-semibold text-slate-700">{value || "-"}</p></div>;
+}
+
+function DetailBlock({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-sky-700">{label}</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value || "-"}</p></div>;
+}
+
+function IconButton({ label, icon: Icon, onClick, danger = false }: { label: string; icon: typeof Eye; onClick: () => void; danger?: boolean }) {
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition ${danger ? "border-rose-200 text-rose-600 hover:bg-rose-50" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" /></button>;
+}
+
+function PrimaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800">{children}</button>;
+}
+
+function SecondaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return <button type="button" onClick={onClick} className="inline-flex h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700">{children}</button>;
+}
+
+function Th({ children, right = false }: { children: ReactNode; right?: boolean }) {
+  return <th className={`px-4 py-3 font-semibold ${right ? "text-right" : ""}`}>{children}</th>;
+}
+
+function Td({ children }: { children: ReactNode }) {
+  return <td className="px-4 py-4 text-slate-700">{children}</td>;
+}
+
+function EmptyState() {
+  return <div className="px-5 py-14 text-center"><ShieldCheck className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No approvals found</p><p className="mt-1 text-xs text-slate-500">Add an approval or adjust the active filters.</p></div>;
+}
+
+function CenteredLoading({ label }: { label: string }) {
+  return <div className="flex min-h-[60vh] items-center justify-center"><div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-lg"><Loader2 className="h-5 w-5 animate-spin text-sky-700" /><span className="text-sm font-semibold text-slate-700">{label}</span></div></div>;
+}
+
+function TableLoading() {
+  return <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80"><div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg"><Loader2 className="h-4 w-4 animate-spin text-sky-700" />Loading approvals...</div></div>;
+}
+
+function Pagination({ page, loading, onPage }: { page: ApprovalsPage; loading: boolean; onPage: (page: number) => Promise<void> }) {
+  return <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Showing {page.records.length} of {page.total} / Page {page.page} of {page.totalPages}</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!page.hasPreviousPage || loading} onClick={() => void onPage(page.page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button><button type="button" disabled={!page.hasNextPage || loading} onClick={() => void onPage(page.page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button></div></div>;
 }
