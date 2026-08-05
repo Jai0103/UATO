@@ -140,14 +140,6 @@ export default function FatigueRiskRecordsPage() {
       setRecordsPage(result);
       if (page > result.totalPages) setPage(result.totalPages);
 
-      if (result.hasNextPage) {
-        void fetchFatigueRiskRecordsPage({
-          ...request,
-          page: result.page + 1
-        }).catch(() => {
-          // Preloading is optional; the normal page request remains the fallback.
-        });
-      }
     } catch (error) {
       if (requestId !== requestSequence.current) return;
 
