@@ -1,4 +1,4 @@
-const VERSION = "uapl-fms-2026-07-30-v3";
+const VERSION = "uapl-fms-2026-08-05-v4";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const BASE_PATH = "/UATO";
@@ -111,3 +111,4 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
