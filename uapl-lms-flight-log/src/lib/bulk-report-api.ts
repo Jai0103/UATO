@@ -87,3 +87,19 @@ export async function fetchBulkFatigueRiskReportRecords(
 
   return data.records || [];
 }
+
+export async function fetchFatigueRiskReportTrainerNames(
+  request: {
+    dateFrom: string;
+    dateTo: string;
+  }
+) {
+  const data = await postToGoogle<{
+    trainerNames: string[];
+  }>({
+    action: "getFatigueRiskReportTrainerNames",
+    ...request
+  });
+
+  return data.trainerNames || [];
+}
