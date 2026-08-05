@@ -20,7 +20,8 @@ import {
   fetchBulkFlightReportRecords,
   fetchBulkFatigueRiskReportRecords,
   fetchBulkStaffTrainingReportRecords,
-  fetchBulkUaMaintenanceReportRecords
+  fetchBulkUaMaintenanceReportRecords,
+  fetchFatigueRiskReportTrainerNames
 } from "@/lib/bulk-report-api";
 import {
   fetchAllEvaluationResponses,
@@ -85,6 +86,9 @@ export default function ReportsPage() {
   const [fatigueFrom, setFatigueFrom] = useState(firstDayOfMonth());
   const [fatigueTo, setFatigueTo] = useState(today());
   const [fatigueTrainerName, setFatigueTrainerName] = useState("");
+  const [fatigueTrainerNames, setFatigueTrainerNames] = useState<string[]>([]);
+  const [fatigueTrainersLoading, setFatigueTrainersLoading] = useState(false);
+  const [fatigueTrainersError, setFatigueTrainersError] = useState("");
   const [evaluationSearch, setEvaluationSearch] = useState("");
   const [evaluationYear, setEvaluationYear] = useState("");
   const [evaluationSessions, setEvaluationSessions] = useState<
@@ -147,6 +151,49 @@ export default function ReportsPage() {
       window.clearTimeout(timer);
     };
   }, [evaluationSearch, evaluationYear, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || !fatigueFrom || !fatigueTo || fatigueFrom > fatigueTo) {
+      setFatigueTrainerNames([]);
+      setFatigueTrainerName("");
+      return;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setFatigueTrainersLoading(true);
+      setFatigueTrainersError("");
+
+      try {
+        const names = await fetchFatigueRiskReportTrainerNames({
+          dateFrom: fatigueFrom,
+          dateTo: fatigueTo
+        });
+        if (!active) return;
+
+        setFatigueTrainerNames(names);
+        setFatigueTrainerName((current) =>
+          !current || names.includes(current) ? current : ""
+        );
+      } catch (error) {
+        if (!active) return;
+        setFatigueTrainerNames([]);
+        setFatigueTrainerName("");
+        setFatigueTrainersError(
+          error instanceof Error
+            ? error.message
+            : "Trainer names could not be loaded."
+        );
+      } finally {
+        if (active) setFatigueTrainersLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [fatigueFrom, fatigueTo, isAdmin]);
 
   async function generateFlightReport() {
     if (working) return;
@@ -673,18 +720,32 @@ export default function ReportsPage() {
               accent="rose"
             >
               <Field label="Trainer name">
-                <div className="relative">
-                  <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
-                  <input
-                    className={`${fieldClass} pl-10`}
-                    value={fatigueTrainerName}
-                    onChange={(event) =>
-                      setFatigueTrainerName(event.target.value)
-                    }
-                    placeholder="All trainers or search by name"
-                  />
-                </div>
+                <select
+                  className={fieldClass}
+                  value={fatigueTrainerName}
+                  onChange={(event) =>
+                    setFatigueTrainerName(event.target.value)
+                  }
+                  disabled={fatigueTrainersLoading}
+                >
+                  <option value="">
+                    {fatigueTrainersLoading
+                      ? "Loading trainers..."
+                      : "All trainers"}
+                  </option>
+                  {fatigueTrainerNames.map((trainerName) => (
+                    <option key={trainerName} value={trainerName}>
+                      {trainerName}
+                    </option>
+                  ))}
+                </select>
               </Field>
+
+              {fatigueTrainersError ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                  {fatigueTrainersError}
+                </p>
+              ) : null}
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <Field label="Date from">
@@ -712,7 +773,7 @@ export default function ReportsPage() {
                 accent="rose"
                 busy={working === "fatigue"}
                 busyLabel={workingLabel}
-                disabled={working !== null}
+                disabled={working !== null || fatigueTrainersLoading}
                 label="Download combined PDF"
                 onClick={() => void generateFatigueRiskReport()}
               />
