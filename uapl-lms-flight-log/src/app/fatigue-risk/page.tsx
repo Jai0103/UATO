@@ -254,6 +254,7 @@ export default function FatigueRiskPage() {
       return;
     }
 
+    const wasEditingExistingRecord = Boolean(record.id);
     setSaving(true);
     try {
       const saved = await saveFatigueRiskRecord({
@@ -266,10 +267,23 @@ export default function FatigueRiskPage() {
           record.evaluatorPosition.trim() || "Head of Training",
         status: "reviewed"
       });
-      setRecord(normalizeRecord(saved));
+      if (wasEditingExistingRecord) {
+        setRecord(normalizeRecord(saved));
+      } else {
+        setRecord(
+          createEmptyFatigueRiskRecord(
+            "",
+            "",
+            session?.name || record.evaluatedBy
+          )
+        );
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       message.success(
         "Weekly checklist saved",
-        "The Head of Training checklist and signature were saved."
+        wasEditingExistingRecord
+          ? "The checklist changes were saved."
+          : "The checklist was saved and a new blank form is ready."
       );
     } catch (error) {
       message.error(
