@@ -202,14 +202,6 @@ export default function InventoryPage() {
           setMasterData(master);
           setDashboard(stats);
           setAssetPage(assets);
-          if (assets.hasNextPage) {
-            void fetchInventoryAssetsPage({
-              page: assets.page + 1,
-              pageSize: 10
-            }).catch(() => {
-              // Preloading is optional; normal pagination remains the fallback.
-            });
-          }
           return;
         }
 
@@ -221,14 +213,6 @@ export default function InventoryPage() {
           });
           if (requestId !== initializeSequence.current) return;
           setActivityPage(activities);
-          if (activities.hasNextPage) {
-            void fetchInventoryActivityPage({
-              page: activities.page + 1,
-              pageSize: 10
-            }).catch(() => {
-              // Preloading is optional; normal pagination remains the fallback.
-            });
-          }
           return;
         }
 
@@ -296,14 +280,6 @@ export default function InventoryPage() {
       if (requestId !== tableRequestSequence.current) return;
 
       setAssetPage(result);
-      if (result.hasNextPage) {
-        void fetchInventoryAssetsPage({
-          ...request,
-          page: result.page + 1
-        }).catch(() => {
-          // Preloading is optional; normal pagination remains the fallback.
-        });
-      }
     } catch (error) {
       if (requestId !== tableRequestSequence.current) return;
       message.error("Inventory assets could not be loaded", error instanceof Error ? error.message : "Please try again.");
@@ -327,14 +303,6 @@ export default function InventoryPage() {
       if (requestId !== tableRequestSequence.current) return;
 
       setActivityPage(result);
-      if (result.hasNextPage) {
-        void fetchInventoryActivityPage({
-          ...request,
-          page: result.page + 1
-        }).catch(() => {
-          // Preloading is optional; normal pagination remains the fallback.
-        });
-      }
     } catch (error) {
       if (requestId !== tableRequestSequence.current) return;
       message.error("Inventory activity could not be loaded", error instanceof Error ? error.message : "Please try again.");
