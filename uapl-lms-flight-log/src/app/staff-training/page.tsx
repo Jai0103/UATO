@@ -260,14 +260,6 @@ export default function StaffTrainingPage() {
       setRecords(result.records);
       setRecordsPage(result);
 
-      if (result.hasNextPage) {
-        void fetchStaffTrainingRecordsPage({
-          ...request,
-          page: result.page + 1
-        }).catch(() => {
-          // Preloading is optional and must not interrupt this page.
-        });
-      }
     } catch (error) {
       if (requestId !== recordsRequestSequence.current) return;
 
