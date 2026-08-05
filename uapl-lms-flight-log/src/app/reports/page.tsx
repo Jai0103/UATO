@@ -9,6 +9,7 @@ import {
   MessageSquareText,
   Plane,
   Search,
+  ShieldCheck,
   Wrench
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -17,6 +18,7 @@ import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
 import {
   fetchBulkFlightReportRecords,
+  fetchBulkFatigueRiskReportRecords,
   fetchBulkStaffTrainingReportRecords,
   fetchBulkUaMaintenanceReportRecords
 } from "@/lib/bulk-report-api";
@@ -34,6 +36,7 @@ type ReportType =
   | "flight"
   | "staff"
   | "maintenance"
+  | "fatigue"
   | "evaluation-pdf"
   | "evaluation-csv";
 
@@ -79,6 +82,9 @@ export default function ReportsPage() {
   const [staffMonthTo, setStaffMonthTo] = useState(currentMonth());
   const [maintenanceFrom, setMaintenanceFrom] = useState(firstDayOfMonth());
   const [maintenanceTo, setMaintenanceTo] = useState(today());
+  const [fatigueFrom, setFatigueFrom] = useState(firstDayOfMonth());
+  const [fatigueTo, setFatigueTo] = useState(today());
+  const [fatigueTrainerName, setFatigueTrainerName] = useState("");
   const [evaluationSearch, setEvaluationSearch] = useState("");
   const [evaluationYear, setEvaluationYear] = useState("");
   const [evaluationSessions, setEvaluationSessions] = useState<
@@ -350,6 +356,61 @@ export default function ReportsPage() {
     }
   }
 
+  async function generateFatigueRiskReport() {
+    if (working) return;
+    const validation = validateRange(
+      fatigueFrom,
+      fatigueTo,
+      "Fatigue Risk date range"
+    );
+    if (validation) {
+      message.warning("Select a valid date range", validation);
+      return;
+    }
+
+    setWorking("fatigue");
+    setWorkingLabel("Loading Fatigue Risk checklists...");
+    try {
+      const [records, pdfModule] = await Promise.all([
+        fetchBulkFatigueRiskReportRecords({
+          dateFrom: fatigueFrom,
+          dateTo: fatigueTo,
+          trainerName: fatigueTrainerName.trim()
+        }),
+        import("@/lib/fatigue-risk-pdf")
+      ]);
+
+      if (!records.length) {
+        message.warning(
+          "No Fatigue Risk checklists found",
+          "Try another trainer name or date range."
+        );
+        return;
+      }
+
+      setWorkingLabel(
+        `Building ${records.length} Fatigue Risk checklist(s)...`
+      );
+      await allowBrowserPaint();
+      const doc = await pdfModule.createCombinedFatigueRiskPdf(records);
+
+      setWorkingLabel("Starting PDF download...");
+      await allowBrowserPaint();
+      doc.save(`FATIGUE RISK - ${fatigueFrom} TO ${fatigueTo}.pdf`);
+      message.success(
+        `${records.length} Fatigue Risk checklist(s) combined`
+      );
+    } catch (error) {
+      message.error(
+        "Combined Fatigue Risk report could not be generated",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking(null);
+      setWorkingLabel("");
+    }
+  }
+
   return (
     <AppShell>
       <div className="app-page">
@@ -367,7 +428,7 @@ export default function ReportsPage() {
 
         <div
           className={`grid gap-5 ${
-            isAdmin ? "xl:grid-cols-2 2xl:grid-cols-4" : "max-w-2xl"
+            isAdmin ? "xl:grid-cols-2 2xl:grid-cols-3" : "max-w-2xl"
           }`}
         >
           <ReportCard
@@ -603,6 +664,60 @@ export default function ReportsPage() {
               </div>
             </ReportCard>
           ) : null}
+
+          {isAdmin ? (
+            <ReportCard
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title="Fatigue Risk Identification"
+              description="Combined weekly Fatigue Risk checklists"
+              accent="rose"
+            >
+              <Field label="Trainer name">
+                <div className="relative">
+                  <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
+                  <input
+                    className={`${fieldClass} pl-10`}
+                    value={fatigueTrainerName}
+                    onChange={(event) =>
+                      setFatigueTrainerName(event.target.value)
+                    }
+                    placeholder="All trainers or search by name"
+                  />
+                </div>
+              </Field>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <Field label="Date from">
+                  <input
+                    type="date"
+                    className={fieldClass}
+                    value={fatigueFrom}
+                    max={fatigueTo || today()}
+                    onChange={(event) => setFatigueFrom(event.target.value)}
+                  />
+                </Field>
+                <Field label="Date to">
+                  <input
+                    type="date"
+                    className={fieldClass}
+                    value={fatigueTo}
+                    min={fatigueFrom}
+                    max={today()}
+                    onChange={(event) => setFatigueTo(event.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <GenerateButton
+                accent="rose"
+                busy={working === "fatigue"}
+                busyLabel={workingLabel}
+                disabled={working !== null}
+                label="Download combined PDF"
+                onClick={() => void generateFatigueRiskReport()}
+              />
+            </ReportCard>
+          ) : null}
         </div>
       </div>
     </AppShell>
@@ -628,14 +743,15 @@ function ReportCard({
   icon: ReactNode;
   title: string;
   description: string;
-  accent: "sky" | "emerald" | "amber" | "violet";
+  accent: "sky" | "emerald" | "amber" | "violet" | "rose";
   children: ReactNode;
 }) {
   const colors = {
     sky: "border-t-sky-600 bg-sky-50 text-sky-700",
     emerald: "border-t-emerald-600 bg-emerald-50 text-emerald-700",
     amber: "border-t-amber-500 bg-amber-50 text-amber-700",
-    violet: "border-t-violet-600 bg-violet-50 text-violet-700"
+    violet: "border-t-violet-600 bg-violet-50 text-violet-700",
+    rose: "border-t-rose-600 bg-rose-50 text-rose-700"
   }[accent];
 
   return (
@@ -659,7 +775,7 @@ function GenerateButton({
   label,
   onClick
 }: {
-  accent: "sky" | "emerald" | "amber" | "violet";
+  accent: "sky" | "emerald" | "amber" | "violet" | "rose";
   busy: boolean;
   busyLabel: string;
   disabled: boolean;
@@ -670,7 +786,8 @@ function GenerateButton({
     sky: "bg-sky-700 hover:bg-sky-800 focus-visible:ring-sky-200",
     emerald: "bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-200",
     amber: "bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-200",
-    violet: "bg-violet-700 hover:bg-violet-800 focus-visible:ring-violet-200"
+    violet: "bg-violet-700 hover:bg-violet-800 focus-visible:ring-violet-200",
+    rose: "bg-rose-700 hover:bg-rose-800 focus-visible:ring-rose-200"
   }[accent];
 
   return (
