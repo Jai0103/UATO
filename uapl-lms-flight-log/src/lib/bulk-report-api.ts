@@ -10,6 +10,10 @@ import type {
   UaMaintenanceRecord
 } from "@/lib/ua-maintenance";
 
+import type {
+  FatigueRiskRecord
+} from "@/lib/fatigue-risk";
+
 import {
   postToGoogle
 } from "@/lib/google-api";
@@ -60,6 +64,24 @@ export async function fetchBulkUaMaintenanceReportRecords(
   }>({
     action:
       "getBulkUaMaintenanceReportRecords",
+    ...request
+  });
+
+  return data.records || [];
+}
+
+export async function fetchBulkFatigueRiskReportRecords(
+  request: {
+    dateFrom: string;
+    dateTo: string;
+    trainerName: string;
+  }
+) {
+  const data = await postToGoogle<{
+    records: FatigueRiskRecord[];
+  }>({
+    action:
+      "getBulkFatigueRiskReportRecords",
     ...request
   });
 
