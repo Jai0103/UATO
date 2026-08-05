@@ -305,6 +305,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setCheckingSession(false);
       }
 
+      // A valid local session was already authenticated at login. Treat it as
+      // recently verified so the first page data request is not competing with
+      // a second Apps Script authentication request.
+      if (lastSessionVerificationAt === 0) {
+        lastSessionVerificationAt = Date.now();
+      }
+
       try {
         const verified = await verifySessionOnce(storedSession);
         if (!active) return;
