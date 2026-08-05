@@ -265,18 +265,14 @@ async function drawEvaluation(
   }
 }
 
-export async function createFatigueRiskPdf(record: FatigueRiskRecord) {
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4"
-  });
-  const [logo, signature] = await Promise.all([
-    loadImage(LOGO_PATH),
-    record.signatureDataUrl
-      ? loadImage(record.signatureDataUrl)
-      : Promise.resolve(null)
-  ]);
+async function drawFatigueRiskRecord(
+  doc: jsPDF,
+  record: FatigueRiskRecord,
+  logo: HTMLImageElement | null
+) {
+  const signature = record.signatureDataUrl
+    ? await loadImage(record.signatureDataUrl)
+    : null;
   const responseMap = new Map(
     record.responses.map((response) => [
       response.questionId,
@@ -351,8 +347,33 @@ export async function createFatigueRiskPdf(record: FatigueRiskRecord) {
   });
 
   await drawEvaluation(doc, record, signature, y + 5);
+}
+
+export async function createCombinedFatigueRiskPdf(
+  records: FatigueRiskRecord[]
+) {
+  if (!records.length) {
+    throw new Error("At least one Fatigue Risk checklist is required.");
+  }
+
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4"
+  });
+  const logo = await loadImage(LOGO_PATH);
+
+  for (let index = 0; index < records.length; index += 1) {
+    if (index > 0) doc.addPage("a4", "portrait");
+    await drawFatigueRiskRecord(doc, records[index], logo);
+  }
+
   drawFooter(doc);
   return doc;
+}
+
+export async function createFatigueRiskPdf(record: FatigueRiskRecord) {
+  return createCombinedFatigueRiskPdf([record]);
 }
 
 export function fatigueRiskPdfFileName(record: FatigueRiskRecord) {
@@ -360,4 +381,3 @@ export function fatigueRiskPdfFileName(record: FatigueRiskRecord) {
   const date = record.assessmentDate || new Date().toISOString().slice(0, 10);
   return `${name} - FATIGUE RISK CHECKLIST - ${date}.pdf`;
 }
-
