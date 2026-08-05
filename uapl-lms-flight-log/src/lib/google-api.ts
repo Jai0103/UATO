@@ -37,32 +37,34 @@ type ApiCacheEntry = {
   value: unknown;
 };
 
-const API_CACHE_PREFIX = "uapl-api-cache-v3:";
+const API_CACHE_PREFIX = "uapl-api-cache-v4:";
 const MAX_PERSISTED_CACHE_ENTRIES = 40;
+const API_READ_TIMEOUT_MS = 30_000;
+const API_WRITE_TIMEOUT_MS = 90_000;
 const apiMemoryCache = new Map<string, ApiCacheEntry>();
 const apiRequestsInFlight = new Map<string, Promise<unknown>>();
 
 const API_READ_CACHE: Record<string, ApiCacheConfig> = {
-  getAdminDashboardBundle: { ttlMs: 60_000, persist: true },
-  getDashboardStats: { ttlMs: 60_000, persist: true },
-  getApprovalDashboardSummary: { ttlMs: 60_000, persist: true },
-  getFatigueRiskWeeklyStatus: { ttlMs: 60_000, persist: true },
+  getAdminDashboardBundle: { ttlMs: 30_000, persist: false },
+  getDashboardStats: { ttlMs: 30_000, persist: false },
+  getApprovalDashboardSummary: { ttlMs: 30_000, persist: false },
+  getFatigueRiskWeeklyStatus: { ttlMs: 30_000, persist: false },
   getMasterData: { ttlMs: 5 * 60_000, persist: true },
   getMasterDataCatalog: { ttlMs: 5 * 60_000, persist: true },
   getInventoryMasterData: { ttlMs: 5 * 60_000, persist: true },
-  getInventoryDashboard: { ttlMs: 60_000, persist: true },
+  getInventoryDashboard: { ttlMs: 30_000, persist: false },
   getUaMaintenanceMasterData: { ttlMs: 5 * 60_000, persist: true },
   getStaffTrainingDescriptions: { ttlMs: 5 * 60_000, persist: true },
   getUsers: { ttlMs: 2 * 60_000, persist: false },
-  getRecordsPage: { ttlMs: 45_000, persist: true },
+  getRecordsPage: { ttlMs: 10_000, persist: false },
   getRecordsByIds: { ttlMs: 30_000, persist: false },
-  getStaffTrainingRecords: { ttlMs: 45_000, persist: false },
-  getStaffTrainingRecordsPage: { ttlMs: 45_000, persist: true },
-  getUaMaintenanceRecordsPage: { ttlMs: 45_000, persist: true },
-  getFatigueRiskRecordsPage: { ttlMs: 45_000, persist: true },
-  getInventoryAssetsPage: { ttlMs: 45_000, persist: true },
-  getInventoryActivityPage: { ttlMs: 30_000, persist: true },
-  getApprovalsPage: { ttlMs: 45_000, persist: true },
+  getStaffTrainingRecords: { ttlMs: 10_000, persist: false },
+  getStaffTrainingRecordsPage: { ttlMs: 10_000, persist: false },
+  getUaMaintenanceRecordsPage: { ttlMs: 10_000, persist: false },
+  getFatigueRiskRecordsPage: { ttlMs: 10_000, persist: false },
+  getInventoryAssetsPage: { ttlMs: 10_000, persist: false },
+  getInventoryActivityPage: { ttlMs: 10_000, persist: false },
+  getApprovalsPage: { ttlMs: 10_000, persist: false },
   getAuditHistoryPage: { ttlMs: 20_000, persist: false },
   getRecordById: { ttlMs: 45_000, persist: false },
   getStaffTrainingRecord: { ttlMs: 45_000, persist: false },
@@ -222,6 +224,36 @@ function actionChangesData(action: string) {
   );
 }
 
+const PAGINATED_READ_ACTIONS = new Set([
+  "getRecordsPage",
+  "getStaffTrainingRecordsPage",
+  "getUaMaintenanceRecordsPage",
+  "getFatigueRiskRecordsPage",
+  "getInventoryAssetsPage",
+  "getInventoryActivityPage",
+  "getApprovalsPage",
+  "getAuditHistoryPage",
+  "getEvaluationSessionsPage",
+  "getEvaluationResponsesPage"
+]);
+
+function shouldCacheApiResponse(action: string, value: unknown) {
+  if (!PAGINATED_READ_ACTIONS.has(action)) return true;
+  if (!value || typeof value !== "object") return false;
+
+  const response = value as Record<string, unknown>;
+  const collections = [
+    response.records,
+    response.assets,
+    response.activities,
+    response.sessions,
+    response.responses
+  ];
+  const collection = collections.find(Array.isArray);
+
+  return !Array.isArray(collection) || collection.length > 0;
+}
+
 export type FlightLogRecordSummary = {
   id: string;
   student: {
@@ -378,6 +410,11 @@ export async function postToGoogle<T>(
 
   const request = (async () => {
     let response: Response;
+    const controller = new AbortController();
+    const timeoutMs = actionChangesData(action)
+      ? API_WRITE_TIMEOUT_MS
+      : API_READ_TIMEOUT_MS;
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       response = await fetch(
@@ -387,14 +424,25 @@ export async function postToGoogle<T>(
           body: JSON.stringify({
             ...payload,
             sessionToken
-          })
+          }),
+          cache: "no-store",
+          redirect: "follow",
+          signal: controller.signal
         }
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new GoogleApiError(
+          "Google Sheets took too long to respond. Please try again.",
+          "REQUEST_TIMEOUT"
+        );
+      }
       throw new GoogleApiError(
         "Unable to connect to Google Sheets. Check your internet connection.",
         "NETWORK_ERROR"
       );
+    } finally {
+      window.clearTimeout(timeout);
     }
 
     if (!response.ok) {
@@ -435,7 +483,7 @@ export async function postToGoogle<T>(
       );
     }
 
-    if (cacheConfig) {
+    if (cacheConfig && shouldCacheApiResponse(action, data)) {
       writeApiCache(cacheKey, cacheConfig, data);
     } else if (actionChangesData(action)) {
       invalidateGoogleApiCache();
