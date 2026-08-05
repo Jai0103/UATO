@@ -80,20 +80,33 @@ async function postAuthentication<T>(
   payload: Record<string, unknown>
 ): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
 
   try {
     response = await fetch(
       googleAppsScriptUrl,
       {
         method: "POST",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        redirect: "follow",
+        signal: controller.signal
       }
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new AuthApiError(
+        "The authentication service took too long to respond.",
+        "REQUEST_TIMEOUT"
+      );
+    }
     throw new AuthApiError(
       "Unable to connect to the authentication service.",
       "NETWORK_ERROR"
     );
+  } finally {
+    window.clearTimeout(timeout);
   }
 
   if (!response.ok) {
