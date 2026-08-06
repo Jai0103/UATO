@@ -94,6 +94,25 @@ function createEmptyRecord(
   };
 }
 
+function nextMonthlyInspectionDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return new Date().toISOString().slice(0, 10);
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const targetYear = month === 12 ? year + 1 : year;
+  const targetMonth = month === 12 ? 1 : month + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDay);
+
+  return [
+    targetYear,
+    String(targetMonth).padStart(2, "0"),
+    String(targetDay).padStart(2, "0")
+  ].join("-");
+}
+
 function statusStyle(status: UaMaintenanceStatus) {
   if (status === "pass") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "fail") return "border-rose-200 bg-rose-50 text-rose-700";
@@ -121,6 +140,9 @@ export default function UaMaintenancePage() {
     hasPreviousPage: false, hasNextPage: false
   });
   const [viewingRecord, setViewingRecord] = useState<UaMaintenanceRecord | null>(null);
+  const [duplicateSource, setDuplicateSource] =
+    useState<UaMaintenanceRecord | null>(null);
+  const [duplicateDate, setDuplicateDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [showRecordsLoading, setShowRecordsLoading] = useState(false);
@@ -195,11 +217,11 @@ export default function UaMaintenancePage() {
   }, [recordsLoading]);
 
   useEffect(() => {
-    if (!viewingRecord) return;
+    if (!viewingRecord && !duplicateSource) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [viewingRecord]);
+  }, [viewingRecord, duplicateSource]);
 
   async function loadRecordsPage(
     page: number,
@@ -323,17 +345,62 @@ export default function UaMaintenancePage() {
     const saved = await loadRecord(recordId);
     if (!saved) return;
 
+    setDuplicateSource(saved);
+    setDuplicateDate(nextMonthlyInspectionDate(saved.inspectionDate));
+  }
+
+  function cancelDuplicateRecord() {
+    setDuplicateSource(null);
+    setDuplicateDate("");
+  }
+
+  function confirmDuplicateRecord() {
+    if (!duplicateSource) return;
+
+    if (!duplicateDate) {
+      message.warning(
+        "Select the new maintenance date",
+        "Enter the date for the duplicated monthly record."
+      );
+      return;
+    }
+
+    if (duplicateDate === duplicateSource.inspectionDate) {
+      message.warning(
+        "Choose a different date",
+        "The duplicated record must use a different maintenance date."
+      );
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (duplicateDate > today) {
+      message.warning(
+        "Future date is not allowed",
+        "Select today or an earlier maintenance date."
+      );
+      return;
+    }
+
     const now = new Date().toISOString();
     setRecord({
-      ...saved,
+      ...duplicateSource,
       id: crypto.randomUUID(),
-      inspectionDate: now.slice(0, 10),
-      items: createUaMaintenanceEntries(masterData.descriptions, saved.items),
+      inspectionDate: duplicateDate,
+      items: createUaMaintenanceEntries(
+        masterData.descriptions,
+        duplicateSource.items
+      ),
       createdAt: now,
       updatedAt: now
     });
     setMode("checklist");
-    message.success("Maintenance check duplicated");
+    setDuplicateSource(null);
+    setDuplicateDate("");
+    message.info(
+      "Monthly copy ready",
+      "Review the duplicated maintenance check, then click Save maintenance check."
+    );
   }
 
   async function viewRecord(recordId: string) {
@@ -607,6 +674,95 @@ export default function UaMaintenancePage() {
         ) : null}
       </div>
 
+      {duplicateSource ? (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-5">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+            onClick={cancelDuplicateRecord}
+            aria-label="Cancel duplicate maintenance record"
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="duplicate-maintenance-title"
+            className="relative w-full overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-lg sm:rounded-lg"
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase text-cyan-700">
+                  <Copy className="h-4 w-4" />
+                  Monthly maintenance
+                </div>
+                <h2
+                  id="duplicate-maintenance-title"
+                  className="mt-2 text-xl font-bold text-slate-950"
+                >
+                  Duplicate maintenance check
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Everything from the selected record will be copied. Only the
+                  maintenance date will change.
+                </p>
+              </div>
+              <IconButton
+                label="Cancel duplicate"
+                icon={X}
+                onClick={cancelDuplicateRecord}
+              />
+            </header>
+
+            <div className="space-y-4 p-4 sm:p-6">
+              <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                <Detail label="UA Brand / Model" value={duplicateSource.uaModel} />
+                <Detail label="UA ID No." value={duplicateSource.uaId} />
+                <Detail
+                  label="Previous date"
+                  value={formatDate(duplicateSource.inspectionDate)}
+                />
+                <Detail
+                  label="Checklist"
+                  value={duplicateSource.items.length + " items copied"}
+                />
+              </div>
+
+              <Field label="New maintenance date">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={duplicateDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(event) => setDuplicateDate(event.target.value)}
+                  autoFocus
+                />
+              </Field>
+
+              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-900">
+                The copied record will open as a new unsaved checklist. You can
+                review it before saving.
+              </div>
+            </div>
+
+            <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:px-6">
+              <button
+                type="button"
+                onClick={cancelDuplicateRecord}
+                className="h-12 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDuplicateRecord}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-sky-800"
+              >
+                <Copy className="h-4 w-4" />
+                Create monthly copy
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
       {viewingRecord ? <MaintenanceModal record={viewingRecord} onClose={() => setViewingRecord(null)} onDownload={() => void preparePdf(viewingRecord, "download")} onPrint={() => void preparePdf(viewingRecord, "print")} /> : null}
       {working ? <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"><div className="flex w-full max-w-sm items-center gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-2xl"><Loader2 className="h-5 w-5 animate-spin text-sky-700" /><div><p className="text-sm font-semibold text-slate-950">Please wait</p><p className="text-sm text-slate-500">{working}</p></div></div></div> : null}
     </AppShell>
