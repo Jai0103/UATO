@@ -143,6 +143,7 @@ export default function UaMaintenancePage() {
   const [duplicateSource, setDuplicateSource] =
     useState<UaMaintenanceRecord | null>(null);
   const [duplicateDate, setDuplicateDate] = useState("");
+  const [isDuplicateDraft, setIsDuplicateDraft] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [showRecordsLoading, setShowRecordsLoading] = useState(false);
@@ -275,6 +276,7 @@ export default function UaMaintenancePage() {
 
   function startNewRecord() {
     setRecord(createEmptyRecord(masterData, session?.name || ""));
+    setIsDuplicateDraft(false);
     setMode("checklist");
   }
 
@@ -297,6 +299,7 @@ export default function UaMaintenancePage() {
       message.warning("Complete the required information", validation);
       return;
     }
+    const returnToRecordsAfterSave = isDuplicateDraft;
     setWorking("Saving UA Maintenance Check...");
     try {
       const saved = await saveUaMaintenanceRecord({
@@ -304,8 +307,27 @@ export default function UaMaintenancePage() {
         updatedAt: new Date().toISOString()
       });
       setRecord(saved);
-      await loadRecordsPage(recordsPage.page, search, selectedYear, selectedMonth);
-      message.success("UA Maintenance Check saved");
+
+      if (returnToRecordsAfterSave) {
+        setSearch("");
+        setSelectedYear("");
+        setSelectedMonth("");
+        await loadRecordsPage(1, "", "", "");
+        setIsDuplicateDraft(false);
+        setMode("records");
+        message.success(
+          "Monthly maintenance record saved",
+          "The records list has been refreshed."
+        );
+      } else {
+        await loadRecordsPage(
+          recordsPage.page,
+          search,
+          selectedYear,
+          selectedMonth
+        );
+        message.success("UA Maintenance Check saved");
+      }
     } catch (error) {
       message.error(
         "Maintenance check was not saved",
@@ -338,6 +360,7 @@ export default function UaMaintenancePage() {
       ...saved,
       items: createUaMaintenanceEntries(masterData.descriptions, saved.items)
     });
+    setIsDuplicateDraft(false);
     setMode("checklist");
   }
 
@@ -394,6 +417,7 @@ export default function UaMaintenancePage() {
       createdAt: now,
       updatedAt: now
     });
+    setIsDuplicateDraft(true);
     setMode("checklist");
     setDuplicateSource(null);
     setDuplicateDate("");
