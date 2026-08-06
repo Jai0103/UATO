@@ -144,6 +144,10 @@ export default function UaMaintenancePage() {
     useState<UaMaintenanceRecord | null>(null);
   const [duplicateDate, setDuplicateDate] = useState("");
   const [isDuplicateDraft, setIsDuplicateDraft] = useState(false);
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [bulkDuplicateSources, setBulkDuplicateSources] =
+    useState<UaMaintenanceRecord[]>([]);
+  const [bulkDuplicateDate, setBulkDuplicateDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [showRecordsLoading, setShowRecordsLoading] = useState(false);
@@ -218,11 +222,11 @@ export default function UaMaintenancePage() {
   }, [recordsLoading]);
 
   useEffect(() => {
-    if (!viewingRecord && !duplicateSource) return;
+    if (!viewingRecord && !duplicateSource && !bulkDuplicateSources.length) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [viewingRecord, duplicateSource]);
+  }, [viewingRecord, duplicateSource, bulkDuplicateSources.length]);
 
   async function loadRecordsPage(
     page: number,
@@ -425,6 +429,166 @@ export default function UaMaintenancePage() {
       "Monthly copy ready",
       "Review the duplicated maintenance check, then click Save maintenance check."
     );
+  }
+
+  function toggleRecordSelection(recordId: string) {
+    setSelectedRecordIds((current) =>
+      current.includes(recordId)
+        ? current.filter((id) => id !== recordId)
+        : [...current, recordId]
+    );
+  }
+
+  function toggleVisibleRecordSelection() {
+    const visibleIds = records.map((item) => item.id);
+    const allVisibleSelected =
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => selectedRecordIds.includes(id));
+
+    setSelectedRecordIds((current) =>
+      allVisibleSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...current, ...visibleIds]))
+    );
+  }
+
+  async function beginBulkDuplicate() {
+    if (!selectedRecordIds.length || working) return;
+
+    setWorking(
+      `Preparing ${selectedRecordIds.length} maintenance checklist${
+        selectedRecordIds.length === 1 ? "" : "s"
+      }...`
+    );
+
+    try {
+      const loadedRecords: UaMaintenanceRecord[] = [];
+
+      for (const recordId of selectedRecordIds) {
+        loadedRecords.push(await fetchUaMaintenanceRecord(recordId));
+      }
+
+      if (!loadedRecords.length) {
+        throw new Error("No maintenance records were selected.");
+      }
+
+      setBulkDuplicateSources(loadedRecords);
+      setBulkDuplicateDate(
+        nextMonthlyInspectionDate(loadedRecords[0].inspectionDate)
+      );
+    } catch (error) {
+      message.error(
+        "Selected records could not be prepared",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
+  }
+
+  function cancelBulkDuplicate() {
+    setBulkDuplicateSources([]);
+    setBulkDuplicateDate("");
+  }
+
+  async function confirmBulkDuplicate() {
+    if (!bulkDuplicateSources.length || working) return;
+
+    if (!bulkDuplicateDate) {
+      message.warning(
+        "Select the new maintenance date",
+        "Enter one date for all duplicated maintenance records."
+      );
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (bulkDuplicateDate > today) {
+      message.warning(
+        "Future date is not allowed",
+        "Select today or an earlier maintenance date."
+      );
+      return;
+    }
+
+    const unchangedRecords = bulkDuplicateSources.filter(
+      (source) => source.inspectionDate === bulkDuplicateDate
+    );
+    if (unchangedRecords.length) {
+      message.warning(
+        "Choose a different date",
+        `${unchangedRecords.length} selected record${
+          unchangedRecords.length === 1 ? " already uses" : "s already use"
+        } this maintenance date.`
+      );
+      return;
+    }
+
+    setWorking(
+      `Saving ${bulkDuplicateSources.length} monthly maintenance record${
+        bulkDuplicateSources.length === 1 ? "" : "s"
+      }...`
+    );
+
+    let savedCount = 0;
+    const failedAircraft: string[] = [];
+
+    try {
+      for (const source of bulkDuplicateSources) {
+        const now = new Date().toISOString();
+
+        try {
+          await saveUaMaintenanceRecord({
+            ...source,
+            id: crypto.randomUUID(),
+            inspectionDate: bulkDuplicateDate,
+            items: createUaMaintenanceEntries(
+              masterData.descriptions,
+              source.items
+            ),
+            createdAt: now,
+            updatedAt: now
+          });
+          savedCount += 1;
+        } catch {
+          failedAircraft.push(source.uaModel || source.uaId || "Unknown UA");
+        }
+      }
+
+      if (!savedCount) {
+        throw new Error("None of the selected records could be saved.");
+      }
+
+      setBulkDuplicateSources([]);
+      setBulkDuplicateDate("");
+      setSelectedRecordIds([]);
+      setSearch("");
+      setSelectedYear("");
+      setSelectedMonth("");
+      await loadRecordsPage(1, "", "", "");
+      setMode("records");
+
+      if (failedAircraft.length) {
+        message.warning(
+          "Monthly duplication partly completed",
+          `${savedCount} saved. Could not save: ${failedAircraft.join(", ")}.`
+        );
+      } else {
+        message.success(
+          "Monthly maintenance records created",
+          `${savedCount} duplicated record${
+            savedCount === 1 ? " was" : "s were"
+          } saved and the records list was refreshed.`
+        );
+      }
+    } catch (error) {
+      message.error(
+        "Monthly records were not created",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking("");
+    }
   }
 
   async function viewRecord(recordId: string) {
@@ -679,9 +843,53 @@ export default function UaMaintenancePage() {
               <div><h2 className="font-bold text-slate-950">Maintenance history</h2><p className="text-sm text-slate-500">Search and filter completed checks by aircraft and date.</p></div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_150px_auto]"><label className="relative sm:col-span-2 xl:col-span-1"><span className="sr-only">Search maintenance records</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search model, UA ID, or checker" /></label><select className={`${inputClass} mt-0`} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="">All months</option>{monthOptions.map((month, index) => <option key={month} value={String(index + 1).padStart(2, "0")}>{month}</option>)}</select><select className={`${inputClass} mt-0`} value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}><option value="">All years</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select><button type="button" onClick={() => { setSearch(""); setSelectedMonth(""); setSelectedYear(""); }} disabled={!search && !selectedMonth && !selectedYear} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button></div>
+            <div className="flex flex-col gap-3 rounded-lg border border-cyan-200 bg-cyan-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={
+                    records.length > 0 &&
+                    records.every((item) => selectedRecordIds.includes(item.id))
+                  }
+                  onChange={toggleVisibleRecordSelection}
+                  className="h-5 w-5 rounded border-slate-300 text-sky-700 focus:ring-sky-600"
+                  aria-label="Select all visible maintenance records"
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-950">
+                    {selectedRecordIds.length
+                      ? `${selectedRecordIds.length} selected`
+                      : "Select monthly checklists"}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Select several records and assign one new date to every copy.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecordIds([])}
+                  disabled={!selectedRecordIds.length}
+                  className="h-11 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void beginBulkDuplicate()}
+                  disabled={!selectedRecordIds.length || Boolean(working)}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
+                >
+                  <Copy className="h-4 w-4" />
+                  Duplicate selected
+                </button>
+              </div>
+            </div>
+
             <div className="relative min-h-40 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="divide-y divide-slate-200 lg:hidden">{records.map((item) => <article key={item.id} className="p-4"><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.uaModel}</p><p className="truncate text-sm text-slate-500">{item.uaId}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.inspectionDate)}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} fail` : `${item.passCount}/${item.totalCount}`}</span></div><div className="mt-4 flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Duplicate record" icon={Copy} onClick={() => void duplicateRecord(item.id)} /><IconButton label="Download PDF" icon={Download} onClick={() => void downloadRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></article>)}{!records.length && !recordsLoading ? <div className="px-5 py-14 text-center text-sm text-slate-500">No maintenance records found.</div> : null}</div>
-              <div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">UA Brand / Model</th><th className="px-5 py-3 font-semibold">UA ID No.</th><th className="px-5 py-3 font-semibold">Date</th><th className="px-5 py-3 font-semibold">Checked by</th><th className="px-5 py-3 font-semibold">Result</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody>{records.map((item) => <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50/70"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><span className="font-semibold text-slate-950">{item.uaModel || "-"}</span></div></td><td className="px-5 py-4 text-slate-700">{item.uaId || "-"}</td><td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(item.inspectionDate)}</td><td className="px-5 py-4 text-slate-700">{item.checkedByName || "-"}</td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} failed` : `${item.passCount} passed`}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Duplicate record" icon={Copy} onClick={() => void duplicateRecord(item.id)} /><IconButton label="Download PDF" icon={Download} onClick={() => void downloadRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></td></tr>)}{!records.length && !recordsLoading ? <tr><td colSpan={6} className="px-5 py-14 text-center text-slate-500">No maintenance records found.</td></tr> : null}</tbody></table></div>
+              <div className="divide-y divide-slate-200 lg:hidden">{records.map((item) => <article key={item.id} className={`p-4 transition ${selectedRecordIds.includes(item.id) ? "bg-cyan-50/70" : "bg-white"}`}><div className="mb-3 flex items-center justify-between"><label className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={selectedRecordIds.includes(item.id)} onChange={() => toggleRecordSelection(item.id)} className="h-5 w-5 rounded border-slate-300 text-sky-700 focus:ring-sky-600" /><span>Select</span></label>{selectedRecordIds.includes(item.id) ? <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-bold text-cyan-800">Selected</span> : null}</div><div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-950">{item.uaModel}</p><p className="truncate text-sm text-slate-500">{item.uaId}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.inspectionDate)}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} fail` : `${item.passCount}/${item.totalCount}`}</span></div><div className="mt-4 flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Duplicate record" icon={Copy} onClick={() => void duplicateRecord(item.id)} /><IconButton label="Download PDF" icon={Download} onClick={() => void downloadRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></article>)}{!records.length && !recordsLoading ? <div className="px-5 py-14 text-center text-sm text-slate-500">No maintenance records found.</div> : null}</div>
+              <div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[1040px] text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="w-14 px-4 py-3"><input type="checkbox" checked={records.length > 0 && records.every((item) => selectedRecordIds.includes(item.id))} onChange={toggleVisibleRecordSelection} className="h-5 w-5 rounded border-slate-300 text-sky-700 focus:ring-sky-600" aria-label="Select all visible maintenance records" /></th><th className="px-5 py-3 font-semibold">UA Brand / Model</th><th className="px-5 py-3 font-semibold">UA ID No.</th><th className="px-5 py-3 font-semibold">Date</th><th className="px-5 py-3 font-semibold">Checked by</th><th className="px-5 py-3 font-semibold">Result</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody>{records.map((item) => <tr key={item.id} className={`border-b border-slate-100 transition ${selectedRecordIds.includes(item.id) ? "bg-cyan-50/70" : "hover:bg-slate-50/70"}`}><td className="px-4 py-4"><input type="checkbox" checked={selectedRecordIds.includes(item.id)} onChange={() => toggleRecordSelection(item.id)} className="h-5 w-5 rounded border-slate-300 text-sky-700 focus:ring-sky-600" aria-label={`Select ${item.uaModel || item.uaId}`} /></td><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><Wrench className="h-5 w-5" /></div><span className="font-semibold text-slate-950">{item.uaModel || "-"}</span></div></td><td className="px-5 py-4 text-slate-700">{item.uaId || "-"}</td><td className="whitespace-nowrap px-5 py-4 text-slate-700">{formatDate(item.inspectionDate)}</td><td className="px-5 py-4 text-slate-700">{item.checkedByName || "-"}</td><td className="px-5 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.failCount ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{item.failCount ? `${item.failCount} failed` : `${item.passCount} passed`}</span></td><td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="View record" icon={Eye} onClick={() => void viewRecord(item.id)} /><IconButton label="Edit record" icon={Edit3} onClick={() => void editRecord(item.id)} /><IconButton label="Duplicate record" icon={Copy} onClick={() => void duplicateRecord(item.id)} /><IconButton label="Download PDF" icon={Download} onClick={() => void downloadRecord(item.id)} /><IconButton label="Delete record" icon={Trash2} danger onClick={() => void removeRecord(item)} /></div></td></tr>)}{!records.length && !recordsLoading ? <tr><td colSpan={7} className="px-5 py-14 text-center text-slate-500">No maintenance records found.</td></tr> : null}</tbody></table></div>
               {showRecordsLoading ? <div className="absolute inset-0 flex items-center justify-center bg-white/80"><div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold shadow-lg"><Loader2 className="h-4 w-4 animate-spin text-sky-700" /> Loading records...</div></div> : null}
               <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Showing {records.length} of {recordsPage.totalRecords} records / Page {recordsPage.page} of {recordsPage.totalPages}</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={!recordsPage.hasPreviousPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page - 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button><button type="button" disabled={!recordsPage.hasNextPage || recordsLoading} onClick={() => void loadRecordsPage(recordsPage.page + 1)} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button></div></div>
             </div>
@@ -697,6 +905,109 @@ export default function UaMaintenancePage() {
           </section>
         ) : null}
       </div>
+
+      {bulkDuplicateSources.length ? (
+        <div className="fixed inset-0 z-[125] flex items-end justify-center sm:items-center sm:p-5">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+            onClick={cancelBulkDuplicate}
+            aria-label="Cancel bulk maintenance duplication"
+          />
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-duplicate-maintenance-title"
+            className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-2xl sm:rounded-lg"
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase text-cyan-700">
+                  <Copy className="h-4 w-4" />
+                  Monthly batch
+                </div>
+                <h2
+                  id="bulk-duplicate-maintenance-title"
+                  className="mt-2 text-xl font-bold text-slate-950"
+                >
+                  Duplicate {bulkDuplicateSources.length} maintenance records
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-500">
+                  Apply one new maintenance date to every selected checklist.
+                </p>
+              </div>
+              <IconButton
+                label="Cancel bulk duplication"
+                icon={X}
+                onClick={cancelBulkDuplicate}
+              />
+            </header>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <div className="grid grid-cols-[minmax(0,1fr)_120px] bg-slate-100 px-4 py-3 text-xs font-bold uppercase text-slate-600">
+                  <span>Selected aircraft</span>
+                  <span>Previous date</span>
+                </div>
+                <div className="max-h-56 divide-y divide-slate-100 overflow-y-auto bg-white">
+                  {bulkDuplicateSources.map((source) => (
+                    <div
+                      key={source.id}
+                      className="grid grid-cols-[minmax(0,1fr)_120px] items-center px-4 py-3 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-950">
+                          {source.uaModel || "Unnamed UA"}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {source.uaId || "No UA ID"}
+                        </p>
+                      </div>
+                      <span className="text-slate-600">
+                        {formatDate(source.inspectionDate)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Field label="New maintenance date for all selected records">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={bulkDuplicateDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(event) => setBulkDuplicateDate(event.target.value)}
+                  autoFocus
+                />
+              </Field>
+
+              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-900">
+                Each copy keeps its own aircraft details, checklist results,
+                remarks, checker information, recommendation, and signature.
+              </div>
+            </div>
+
+            <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 sm:px-6">
+              <button
+                type="button"
+                onClick={cancelBulkDuplicate}
+                className="h-12 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmBulkDuplicate()}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-sky-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-sky-800"
+              >
+                <Copy className="h-4 w-4" />
+                Save all copies
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {duplicateSource ? (
         <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-5">
