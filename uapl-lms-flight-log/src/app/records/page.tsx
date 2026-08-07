@@ -14,6 +14,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Download,
   Eye,
   FilePenLine,
   FileText,
@@ -74,6 +75,7 @@ export default function RecordsPage() {
   const [loading, setLoading] = useState(true);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<FlightLogRecord | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -128,14 +130,6 @@ export default function RecordsPage() {
 
       if (result.page !== page) setPage(result.page);
 
-      if (result.hasNextPage) {
-        void fetchGoogleRecordsPage({
-          ...request,
-          page: result.page + 1,
-        }).catch(() => {
-          // Preloading is optional and must never interrupt the current page.
-        });
-      }
     } catch (error) {
       if (requestId !== requestSequence.current) return;
 
@@ -208,6 +202,43 @@ export default function RecordsPage() {
     router.push("/flight-logs");
   }
 
+  async function downloadRecordPdf(recordId: string) {
+    if (downloadingPdfId) return;
+
+    setDownloadingPdfId(recordId);
+
+    try {
+      const detail =
+        selectedRecord?.id === recordId
+          ? selectedRecord
+          : await fetchGoogleRecordById(recordId);
+
+      const pdfModule = await import("@/lib/pdf");
+
+      pdfModule.generateFlightLogPdf({
+        student: detail.student,
+        rows: detail.rows,
+      });
+
+      notify({
+        type: "success",
+        title: "Flight Log PDF downloaded",
+        message: `${detail.student.studentName || "Student"}'s report is ready.`,
+      });
+    } catch (error) {
+      notify({
+        type: "error",
+        title: "PDF could not be generated",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Please try again.",
+      });
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  }
+
   async function requestDelete(record: FlightLogRecordSummary) {
     const confirmed = await confirm({
       title: "Delete flight record?",
@@ -269,6 +300,7 @@ export default function RecordsPage() {
       ) : null}
       {loadingDetail ? <LoadingOverlay label="Opening flight record..." /> : null}
       {deleting ? <LoadingOverlay label="Deleting flight record..." /> : null}
+      {downloadingPdfId ? <LoadingOverlay label="Generating Flight Log PDF..." /> : null}
 
       <div className="app-page">
         <section className="app-card border-t-4 border-t-sky-600">
@@ -383,6 +415,9 @@ export default function RecordsPage() {
                   <ActionButton label="View record" onClick={() => void viewRecord(record.id)}>
                     <Eye size={17} />
                   </ActionButton>
+                  <ActionButton label="Download Flight Log PDF" onClick={() => void downloadRecordPdf(record.id)}>
+                    <Download size={17} />
+                  </ActionButton>
                   <ActionButton label="Continue record" primary onClick={() => void continueRecord(record.id)}>
                     <FilePenLine size={17} />
                   </ActionButton>
@@ -421,6 +456,7 @@ export default function RecordsPage() {
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
                         <ActionButton label="View record" onClick={() => void viewRecord(record.id)}><Eye size={16} /></ActionButton>
+                        <ActionButton label="Download Flight Log PDF" onClick={() => void downloadRecordPdf(record.id)}><Download size={16} /></ActionButton>
                         <ActionButton label="Continue record" primary onClick={() => void continueRecord(record.id)}><FilePenLine size={16} /></ActionButton>
                         <ActionButton label="Delete record" danger onClick={() => void requestDelete(record)}><Trash2 size={16} /></ActionButton>
                       </div>
@@ -462,7 +498,12 @@ export default function RecordsPage() {
       </div>
 
       {selectedRecord ? (
-        <RecordDetailModal record={selectedRecord} onClose={() => setSelectedRecord(null)} onContinue={() => void continueRecord(selectedRecord.id)} />
+        <RecordDetailModal
+          record={selectedRecord}
+          onClose={() => setSelectedRecord(null)}
+          onContinue={() => void continueRecord(selectedRecord.id)}
+          onDownload={() => void downloadRecordPdf(selectedRecord.id)}
+        />
       ) : null}
 
     </AppShell>
@@ -495,7 +536,17 @@ function ActionButton({
   );
 }
 
-function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogRecord; onClose: () => void; onContinue: () => void }) {
+function RecordDetailModal({
+  record,
+  onClose,
+  onContinue,
+  onDownload,
+}: {
+  record: FlightLogRecord;
+  onClose: () => void;
+  onContinue: () => void;
+  onDownload: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div className="flex max-h-[95dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-6xl sm:rounded-lg">
@@ -506,6 +557,7 @@ function RecordDetailModal({ record, onClose, onContinue }: { record: FlightLogR
             <p className="mt-0.5 text-sm text-slate-500">{record.rows.length} {record.rows.length === 1 ? "flight" : "flights"}</p>
           </div>
           <div className="flex shrink-0 gap-2">
+            <ActionButton label="Download Flight Log PDF" onClick={onDownload}><Download size={17} /></ActionButton>
             <ActionButton label="Continue record" primary onClick={onContinue}><FilePenLine size={17} /></ActionButton>
             <ActionButton label="Close record" onClick={onClose}><X size={18} /></ActionButton>
           </div>
