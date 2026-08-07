@@ -18,6 +18,7 @@ import {
   CircleOff,
   Edit3,
   GraduationCap,
+  ListPlus,
   MapPin,
   Plane,
   Plus,
@@ -61,6 +62,51 @@ type EditorState = {
   value: string;
   status: ItemStatus;
 };
+
+type BulkMasterDataKey =
+  | "batterySerialNumbers"
+  | "afeInstructors"
+  | "uaModels"
+  | "uaCategories";
+
+type BulkEditorState = Record<
+  BulkMasterDataKey,
+  string
+>;
+
+const bulkSections: Array<{
+  key: BulkMasterDataKey;
+  label: string;
+  placeholder: string;
+  icon: typeof BatteryCharging;
+}> = [
+  {
+    key: "batterySerialNumbers",
+    label: "Battery Serial Numbers",
+    placeholder: "B-001\nB-002\nB-003",
+    icon: BatteryCharging
+  },
+  {
+    key: "afeInstructors",
+    label: "AFE / Instructors",
+    placeholder: "Instructor Name 1\nInstructor Name 2",
+    icon: GraduationCap
+  },
+  {
+    key: "uaModels",
+    label: "UA Models & Serial Numbers",
+    placeholder: "X500-001\nX500-002",
+    icon: Plane
+  },
+  {
+    key: "uaCategories",
+    label: "UA Categories",
+    placeholder: "M7\nM25\nH25",
+    icon: Tag
+  }
+];
+
+const BULK_LIMIT_PER_SECTION = 500;
 
 const sections: {
   key: MasterDataKey;
@@ -216,6 +262,22 @@ function createItemId() {
     .slice(2)}`;
 }
 
+function createEmptyBulkEditor(): BulkEditorState {
+  return {
+    batterySerialNumbers: "",
+    afeInstructors: "",
+    uaModels: "",
+    uaCategories: ""
+  };
+}
+
+function parseBulkValues(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export default function MasterDataPage() {
   const { notify, confirm } =
     useAppMessage();
@@ -236,6 +298,9 @@ export default function MasterDataPage() {
 
   const [editor, setEditor] =
     useState<EditorState | null>(null);
+
+  const [bulkEditor, setBulkEditor] =
+    useState<BulkEditorState | null>(null);
 
   const [loading, setLoading] =
     useState(true);
@@ -484,6 +549,121 @@ export default function MasterDataPage() {
       value: "",
       status: "active"
     });
+  }
+
+  function openBulkEditor() {
+    setBulkEditor(createEmptyBulkEditor());
+  }
+
+  async function saveBulkEditor(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!bulkEditor || !catalog) return;
+
+    for (const section of bulkSections) {
+      const count = parseBulkValues(
+        bulkEditor[section.key]
+      ).length;
+
+      if (count > BULK_LIMIT_PER_SECTION) {
+        notify({
+          type: "warning",
+          title: "Bulk limit exceeded",
+          message: `${section.label} accepts up to ${BULK_LIMIT_PER_SECTION} values per import.`
+        });
+        return;
+      }
+    }
+
+    const nextSections = {
+      ...catalog.sections
+    };
+    let addedCount = 0;
+    let skippedCount = 0;
+    const addedBySection: string[] = [];
+
+    bulkSections.forEach((section) => {
+      const existingItems =
+        catalog.sections[section.key];
+      const existingValues = new Set(
+        existingItems.map((item) =>
+          item.value.trim().toLowerCase()
+        )
+      );
+      const batchValues = new Set<string>();
+      const newItems: CatalogItem[] = [];
+
+      parseBulkValues(
+        bulkEditor[section.key]
+      ).forEach((value) => {
+        const normalizedValue =
+          value.toLowerCase();
+
+        if (
+          existingValues.has(normalizedValue) ||
+          batchValues.has(normalizedValue)
+        ) {
+          skippedCount += 1;
+          return;
+        }
+
+        batchValues.add(normalizedValue);
+        newItems.push({
+          id: createItemId(),
+          value,
+          status: "active"
+        });
+      });
+
+      if (newItems.length) {
+        addedCount += newItems.length;
+        addedBySection.push(
+          `${section.label}: ${newItems.length}`
+        );
+
+        nextSections[section.key] = [
+          ...existingItems,
+          ...newItems
+        ].sort((a, b) =>
+          a.value.localeCompare(b.value)
+        );
+      }
+    });
+
+    if (!addedCount) {
+      notify({
+        type: "warning",
+        title: "No new values to add",
+        message:
+          skippedCount > 0
+            ? "Every entered value already exists or is duplicated in the pasted data."
+            : "Enter at least one value. Use one value per line."
+      });
+      return;
+    }
+
+    const successful = await persistCatalog(
+      {
+        ...catalog,
+        sections: nextSections
+      },
+      "Bulk Master Data added",
+      `${addedCount} active value${
+        addedCount === 1 ? " was" : "s were"
+      } added. ${addedBySection.join(" | ")}${
+        skippedCount
+          ? ` | ${skippedCount} duplicate${
+              skippedCount === 1 ? " was" : "s were"
+            } skipped.`
+          : ""
+      }`
+    );
+
+    if (successful) {
+      setBulkEditor(null);
+    }
   }
 
   function openEditEditor(
@@ -801,14 +981,25 @@ export default function MasterDataPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={openAddEditor}
-                className="app-button-primary w-full justify-center sm:w-auto"
-              >
-                <Plus className="h-4 w-4" />
-                Add value
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <button
+                  type="button"
+                  onClick={openBulkEditor}
+                  className="app-button-secondary w-full justify-center sm:w-auto"
+                >
+                  <ListPlus className="h-4 w-4" />
+                  Bulk add
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openAddEditor}
+                  className="app-button-primary w-full justify-center sm:w-auto"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add value
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 flex flex-col gap-3 lg:flex-row">
@@ -993,6 +1184,129 @@ export default function MasterDataPage() {
           ) : null}
         </section>
       </div>
+
+      {bulkEditor ? (
+        <div className="fixed inset-0 z-[85] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0"
+            onClick={() =>
+              !saving && setBulkEditor(null)
+            }
+            aria-label="Close bulk Master Data import"
+          />
+
+          <form
+            onSubmit={saveBulkEditor}
+            className="relative z-10 flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-lg"
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-sky-700">
+                  <ListPlus className="h-4 w-4" />
+                  Flight Log Master Data
+                </div>
+                <h2 className="mt-2 text-xl font-bold text-slate-950 sm:text-2xl">
+                  Bulk add reference values
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Paste one value per line. All new values will be active and
+                  saved together in one update.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  !saving && setBulkEditor(null)
+                }
+                disabled={saving}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-100 disabled:opacity-40"
+                aria-label="Close bulk import"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 p-4 sm:p-6">
+              <div className="grid gap-4 lg:grid-cols-2">
+                {bulkSections.map((section) => {
+                  const Icon = section.icon;
+                  const valueCount = parseBulkValues(
+                    bulkEditor[section.key]
+                  ).length;
+
+                  return (
+                    <label
+                      key={section.key}
+                      className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-900">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="truncate">
+                            {section.label}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                          {valueCount} value{valueCount === 1 ? "" : "s"}
+                        </span>
+                      </span>
+
+                      <textarea
+                        value={bulkEditor[section.key]}
+                        onChange={(event) =>
+                          setBulkEditor((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  [section.key]: event.target.value
+                                }
+                              : current
+                          )
+                        }
+                        className="mt-3 min-h-40 w-full resize-y rounded-lg border border-slate-300 bg-white p-3 text-base leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:text-sm"
+                        placeholder={section.placeholder}
+                        spellCheck={section.key === "afeInstructors"}
+                      />
+
+                      <span className="mt-2 block text-xs text-slate-500">
+                        Maximum {BULK_LIMIT_PER_SECTION} values. Blank lines are ignored.
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-900">
+                Existing values and duplicates within the pasted lists are
+                skipped automatically using case-insensitive matching.
+              </div>
+            </div>
+
+            <footer className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:px-6">
+              <button
+                type="button"
+                onClick={() => setBulkEditor(null)}
+                disabled={saving}
+                className="app-button-secondary justify-center sm:min-w-28"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="app-button-primary justify-center sm:min-w-44"
+              >
+                <ListPlus className="h-4 w-4" />
+                Add all values
+              </button>
+            </footer>
+          </form>
+        </div>
+      ) : null}
 
       {editor ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
