@@ -1,3 +1,103 @@
+"use client";
+
+import {
+  AlertCircle,
+  AtSign,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  LockKeyhole,
+  ShieldCheck,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import {
+  AuthApiError,
+  getSecureSession,
+  loginSecurely,
+} from "@/lib/auth-api";
+
+const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(
+    null
+  );
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  useEffect(() => {
+    const existingSession = getSecureSession();
+
+    if (!existingSession) {
+      setCheckingSession(false);
+      return;
+    }
+
+    if (existingSession.mustChangePassword) {
+      router.replace("/change-password");
+      return;
+    }
+
+    // The stored session already contains a signed token and an expiry time.
+    // AppShell performs the periodic server-side account-status check, so the
+    // login page can route immediately without adding another Apps Script call.
+    router.replace(
+      existingSession.role === "admin" ? "/admin" : "/flight-logs"
+    );
+  }, [router]);
+
+  function clearError() {
+    if (loginError) setLoginError("");
+    if (remainingAttempts !== null) setRemainingAttempts(null);
+  }
+
+  function updateCapsLock(event: KeyboardEvent<HTMLInputElement>) {
+    setCapsLockOn(event.getModifierState("CapsLock"));
+  }
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (loggingIn) return;
+
+    const cleanIdentifier = identifier.trim();
+
+    if (!cleanIdentifier || !password) {
+      setLoginError("Enter your email or username and password.");
+      return;
+    }
+
+    setLoginError("");
+    setRemainingAttempts(null);
+    setLoggingIn(true);
+
+    try {
+      const session = await loginSecurely(cleanIdentifier, password);
+
+      if (session.mustChangePassword) {
+        router.replace("/change-password");
+        return;
+      }
+
+      router.replace(session.role === "admin" ? "/admin" : "/flight-logs");
+    } catch (error) {
+      if (error instanceof AuthApiError) {
+        setLoginError(error.message);
+
+        if (typeof error.remainingAttempts === "number") {
+          setRemainingAttempts(error.remainingAttempts);
         }
         return;
       }
