@@ -43,10 +43,18 @@ const columns: ColumnDefinition[] = [
   { label: "Remarks", width: 49 }
 ];
 
-let cachedLogoImage: HTMLImageElement | null = null;
+let cachedLogoDataUrl = "";
+let logoLoadRequest: Promise<void> | null = null;
 
 function getLogoUrl() {
   if (typeof window === "undefined") return "";
+
+  const manifestLink = document.querySelector<HTMLLinkElement>(
+    'link[rel="manifest"]'
+  );
+  if (manifestLink?.href) {
+    return new URL("aga-horizontal-logo.png", manifestLink.href).toString();
+  }
 
   const nextScript = Array.from(document.scripts).find((script) =>
     script.src.includes("/_next/")
@@ -56,22 +64,50 @@ function getLogoUrl() {
     const scriptUrl = new URL(nextScript.src);
     const basePath = scriptUrl.pathname.split("/_next/")[0];
 
-    return `${scriptUrl.origin}${basePath}/apollo-global-academy-logo.png`;
+    return `${scriptUrl.origin}${basePath}/aga-horizontal-logo.png`;
   }
 
-  return `${window.location.origin}/apollo-global-academy-logo.png`;
+  return `${window.location.origin}/UATO/aga-horizontal-logo.png`;
 }
 
-function preloadLogo() {
-  if (typeof window === "undefined" || cachedLogoImage) return;
-
-  const image = new Image();
-  image.crossOrigin = "anonymous";
-  image.src = getLogoUrl();
-  cachedLogoImage = image;
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
-preloadLogo();
+export function preloadFlightLogPdfAssets() {
+  if (typeof window === "undefined" || cachedLogoDataUrl) {
+    return Promise.resolve();
+  }
+
+  if (logoLoadRequest) return logoLoadRequest;
+
+  logoLoadRequest = fetch(getLogoUrl(), { cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error("Logo could not be loaded.");
+      return response.blob();
+    })
+    .then(blobToDataUrl)
+    .then((dataUrl) => {
+      cachedLogoDataUrl = dataUrl;
+    })
+    .catch(() => {
+      cachedLogoDataUrl = "";
+    })
+    .finally(() => {
+      logoLoadRequest = null;
+    });
+
+  return logoLoadRequest;
+}
+
+if (typeof window !== "undefined") {
+  void preloadFlightLogPdfAssets();
+}
 
 export function safePdfFileName(value: string) {
   return value
@@ -110,19 +146,10 @@ function formatFlightDate(value: string) {
 }
 
 function drawLogo(doc: jsPDF) {
-  // Copy to a local variable so TypeScript can confirm it is not null.
-  const logoImage = cachedLogoImage;
-
-  if (
-    logoImage !== null &&
-    logoImage.complete &&
-    logoImage.naturalWidth > 0
-  ) {
+  if (cachedLogoDataUrl) {
     try {
-      const imageRatio =
-        logoImage.naturalWidth /
-        Math.max(logoImage.naturalHeight, 1);
-
+      // The supplied horizontal brand asset is 2821 x 1087.
+      const imageRatio = 2821 / 1087;
       let logoHeight = LOGO_AREA_HEIGHT;
       let logoWidth = logoHeight * imageRatio;
 
@@ -138,7 +165,7 @@ function drawLogo(doc: jsPDF) {
         (LOGO_AREA_HEIGHT - logoHeight) / 2;
 
       doc.addImage(
-        logoImage,
+        cachedLogoDataUrl,
         "PNG",
         logoX,
         logoY,
