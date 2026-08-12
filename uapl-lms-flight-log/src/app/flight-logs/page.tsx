@@ -111,25 +111,25 @@ const fields: {
 
 const remarkPresets: RemarkPreset[] = [
   {
-    value: "Take-Off and Hover (Up)",
+    value: "Take-Off and Hover (↑)",
     label: "Take-Off and Hover",
     direction: "Up",
     icon: ArrowUp,
   },
   {
-    value: "Take-Off Hover (Left)",
+    value: "Take-Off Hover (←)",
     label: "Take-Off Hover",
     direction: "Left",
     icon: ArrowLeft,
   },
   {
-    value: "Take-Off Hover (Down)",
+    value: "Take-Off Hover (↓)",
     label: "Take-Off Hover",
     direction: "Down",
     icon: ArrowDown,
   },
   {
-    value: "Take-Off Hover (Right)",
+    value: "Take-Off Hover (→)",
     label: "Take-Off Hover",
     direction: "Right",
     icon: ArrowRight,
@@ -148,7 +148,13 @@ const remarkPresetValues = new Set(
 );
 
 function parseRemarks(value: string) {
-  const parts = String(value || "")
+  const normalizedValue = String(value || "")
+    .replaceAll("Take-Off and Hover (Up)", "Take-Off and Hover (↑)")
+    .replaceAll("Take-Off Hover (Left)", "Take-Off Hover (←)")
+    .replaceAll("Take-Off Hover (Down)", "Take-Off Hover (↓)")
+    .replaceAll("Take-Off Hover (Right)", "Take-Off Hover (→)");
+
+  const parts = normalizedValue
     .split(";")
     .map((part) => part.trim())
     .filter(Boolean);
