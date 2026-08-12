@@ -3,23 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --app-background: #eef3f8;
+  --app-background: #edf2f6;
   --app-surface: #ffffff;
-  --app-surface-subtle: #f8fafc;
-  --app-foreground: #405168;
-  --app-heading: #16263c;
-  --app-muted: #6b7d92;
-  --app-border: #d7e0ea;
-  --app-border-strong: #c3cfdd;
-  --app-primary: #075f8f;
-  --app-primary-hover: #064d75;
+  --app-surface-subtle: #f6f8fa;
+  --app-foreground: #415168;
+  --app-heading: #11263b;
+  --app-muted: #687a90;
+  --app-border: #d3dde7;
+  --app-border-strong: #bcc9d6;
+  --app-primary: #006b8f;
+  --app-primary-hover: #005776;
+  --app-primary-soft: #e9f6fa;
   --app-navy: #102a43;
-  --app-accent: #c7353d;
-  --app-focus: rgba(8, 125, 178, 0.2);
-  --app-shadow: 0 1px 2px rgba(16, 42, 67, 0.04),
-    0 8px 24px rgba(16, 42, 67, 0.06);
-  --app-shadow-raised: 0 2px 4px rgba(16, 42, 67, 0.06),
-    0 16px 40px rgba(16, 42, 67, 0.11);
+  --app-accent: #d53d48;
+  --app-teal: #0b8b80;
+  --app-gold: #c88b18;
+  --app-focus: rgba(0, 107, 143, 0.2);
+  --app-shadow: 0 1px 2px rgba(17, 38, 59, 0.04),
+    0 10px 26px rgba(17, 38, 59, 0.065);
+  --app-shadow-raised: 0 2px 5px rgba(17, 38, 59, 0.07),
+    0 20px 46px rgba(17, 38, 59, 0.13);
   --background: var(--app-background);
   --foreground: var(--app-foreground);
 }
@@ -130,12 +133,12 @@ canvas {
 }
 
 ::selection {
-  background: #0b638f;
+  background: var(--app-primary);
   color: #ffffff;
 }
 
 * {
-  scrollbar-color: #b9c6d5 transparent;
+  scrollbar-color: #aebdca transparent;
   scrollbar-width: thin;
 }
 
@@ -147,7 +150,7 @@ canvas {
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: #b9c6d5;
+  background: #aebdca;
   background-clip: padding-box;
 }
 
@@ -219,12 +222,13 @@ canvas {
     @apply min-w-0 rounded-lg border bg-white p-4 sm:p-5;
     border-color: var(--app-border);
     box-shadow: var(--app-shadow);
+    transition: border-color 180ms ease, box-shadow 180ms ease;
   }
 
   .app-page-header {
     @apply relative min-w-0 overflow-hidden rounded-lg border bg-white p-5 sm:p-6;
     border-color: var(--app-border);
-    box-shadow: var(--app-shadow);
+    box-shadow: var(--app-shadow-raised);
   }
 
   .app-page-header::before {
@@ -233,6 +237,15 @@ canvas {
     inset: 0 auto 0 0;
     width: 4px;
     background: var(--app-primary);
+  }
+
+  .app-page-header::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto auto;
+    width: 52px;
+    height: 3px;
+    background: var(--app-accent);
   }
 
   .app-title {
@@ -256,17 +269,18 @@ canvas {
   }
 
   .app-divider {
-    border-color: #e5ebf2;
+    border-color: #e2e8ef;
   }
 
   .app-input {
     @apply mt-2 h-12 w-full rounded-lg border bg-white px-3 text-base shadow-sm outline-none transition md:h-11 md:text-sm;
     border-color: var(--app-border-strong);
     color: var(--app-heading);
+    background: #fcfdfe;
   }
 
   .app-input:hover:not(:disabled):not([readonly]) {
-    border-color: #9fb0c3;
+    border-color: #8fa4b7;
   }
 
   .app-input:focus {
@@ -277,21 +291,22 @@ canvas {
   .app-input:disabled,
   .app-input[readonly] {
     @apply bg-slate-100 shadow-none;
-    border-color: #dde5ee;
-    color: #718096;
+    border-color: #dce4eb;
+    background: #f1f4f6;
+    color: #718196;
   }
 
   .app-button-primary {
     @apply inline-flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50;
     background: var(--app-primary);
-    box-shadow: 0 1px 2px rgba(16, 42, 67, 0.12),
-      0 5px 14px rgba(7, 95, 143, 0.18);
+    box-shadow: 0 1px 2px rgba(17, 38, 59, 0.16),
+      0 7px 18px rgba(0, 107, 143, 0.2);
   }
 
   .app-button-primary:hover:not(:disabled) {
     background: var(--app-primary-hover);
-    box-shadow: 0 2px 4px rgba(16, 42, 67, 0.14),
-      0 8px 18px rgba(7, 95, 143, 0.2);
+    box-shadow: 0 2px 4px rgba(17, 38, 59, 0.16),
+      0 10px 22px rgba(0, 107, 143, 0.24);
     transform: translateY(-1px);
   }
 
@@ -302,13 +317,13 @@ canvas {
   .app-button-secondary {
     @apply inline-flex h-11 items-center justify-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50;
     border-color: var(--app-border-strong);
-    color: #405168;
+    color: #364b62;
   }
 
   .app-button-secondary:hover:not(:disabled) {
-    border-color: #8bb4cc;
-    background: #f3f8fb;
-    color: #075f8f;
+    border-color: #75a9bd;
+    background: var(--app-primary-soft);
+    color: var(--app-primary);
   }
 
   .app-icon-button,
@@ -318,12 +333,12 @@ canvas {
 
   .app-icon-button {
     border-color: var(--app-border);
-    color: #607389;
+    color: #586d83;
   }
 
   .app-icon-button:hover:not(:disabled) {
-    border-color: #9ec3d7;
-    background: #f1f8fb;
+    border-color: #84b4c6;
+    background: var(--app-primary-soft);
     color: var(--app-primary);
   }
 
@@ -338,14 +353,14 @@ canvas {
   .app-table-shell {
     @apply min-w-0 overflow-hidden rounded-lg border bg-white;
     border-color: var(--app-border);
-    box-shadow: var(--app-shadow);
+    box-shadow: var(--app-shadow-raised);
   }
 
   .app-table-header {
     @apply border-b text-xs font-bold uppercase;
     border-color: var(--app-border);
-    background: #f4f7fa;
-    color: #586b82;
+    background: #eef3f6;
+    color: #43596f;
   }
 
   .app-table-shell tbody tr {
@@ -353,7 +368,7 @@ canvas {
   }
 
   .app-table-shell tbody tr:hover {
-    background: #f7fafc;
+    background: #f2f8fa;
   }
 
   .app-status-active,
@@ -363,26 +378,34 @@ canvas {
   }
 
   .app-status-active {
-    @apply border-emerald-200 bg-emerald-50 text-emerald-700;
+    border-color: #a9ded2;
+    background: #eaf8f4;
+    color: #087467;
   }
 
   .app-status-warning {
-    @apply border-amber-200 bg-amber-50 text-amber-700;
+    border-color: #ead39b;
+    background: #fff8e8;
+    color: #96610a;
   }
 
   .app-status-danger {
-    @apply border-rose-200 bg-rose-50 text-rose-700;
+    border-color: #efb8bd;
+    background: #fff0f1;
+    color: #b52d39;
   }
 
   .app-toolbar {
     @apply flex min-w-0 flex-col gap-3 rounded-lg border bg-white p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4;
     border-color: var(--app-border);
-    box-shadow: 0 1px 2px rgba(16, 42, 67, 0.04);
+    box-shadow: 0 1px 2px rgba(17, 38, 59, 0.05),
+      0 7px 18px rgba(17, 38, 59, 0.04);
   }
 
   .app-empty-state {
-    @apply rounded-lg border border-dashed bg-slate-50 p-8 text-center;
+    @apply rounded-lg border border-dashed p-8 text-center;
     border-color: var(--app-border-strong);
+    background: #f5f8fa;
   }
 
   .app-overlay-enter {
