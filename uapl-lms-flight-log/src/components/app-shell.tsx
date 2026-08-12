@@ -492,14 +492,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (checkingSession || !session) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#eef3f8] px-4">
-        <div className="app-panel-enter flex items-center gap-3 rounded-lg border border-[#d7e0ea] bg-white px-5 py-4 shadow-[0_16px_40px_rgba(16,42,67,0.12)]">
-          <Loader2 className="h-5 w-5 animate-spin text-[#075f8f]" />
+      <div className="flex min-h-screen items-center justify-center bg-[#edf2f6] px-4">
+        <div className="app-panel-enter flex items-center gap-3 rounded-lg border border-[#d3dde7] bg-white px-5 py-4 shadow-[0_18px_44px_rgba(17,38,59,0.14)]">
+          <Loader2 className="h-5 w-5 animate-spin text-[#006b8f]" />
           <div>
-            <p className="text-sm font-semibold text-[#16263c]">
+            <p className="text-sm font-semibold text-[#11263b]">
               Verifying session
             </p>
-            <p className="text-xs text-[#6b7d92]">
+            <p className="text-xs text-[#687a90]">
               Checking your secure access...
             </p>
           </div>
@@ -515,7 +515,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   function renderAccount(compact = false) {
     return (
       <div
-        className={`rounded-lg border border-[#d9e2eb] bg-[#f5f8fb] ${
+        className={`rounded-lg border border-[#d3dde7] bg-white shadow-[0_1px_2px_rgba(17,38,59,0.04)] ${
           compact ? "flex justify-center p-2" : "p-3"
         }`}
         title={
@@ -525,7 +525,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }
       >
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#075f8f] shadow-sm ring-1 ring-[#d7e0ea]">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#e9f6fa] text-[#006b8f] shadow-sm ring-1 ring-[#c9e5ee]">
             {activeSession.role === "admin" ? (
               <Shield className="h-5 w-5" />
             ) : (
@@ -535,7 +535,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           {!compact ? (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#16263c]">
+              <p className="truncate text-sm font-semibold text-[#11263b]">
                 {activeSession.name}
               </p>
               <p className="truncate text-xs capitalize text-[#718096]">
@@ -588,18 +588,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     compact ? "justify-center px-2" : "gap-3 px-3"
                   } ${
                     active
-                      ? "bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.18)]"
-                      : "text-[#506278] hover:bg-[#edf3f7] hover:text-[#16263c]"
+                      ? "bg-[#102a43] text-white shadow-[0_7px_18px_rgba(16,42,67,0.22)]"
+                      : "text-[#465d73] hover:bg-[#eaf3f6] hover:text-[#11263b]"
                   }`}
                   aria-expanded={expanded}
                   title={compact ? item.label : undefined}
                 >
                   {active ? (
-                    <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#6bc4e8]" />
+                    <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#58bddc]" />
                   ) : null}
                   <Icon
                     className={`h-[18px] w-[18px] shrink-0 ${
-                      active ? "text-[#6bc4e8]" : "text-[#708399]"
+                      active ? "text-[#58bddc]" : "text-[#708399]"
                     }`}
                   />
                   {!compact ? (
@@ -645,17 +645,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             }}
                             className={`relative flex min-h-10 items-center rounded-lg px-3 py-2 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-[#4ba3c7] focus-visible:ring-offset-1 ${
                               selected
-                                ? "bg-[#eaf4f8] font-semibold text-[#075f8f] ring-1 ring-inset ring-[#d2e9f2]"
-                                : "text-[#66798f] hover:bg-[#f0f4f8] hover:text-[#16263c]"
+                                ? "bg-[#e9f6fa] font-semibold text-[#006b8f] ring-1 ring-inset ring-[#c9e5ee]"
+                                : "text-[#66798f] hover:bg-[#edf3f6] hover:text-[#11263b]"
                             }`}
                             aria-current={selected ? "page" : undefined}
                           >
                             {selected ? (
-                              <span className="absolute -left-[13px] top-2 h-6 w-1 rounded-full bg-[#c7353d]" />
+                              <span className="absolute -left-[13px] top-2 h-6 w-1 rounded-full bg-[#d53d48]" />
                             ) : null}
                             <span
                               className={`mr-2 h-1.5 w-1.5 shrink-0 rounded-full ${
-                                selected ? "bg-[#c7353d]" : "bg-[#bdc9d6]"
+                                selected ? "bg-[#d53d48]" : "bg-[#bdc9d6]"
                               }`}
                             />
                             <span className="truncate">{child.label}</span>
@@ -684,18 +684,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 compact ? "justify-center px-2" : "gap-3 px-3"
               } ${
                 active
-                  ? "bg-[#102a43] text-white shadow-[0_5px_14px_rgba(16,42,67,0.18)]"
-                  : "text-[#506278] hover:bg-[#edf3f7] hover:text-[#16263c]"
+                  ? "bg-[#102a43] text-white shadow-[0_7px_18px_rgba(16,42,67,0.22)]"
+                  : "text-[#465d73] hover:bg-[#eaf3f6] hover:text-[#11263b]"
               }`}
               aria-current={active ? "page" : undefined}
               title={compact ? item.label : undefined}
             >
               {active ? (
-                <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#6bc4e8]" />
+                <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#58bddc]" />
               ) : null}
               <Icon
                 className={`h-[18px] w-[18px] shrink-0 ${
-                  active ? "text-[#6bc4e8]" : "text-[#708399]"
+                  active ? "text-[#58bddc]" : "text-[#708399]"
                 }`}
               />
               {!compact ? <span className="truncate">{item.label}</span> : null}
@@ -729,11 +729,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`min-h-screen w-full overflow-x-hidden bg-[#eef3f8] transition-[padding-left] duration-300 ease-out ${
+      className={`min-h-screen w-full overflow-x-hidden bg-[#edf2f6] transition-[padding-left] duration-300 ease-out ${
         desktopCollapsed ? "lg:pl-[84px]" : "lg:pl-[288px]"
       }`}
     >
-      <header className="sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-30 border-b border-[#d3dde7] bg-white/95 shadow-[0_5px_20px_rgba(17,38,59,0.09)] backdrop-blur lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
           <button
@@ -765,7 +765,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
 
         <aside
-          className={`absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-hidden border-r border-[#d7e0ea] bg-white shadow-[0_20px_50px_rgba(16,42,67,0.25)] transition-transform duration-300 ease-out ${
+          className={`absolute left-0 top-0 flex h-full w-[88vw] max-w-[340px] flex-col overflow-hidden border-r border-[#d3dde7] bg-[#f9fbfc] shadow-[0_24px_60px_rgba(17,38,59,0.27)] transition-transform duration-300 ease-out ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -797,7 +797,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 hidden h-dvh min-h-0 flex-col overflow-visible border-r border-[#d4dee8] bg-[#fbfcfe] shadow-[5px_0_22px_rgba(16,42,67,0.04)] transition-[width] duration-300 ease-out lg:flex ${
+        className={`app-nav-surface fixed inset-y-0 left-0 z-40 hidden h-dvh min-h-0 flex-col overflow-visible border-r transition-[width] duration-300 ease-out lg:flex ${
           desktopCollapsed ? "w-[84px]" : "w-[288px]"
         }`}
       >
@@ -856,7 +856,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <div
-          className={`shrink-0 border-t border-[#e3e9f0] bg-[#fbfcfe] py-3 ${
+          className={`shrink-0 border-t border-[#e0e7ee] bg-[#f9fbfc] py-3 ${
             desktopCollapsed ? "px-3" : "px-5"
           }`}
         >
