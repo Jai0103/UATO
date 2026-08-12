@@ -193,42 +193,42 @@ export default function AdminPage() {
       value: String(dashboard.totalStudents),
       icon: GraduationCap,
       description: "Unique student records",
-      tone: "border-t-sky-500 bg-sky-50 text-sky-700"
+      tone: "border-t-sky-400 bg-sky-50 text-sky-700"
     },
     {
       label: "Pending",
       value: String(dashboard.pendingRecords),
       icon: Clock,
       description: "Missing signature or entries",
-      tone: "border-t-amber-500 bg-amber-50 text-amber-700"
+      tone: "border-t-amber-400 bg-amber-50 text-amber-700"
     },
     {
       label: "Trainers",
       value: String(dashboard.activeTrainers),
       icon: Users,
       description: "Active trainer accounts",
-      tone: "border-t-indigo-500 bg-indigo-50 text-indigo-700"
+      tone: "border-t-indigo-400 bg-indigo-50 text-indigo-700"
     },
     {
       label: "Completed",
       value: String(dashboard.completedRecords),
       icon: ClipboardCheck,
       description: "Ready flight log reports",
-      tone: "border-t-emerald-500 bg-emerald-50 text-emerald-700"
+      tone: "border-t-emerald-400 bg-emerald-50 text-emerald-700"
     },
     {
       label: "Flights",
       value: String(dashboard.totalFlights),
       icon: ClipboardList,
       description: "Total flight entries",
-      tone: "border-t-rose-500 bg-rose-50 text-rose-700"
+      tone: "border-t-rose-400 bg-rose-50 text-rose-700"
     },
     {
       label: "Flight Time",
       value: formatMinutes(dashboard.totalMinutes),
       icon: Timer,
       description: "Combined recorded duration",
-      tone: "border-t-teal-500 bg-teal-50 text-teal-700"
+      tone: "border-t-teal-400 bg-teal-50 text-teal-700"
     }
   ];
 
@@ -237,17 +237,17 @@ export default function AdminPage() {
       {loading ? <LoadingOverlay label="Loading dashboard statistics..." /> : null}
 
       <div className="app-page">
-        <section className="app-page-header">
+        <section className="app-page-header py-5 sm:py-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-bold text-[#075f8f] ring-1 ring-[#d5e9f1]">
+              <div className="inline-flex items-center gap-2 rounded-md bg-[#e9f6fa] px-2.5 py-1 text-xs font-bold text-[#006b8f] ring-1 ring-[#c9e5ee]">
                 <Database className="h-3.5 w-3.5" />
                 Admin Overview
               </div>
-              <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">
+              <h1 className="mt-3 text-2xl font-bold text-[#11263b] sm:text-3xl">
                 Dashboard
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6b7d92]">
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#687a90]">
                 Monitor training records, operational activity, and system administration.
               </p>
             </div>
@@ -272,22 +272,22 @@ export default function AdminPage() {
             return (
               <article
                 key={stat.label}
-                className={`group min-w-0 rounded-lg border border-[#d7e0ea] border-t-[3px] bg-white p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04),0_7px_20px_rgba(16,42,67,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(16,42,67,0.06),0_14px_30px_rgba(16,42,67,0.09)] sm:p-5 ${accent}`}
+                className={`app-dashboard-stat group border-t-[3px] ${accent}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase text-[#6b7d92] sm:text-sm sm:normal-case">
+                    <p className="text-xs font-semibold uppercase text-[#687a90] sm:text-sm sm:normal-case">
                       {stat.label}
                     </p>
-                    <p className="mt-2 break-words text-2xl font-bold text-[#16263c] sm:text-3xl">
+                    <p className="mt-2 break-words text-2xl font-bold text-[#11263b] sm:text-3xl">
                       {stat.value}
                     </p>
                   </div>
-                  <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 transition group-hover:scale-105 sm:flex ${iconBackground} ${iconColor}`}>
+                  <div className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/80 shadow-sm ring-1 transition duration-200 group-hover:scale-105 sm:flex ${iconBackground} ${iconColor}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs leading-5 text-[#718096]">
+                <p className="mt-2 text-xs leading-5 text-[#718196]">
                   {stat.description}
                 </p>
               </article>
@@ -296,7 +296,7 @@ export default function AdminPage() {
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-          <article className="app-card min-w-0 overflow-hidden">
+          <article className="app-dashboard-panel p-4 sm:p-5">
             <div className="flex flex-col gap-3 border-b border-[#e5ebf2] pb-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="app-section-label">Activity trend</p>
@@ -316,7 +316,7 @@ export default function AdminPage() {
             <MonthlyActivityChart data={dashboard.monthlyActivity} />
           </article>
 
-          <article className="app-card min-w-0">
+          <article className="app-dashboard-panel p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="app-section-label">Latest updates</p>
