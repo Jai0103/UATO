@@ -1,4 +1,4 @@
-const VERSION = "uapl-fms-2026-08-05-v4";
+const VERSION = "uapl-fms-2026-08-12-v5";
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 const BASE_PATH = "/UATO";
@@ -11,7 +11,8 @@ const CORE_ASSETS = [
   `${BASE_PATH}/app-icon-180.png`,
   `${BASE_PATH}/app-icon-192.png`,
   `${BASE_PATH}/app-icon-512.png`,
-  `${BASE_PATH}/app-icon-maskable-512.png`
+  `${BASE_PATH}/app-icon-maskable-512.png`,
+  `${BASE_PATH}/aga-horizontal-logo.png`
 ];
 
 self.addEventListener("install", (event) => {
@@ -111,4 +112,3 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
-
