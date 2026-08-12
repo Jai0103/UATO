@@ -29,6 +29,10 @@ import {
   type MasterData,
 } from "@/lib/master-data";
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -36,6 +40,7 @@ import {
   Clock,
   FileCheck2,
   MapPin,
+  ListChecks,
   Pencil,
   Plus,
   RotateCcw,
@@ -55,6 +60,13 @@ import {
 } from "react";
 
 type StepKey = "details" | "signature" | "flights" | "review";
+
+type RemarkPreset = {
+  value: string;
+  label: string;
+  direction?: string;
+  icon?: typeof ArrowUp;
+};
 
 type FlightLogDraft = {
   recordId?: string;
@@ -96,6 +108,56 @@ const fields: {
   { key: "instructorInCommand", label: "AFE / Instructor in Command" },
   { key: "remarks", label: "Remarks" },
 ];
+
+const remarkPresets: RemarkPreset[] = [
+  {
+    value: "Take-Off and Hover (Up)",
+    label: "Take-Off and Hover",
+    direction: "Up",
+    icon: ArrowUp,
+  },
+  {
+    value: "Take-Off Hover (Left)",
+    label: "Take-Off Hover",
+    direction: "Left",
+    icon: ArrowLeft,
+  },
+  {
+    value: "Take-Off Hover (Down)",
+    label: "Take-Off Hover",
+    direction: "Down",
+    icon: ArrowDown,
+  },
+  {
+    value: "Take-Off Hover (Right)",
+    label: "Take-Off Hover",
+    direction: "Right",
+    icon: ArrowRight,
+  },
+  {
+    value: "Take-Off and Hover (All orientations)",
+    label: "Take-Off and Hover (All orientations)",
+  },
+  { value: "Precision Landing", label: "Precision Landing" },
+  { value: "A/D Square", label: "A/D Square" },
+  { value: "Figure 8", label: "Figure 8" },
+];
+
+const remarkPresetValues = new Set(
+  remarkPresets.map((preset) => preset.value)
+);
+
+function parseRemarks(value: string) {
+  const parts = String(value || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return {
+    selected: parts.filter((part) => remarkPresetValues.has(part)),
+    notes: parts.filter((part) => !remarkPresetValues.has(part)).join("; "),
+  };
+}
 
 function hasStudentDetails(student: StudentDetails) {
   return Boolean(
@@ -168,6 +230,11 @@ export default function FlightLogsPage() {
   const [activeUpdatedAt, setActiveUpdatedAt] = useState("");
   const [activeSuggestField, setActiveSuggestField] =
     useState<keyof FlightLogRow | null>(null);
+  const [remarksPickerOpen, setRemarksPickerOpen] = useState(false);
+  const [selectedPresetRemarks, setSelectedPresetRemarks] = useState<string[]>(
+    []
+  );
+  const [additionalRemarks, setAdditionalRemarks] = useState("");
 
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const masterDataRequestSequence = useRef(0);
@@ -410,6 +477,35 @@ export default function FlightLogsPage() {
     setFlightForm((current) => ({ ...current, [field]: value }));
   }
 
+  function openRemarksPicker() {
+    const parsed = parseRemarks(flightForm.remarks);
+    setSelectedPresetRemarks(parsed.selected);
+    setAdditionalRemarks(parsed.notes);
+    setRemarksPickerOpen(true);
+  }
+
+  function closeRemarksPicker() {
+    setRemarksPickerOpen(false);
+  }
+
+  function togglePresetRemark(value: string) {
+    setSelectedPresetRemarks((current) =>
+      current.includes(value)
+        ? current.filter((remark) => remark !== value)
+        : [...current, value]
+    );
+  }
+
+  function applySelectedRemarks() {
+    const remarks = [
+      ...selectedPresetRemarks,
+      additionalRemarks.trim(),
+    ].filter(Boolean);
+
+    updateFlightForm("remarks", remarks.join("; "));
+    setRemarksPickerOpen(false);
+  }
+
   async function validateStudentIdentity() {
     if (!detailsDone) {
       notify({
@@ -631,6 +727,7 @@ export default function FlightLogsPage() {
 
   function closeFlightModal() {
     setModalOpen(false);
+    setRemarksPickerOpen(false);
     setEditingIndex(null);
     setFlightForm({ ...emptyRow });
     setSavedUnavailableBatteries([]);
@@ -1093,6 +1190,31 @@ export default function FlightLogsPage() {
       return renderSmartSuggestionField(
         "batterySn",
         availableBatteryOptions
+      );
+    }
+
+    if (field.key === "remarks") {
+      return (
+        <div className="mt-2 space-y-2">
+          <textarea
+            rows={3}
+            className="min-h-24 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-3 text-base leading-6 text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:text-sm"
+            value={flightForm.remarks}
+            onChange={(event) =>
+              updateFlightForm("remarks", event.target.value)
+            }
+            placeholder="Selected exercises and additional remarks will appear here"
+          />
+
+          <button
+            type="button"
+            onClick={openRemarksPicker}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 text-sm font-bold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100 sm:w-auto"
+          >
+            <ListChecks size={17} />
+            Enter Remarks
+          </button>
+        </div>
       );
     }
 
@@ -1656,6 +1778,116 @@ export default function FlightLogsPage() {
               <button onClick={saveFlightEntry} className="app-button-primary">
                 <Save size={16} />
                 {editingIndex === null ? "Add Flight" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {remarksPickerOpen ? (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remarks-picker-title"
+            className="max-h-[92dvh] w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-xl sm:rounded-lg"
+          >
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-sky-100 bg-sky-50 px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase text-sky-700">
+                  Flight exercises
+                </p>
+                <h2
+                  id="remarks-picker-title"
+                  className="mt-0.5 text-lg font-bold text-slate-800"
+                >
+                  Enter Remarks
+                </h2>
+                <p className="mt-1 text-sm leading-5 text-slate-500">
+                  Select every exercise completed during this flight.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeRemarksPicker}
+                className="app-icon-button shrink-0"
+                aria-label="Close remarks"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-4 sm:p-5">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {remarkPresets.map((preset) => {
+                  const checked = selectedPresetRemarks.includes(preset.value);
+                  const DirectionIcon = preset.icon;
+
+                  return (
+                    <label
+                      key={preset.value}
+                      className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-lg border p-3 transition ${
+                        checked
+                          ? "border-sky-500 bg-sky-50 shadow-sm ring-1 ring-sky-100"
+                          : "border-slate-200 bg-white hover:border-sky-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePresetRemark(preset.value)}
+                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-sky-700 focus:ring-sky-500"
+                      />
+
+                      {DirectionIcon ? (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-sky-700 shadow-sm ring-1 ring-sky-100">
+                          <DirectionIcon size={18} strokeWidth={2.4} />
+                        </span>
+                      ) : null}
+
+                      <span className="min-w-0 text-sm font-semibold leading-5 text-slate-700">
+                        {preset.label}
+                        {preset.direction ? (
+                          <span className="block text-xs font-medium text-sky-700">
+                            {preset.direction} orientation
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">
+                  Additional remarks
+                </span>
+                <textarea
+                  rows={3}
+                  value={additionalRemarks}
+                  onChange={(event) => setAdditionalRemarks(event.target.value)}
+                  className="mt-2 min-h-24 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-3 text-base leading-6 text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-sky-600 focus:ring-2 focus:ring-sky-100 md:text-sm"
+                  placeholder="Optional notes"
+                />
+              </label>
+            </div>
+
+            <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:p-5">
+              <button
+                type="button"
+                onClick={closeRemarksPicker}
+                className="app-button-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applySelectedRemarks}
+                className="app-button-primary"
+              >
+                <Check size={16} />
+                Apply Remarks
               </button>
             </div>
           </div>
