@@ -215,6 +215,8 @@ export default function RecordsPage() {
 
       const pdfModule = await import("@/lib/pdf");
 
+      await pdfModule.preloadFlightLogPdfAssets();
+
       pdfModule.generateFlightLogPdf({
         student: detail.student,
         rows: detail.rows,
