@@ -39,8 +39,8 @@ type ApiCacheEntry = {
 
 const API_CACHE_PREFIX = "uapl-api-cache-v4:";
 const MAX_PERSISTED_CACHE_ENTRIES = 40;
-const API_READ_TIMEOUT_MS = 30_000;
-const API_WRITE_TIMEOUT_MS = 90_000;
+const API_READ_TIMEOUT_MS = 22_000;
+const API_WRITE_TIMEOUT_MS = 75_000;
 const apiMemoryCache = new Map<string, ApiCacheEntry>();
 const apiRequestsInFlight = new Map<string, Promise<unknown>>();
 
@@ -56,7 +56,7 @@ const API_READ_CACHE: Record<string, ApiCacheConfig> = {
   getUaMaintenanceMasterData: { ttlMs: 5 * 60_000, persist: true },
   getStaffTrainingDescriptions: { ttlMs: 5 * 60_000, persist: true },
   getUsers: { ttlMs: 2 * 60_000, persist: false },
-  getRecordsPage: { ttlMs: 10_000, persist: false },
+  getRecordsPage: { ttlMs: 30_000, persist: true },
   getRecordsByIds: { ttlMs: 30_000, persist: false },
   getStaffTrainingRecords: { ttlMs: 10_000, persist: false },
   getStaffTrainingRecordsPage: { ttlMs: 10_000, persist: false },
@@ -66,6 +66,9 @@ const API_READ_CACHE: Record<string, ApiCacheConfig> = {
   getInventoryActivityPage: { ttlMs: 10_000, persist: false },
   getApprovalsPage: { ttlMs: 10_000, persist: false },
   getAuditHistoryPage: { ttlMs: 20_000, persist: false },
+  getEvaluationSessionsPage: { ttlMs: 20_000, persist: false },
+  getEvaluationResponsesPage: { ttlMs: 20_000, persist: false },
+  getEvaluationQuestions: { ttlMs: 5 * 60_000, persist: true },
   getRecordById: { ttlMs: 45_000, persist: false },
   getStaffTrainingRecord: { ttlMs: 45_000, persist: false },
   getUaMaintenanceRecord: { ttlMs: 45_000, persist: false },
@@ -219,8 +222,15 @@ export function invalidateGoogleApiCache() {
 }
 
 function actionChangesData(action: string) {
-  return /^(save|delete|archive|create|update|setup|set|reset|rebuild)/i.test(
-    action
+  return (
+    /^(save|delete|archive|create|update|setup|set|reset|rebuild)/i.test(
+      action
+    ) ||
+    [
+      "submitPublicEvaluation",
+      "closeEvaluationSession",
+      "secureChangePassword"
+    ].includes(action)
   );
 }
 
@@ -381,6 +391,44 @@ function handleAuthenticationError(
   }
 }
 
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
+async function fetchGoogleOnce(
+  requestBody: string,
+  timeoutMs: number
+) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(googleAppsScriptUrl, {
+      method: "POST",
+      body: requestBody,
+      cache: "no-store",
+      redirect: "follow",
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new GoogleApiError(
+        "Google Sheets took too long to respond. Please try again.",
+        "REQUEST_TIMEOUT"
+      );
+    }
+
+    throw new GoogleApiError(
+      "Unable to connect to Google Sheets. Check your internet connection.",
+      "NETWORK_ERROR"
+    );
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export async function postToGoogle<T>(
   payload: Record<string, unknown>
 ): Promise<T> {
@@ -410,39 +458,25 @@ export async function postToGoogle<T>(
 
   const request = (async () => {
     let response: Response;
-    const controller = new AbortController();
     const timeoutMs = actionChangesData(action)
       ? API_WRITE_TIMEOUT_MS
       : API_READ_TIMEOUT_MS;
-    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const requestBody = JSON.stringify({ ...payload, sessionToken });
 
     try {
-      response = await fetch(
-        googleAppsScriptUrl,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            ...payload,
-            sessionToken
-          }),
-          cache: "no-store",
-          redirect: "follow",
-          signal: controller.signal
-        }
-      );
+      response = await fetchGoogleOnce(requestBody, timeoutMs);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw new GoogleApiError(
-          "Google Sheets took too long to respond. Please try again.",
-          "REQUEST_TIMEOUT"
-        );
-      }
-      throw new GoogleApiError(
-        "Unable to connect to Google Sheets. Check your internet connection.",
-        "NETWORK_ERROR"
-      );
-    } finally {
-      window.clearTimeout(timeout);
+      const retryable =
+        Boolean(cacheConfig) &&
+        error instanceof GoogleApiError &&
+        ["REQUEST_TIMEOUT", "NETWORK_ERROR"].includes(error.code);
+
+      if (!retryable) throw error;
+
+      // Read requests are safe to retry. Writes are deliberately never retried
+      // because the first Apps Script execution may already have committed.
+      await wait(450);
+      response = await fetchGoogleOnce(requestBody, timeoutMs);
     }
 
     if (!response.ok) {
