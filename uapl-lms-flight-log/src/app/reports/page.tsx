@@ -219,6 +219,7 @@ export default function ReportsPage() {
 
       setWorkingLabel(`Building ${records.length} Flight Log report(s)...`);
       await allowBrowserPaint();
+      await pdfModule.preloadFlightLogPdfAssets();
       const doc = pdfModule.createCombinedFlightLogPdf(records);
 
       setWorkingLabel("Starting PDF download...");
