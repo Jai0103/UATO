@@ -16,7 +16,9 @@ import {
   LogOut,
   Menu,
   MessageSquareText,
+  Moon,
   Shield,
+  Sun,
   UserCircle,
   UserCog,
   X
@@ -50,6 +52,7 @@ const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 const SQUARE_LOGO_PATH = "/UATO/AGA_Logo_Square%20(1).jpg";
 const PASSWORD_PAGE = "/change-password";
 const SIDEBAR_STORAGE_KEY = "uapl-desktop-sidebar-collapsed";
+const THEME_STORAGE_KEY = "uapl-interface-theme";
 const SESSION_VERIFICATION_INTERVAL_MS = 2 * 60 * 1000;
 
 let lastSessionVerificationAt = 0;
@@ -275,9 +278,54 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [checkingSession, setCheckingSession] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const prefetchedRoutes = useRef(new Set<string>());
+
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setDarkMode(isDark);
+  }, []);
+
+  function toggleDarkMode() {
+    setDarkMode((current) => {
+      const next = !current;
+      document.documentElement.classList.toggle("dark", next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
+      } catch {
+        // Theme still changes when browser storage is unavailable.
+      }
+      return next;
+    });
+  }
+
+  function renderThemeToggle(compact = false, iconOnly = false) {
+    const label = darkMode ? "Use light mode" : "Use dark mode";
+
+    return (
+      <button
+        type="button"
+        onClick={toggleDarkMode}
+        className={`app-theme-toggle flex h-11 items-center rounded-lg text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#4ba3c7] focus-visible:ring-offset-2 ${
+          compact || iconOnly ? "w-11 justify-center" : "w-full gap-3 px-3"
+        }`}
+        aria-label={label}
+        title={label}
+        aria-pressed={darkMode}
+      >
+        {darkMode ? (
+          <Sun className="h-[18px] w-[18px] shrink-0" />
+        ) : (
+          <Moon className="h-[18px] w-[18px] shrink-0" />
+        )}
+        {!compact && !iconOnly ? (
+          <span>{darkMode ? "Light mode" : "Dark mode"}</span>
+        ) : null}
+      </button>
+    );
+  }
 
   useEffect(() => {
     try {
@@ -733,18 +781,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         desktopCollapsed ? "lg:pl-[84px]" : "lg:pl-[288px]"
       }`}
     >
-      <header className="app-mobile-header sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
+      <header className="app-mobile-header app-brand-zone sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] shadow-sm outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
-            aria-label="Open navigation menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {renderThemeToggle(false, true)}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] shadow-sm outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
+              aria-label="Open navigation menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -769,7 +820,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#dce4ed] bg-white px-4 py-3">
+          <div className="app-brand-zone flex shrink-0 items-center justify-between gap-3 border-b border-[#dce4ed] bg-white px-4 py-3">
             <BrandLogo mobile />
             <button
               type="button"
@@ -802,7 +853,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div
-          className={`relative shrink-0 border-b border-[#dce4ed] ${
+          className={`app-brand-zone relative shrink-0 border-b border-[#dce4ed] ${
             desktopCollapsed ? "px-3 py-4" : "px-5 py-5"
           }`}
         >
@@ -860,6 +911,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             desktopCollapsed ? "px-3" : "px-5"
           }`}
         >
+          <div className="mb-1">{renderThemeToggle(desktopCollapsed)}</div>
           {renderLogout(desktopCollapsed)}
         </div>
       </aside>
