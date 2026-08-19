@@ -52,8 +52,20 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#102a43" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b121b" },
   ],
 };
+
+const themeInitializationScript = `
+  (function () {
+    try {
+      var savedTheme = localStorage.getItem("uapl-interface-theme");
+      document.documentElement.classList.toggle("dark", savedTheme === "dark");
+    } catch (error) {
+      document.documentElement.classList.remove("dark");
+    }
+  })();
+`;
 
 type RootLayoutProps = Readonly<{
   children: ReactNode;
@@ -61,7 +73,10 @@ type RootLayoutProps = Readonly<{
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} />
+      </head>
       <body>
         <MessageProvider>
           {children}
