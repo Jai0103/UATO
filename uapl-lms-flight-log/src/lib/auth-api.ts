@@ -81,7 +81,7 @@ async function postAuthentication<T>(
 ): Promise<T> {
   let response: Response;
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 30_000);
+  const timeout = window.setTimeout(() => controller.abort(), 45_000);
 
   try {
     response = await fetch(
