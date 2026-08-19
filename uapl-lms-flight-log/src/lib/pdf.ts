@@ -424,6 +424,20 @@ function getRowValues(row: FlightLogRow) {
   ];
 }
 
+function normalizePdfTableText(value: unknown) {
+  return String(value ?? "")
+    .replace(/\u2191/g, "^")
+    .replace(/\u2190/g, "<-")
+    .replace(/\u2193/g, "v")
+    .replace(/\u2192/g, "->")
+    .replace(/\u2196/g, "<^-")
+    .replace(/\u2197/g, "-^>")
+    .replace(/\u2199/g, "<v-")
+    .replace(/\u2198/g, "-v>")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function drawTableRow(
   doc: jsPDF,
   row: FlightLogRow,
@@ -447,9 +461,9 @@ function drawTableRow(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.2);
 
-    const value = values[columnIndex] || "";
+    const value = normalizePdfTableText(values[columnIndex]);
     const lines = doc
-      .splitTextToSize(value, column.width - 3)
+      .splitTextToSize(value, column.width - 4)
       .slice(0, 3);
 
     const lineHeight = 3.5;
@@ -463,8 +477,7 @@ function drawTableRow(
       textY,
       {
         align: column.align || "left",
-        lineHeightFactor: 1.05,
-        maxWidth: column.width - 3
+        lineHeightFactor: 1.05
       }
     );
 
