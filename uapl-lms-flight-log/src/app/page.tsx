@@ -22,6 +22,7 @@ import {
   getSecureSession,
   loginSecurely,
 } from "@/lib/auth-api";
+import { googleAppsScriptUrl } from "@/lib/google-api";
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
@@ -58,6 +59,27 @@ export default function LoginPage() {
       existingSession.role === "admin" ? "/admin" : "/flight-logs"
     );
   }, [router]);
+
+  useEffect(() => {
+    if (getSecureSession()) return;
+
+    const controller = new AbortController();
+    const warmup = window.setTimeout(() => {
+      void fetch(googleAppsScriptUrl, {
+        method: "GET",
+        cache: "no-store",
+        redirect: "follow",
+        signal: controller.signal,
+      }).catch(() => {
+        // Warm-up is optional; the real login request still reports errors.
+      });
+    }, 500);
+
+    return () => {
+      window.clearTimeout(warmup);
+      controller.abort();
+    };
+  }, []);
 
   function clearError() {
     if (loginError) setLoginError("");
