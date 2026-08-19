@@ -665,6 +665,19 @@ html.dark .bg-white {
   background-color: #121c28 !important;
 }
 
+html.dark [class*="bg-white/"] {
+  background-color: #121c28 !important;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #172430 !important;
+}
+
+html.dark .bg-slate-950 {
+  background-color: #006f88 !important;
+}
+
 html.dark [class*="bg-[#f"],
 html.dark [class*="bg-[#e"] {
   background-color: #16222e !important;
@@ -697,6 +710,16 @@ html.dark [class*="text-[#8a99aa]"] {
 html.dark [class*="text-[#075f8f]"],
 html.dark [class*="text-[#064d75]"] {
   color: #5bc5da !important;
+}
+
+html.dark .app-brand-zone [class*="text-[#16263c]"],
+html.dark .app-brand-zone [class*="text-[#405168]"],
+html.dark .app-brand-zone [class*="text-[#60748a]"] {
+  color: #13273f !important;
+}
+
+html.dark .text-slate-950 {
+  color: #edf3f8 !important;
 }
 
 html.dark .text-slate-900,
