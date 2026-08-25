@@ -960,14 +960,75 @@ export async function saveGeneratedReportPdf(
     recordIds: string[];
   }
 ) {
-  return postToGoogle<{
-    reportUrl: string;
-    reportFileId: string;
-  }>({
-    action:
-      "saveGeneratedReportPdf",
-    ...payload
-  });
+  const base64Data = payload.base64Pdf.includes(",")
+    ? payload.base64Pdf.split(",").pop() || ""
+    : payload.base64Pdf;
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+
+  for (let index = 0; index < binaryString.length; index += 1) {
+    bytes[index] = binaryString.charCodeAt(index);
+  }
+
+  const safeFileName = payload.fileName
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "flight-log-report.pdf";
+  const reportFileId =
+    `flight-logs/${Date.now()}-${crypto.randomUUID()}-${safeFileName}`;
+
+  const uploadResult = await supabase.storage
+    .from("reports")
+    .upload(reportFileId, bytes, {
+      contentType: "application/pdf",
+      upsert: true
+    });
+
+  if (uploadResult.error) {
+    throw new GoogleApiError(
+      uploadResult.error.message,
+      "SUPABASE_STORAGE_ERROR"
+    );
+  }
+
+  const urlResult = await supabase.storage
+    .from("reports")
+    .createSignedUrl(reportFileId, 60 * 60 * 24 * 7);
+
+  if (urlResult.error) {
+    throw new GoogleApiError(
+      urlResult.error.message,
+      "SUPABASE_STORAGE_ERROR"
+    );
+  }
+
+  const reportUrl = urlResult.data.signedUrl;
+  const reportGeneratedAt = new Date().toISOString();
+
+  if (payload.recordIds.length) {
+    const updateResult = await supabase
+      .from("flight_logs")
+      .update({
+        report_url: reportUrl,
+        report_file_id: reportFileId,
+        report_generated_at: reportGeneratedAt
+      })
+      .in("id", payload.recordIds);
+
+    if (updateResult.error) {
+      throw new GoogleApiError(
+        updateResult.error.message,
+        "SUPABASE_ERROR"
+      );
+    }
+  }
+
+  invalidateGoogleApiCache();
+
+  return {
+    reportUrl,
+    reportFileId
+  };
 }
 
 export async function deleteGoogleRecord(
