@@ -10,6 +10,7 @@ import type {
 import {
   sessionKey
 } from "@/lib/demo-auth";
+import { supabase } from "@/lib/supabase";
 
 export const googleAppsScriptUrl =
   "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
@@ -640,28 +641,79 @@ export async function saveGoogleRecord(
 }
 
 export async function fetchGoogleMasterData() {
-  const data =
-    await postToGoogle<{
-      masterData: MasterData;
-    }>({
-      action: "getMasterData"
-    });
+  const { data, error } = await supabase
+    .from("master_data")
+    .select("section, value, status")
+    .eq("status", "active")
+    .order("value", { ascending: true });
 
-  return data.masterData;
+  if (error) {
+    throw new GoogleApiError(
+      error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const masterData: MasterData = {
+    locations: [],
+    batterySerialNumbers: [],
+    afeInstructors: [],
+    uaModels: [],
+    uaCategories: []
+  };
+
+  for (const row of data || []) {
+    const section = row.section as keyof MasterData;
+
+    if (section in masterData && row.value) {
+      masterData[section].push(row.value);
+    }
+  }
+
+  return masterData;
 }
 
 export async function saveGoogleMasterData(
   masterData: MasterData
 ) {
-  const data =
-    await postToGoogle<{
-      masterData: MasterData;
-    }>({
-      action: "saveMasterData",
-      masterData
-    });
+  const rows = Object.entries(masterData).flatMap(
+    ([section, values]) =>
+      values.map((value) => ({
+        id: crypto.randomUUID(),
+        section,
+        value,
+        status: "active"
+      }))
+  );
 
-  return data.masterData;
+  const deleteResult = await supabase
+    .from("master_data")
+    .delete()
+    .not("section", "is", null);
+
+  if (deleteResult.error) {
+    throw new GoogleApiError(
+      deleteResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  if (rows.length) {
+    const insertResult = await supabase
+      .from("master_data")
+      .insert(rows);
+
+    if (insertResult.error) {
+      throw new GoogleApiError(
+        insertResult.error.message,
+        "SUPABASE_ERROR"
+      );
+    }
+  }
+
+  invalidateGoogleApiCache();
+
+  return masterData;
 }
 
 export async function fetchGoogleUsers() {
