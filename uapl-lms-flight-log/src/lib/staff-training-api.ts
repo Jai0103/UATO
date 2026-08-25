@@ -2,6 +2,7 @@ import { GoogleApiError } from "@/lib/google-api";
 import { supabase } from "@/lib/supabase";
 import type {
   StaffTrainingDescription,
+  StaffTrainingItemStatus,
   StaffTrainingRecord,
   StaffTrainingRecordSummary
 } from "@/lib/staff-training";
@@ -60,7 +61,7 @@ function mapEntry(row: StaffTrainingEntryRow) {
     trainingType: row.training_type,
     description: row.description || "",
     sortOrder: row.sort_order || 0,
-    status: row.status || "",
+    status: (row.status || "") as StaffTrainingItemStatus,
     dateCompleted: row.date_completed || "",
     remarks: row.remarks || ""
   };
