@@ -555,15 +555,15 @@ export async function fetchGoogleRecordsPage(
 
   let builder = supabase
     .from("flight_record_index")
-    .select("*", { count: "exact" })
-    .order("updated_at", { ascending: false })
-    .range(from, to);
+    .select("*", { count: "exact" });
 
   if (query) {
     builder = builder.ilike("search_text", `%${query}%`);
   }
 
-  const { data, error, count } = await builder;
+  const { data, error, count } = await builder
+    .order("updated_at", { ascending: false })
+    .range(from, to);
 
   if (error) {
     throw new GoogleApiError(
