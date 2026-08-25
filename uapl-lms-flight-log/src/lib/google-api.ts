@@ -547,35 +547,56 @@ export async function postToGoogle<T>(
 export async function fetchGoogleRecordsPage(
   request: RecordsPageRequest = {}
 ): Promise<RecordsPageResponse> {
-  const data =
-    await postToGoogle<RecordsPageResponse>({
-      action: "getRecordsPage",
-      page: request.page || 1,
-      pageSize:
-        request.pageSize || 10,
-      query:
-        request.query?.trim() || "",
-      month: request.month || "",
-      year: request.year || ""
-    });
+  const page = request.page || 1;
+  const pageSize = request.pageSize || 10;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const query = request.query?.trim() || "";
+
+  let builder = supabase
+    .from("flight_record_index")
+    .select("*", { count: "exact" })
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+
+  if (query) {
+    builder = builder.ilike("search_text", `%${query}%`);
+  }
+
+  const { data, error, count } = await builder;
+
+  if (error) {
+    throw new GoogleApiError(
+      error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const records: FlightLogRecordSummary[] = (data || []).map((row) => ({
+    id: row.record_id,
+    student: {
+      studentName: row.student_name || "",
+      company: row.company || "",
+      lastFourCharacters: row.last_four_characters || "",
+      studentSignatureDataUrl: row.signature_file_id || ""
+    },
+    rows: [],
+    flightCount: row.flight_count || 0,
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  }));
+
+  const totalRecords = count || 0;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
 
   return {
-    records: data.records || [],
-    page: data.page || 1,
-    pageSize: data.pageSize || 10,
-    totalRecords:
-      data.totalRecords || 0,
-    totalPages:
-      Math.max(
-        1,
-        data.totalPages || 1
-      ),
-    hasPreviousPage:
-      Boolean(
-        data.hasPreviousPage
-      ),
-    hasNextPage:
-      Boolean(data.hasNextPage)
+    records,
+    page,
+    pageSize,
+    totalRecords,
+    totalPages,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages
   };
 }
 
@@ -586,15 +607,31 @@ export async function fetchGoogleRecordsPage(
 export async function fetchGoogleRecordById(
   recordId: string
 ) {
-  const data =
-    await postToGoogle<{
-      record: FlightLogRecord;
-    }>({
-      action: "getRecordById",
-      recordId
-    });
+  const { data, error } = await supabase
+    .from("flight_logs")
+    .select("*")
+    .eq("id", recordId)
+    .single();
 
-  return data.record;
+  if (error) {
+    throw new GoogleApiError(
+      error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  return {
+    id: data.id,
+    student: {
+      studentName: data.student_name || "",
+      company: data.company || "",
+      lastFourCharacters: data.last_four_characters || "",
+      studentSignatureDataUrl: data.signature_file_id || ""
+    },
+    rows: data.rows_json || [],
+    createdAt: data.created_at || "",
+    updatedAt: data.updated_at || ""
+  };
 }
 
 /*
@@ -615,15 +652,30 @@ export async function fetchGoogleRecordsByIds(
     return [];
   }
 
-  const data =
-    await postToGoogle<{
-      records: FlightLogRecord[];
-    }>({
-      action: "getRecordsByIds",
-      recordIds: uniqueIds
-    });
+  const { data, error } = await supabase
+    .from("flight_logs")
+    .select("*")
+    .in("id", uniqueIds);
 
-  return data.records || [];
+  if (error) {
+    throw new GoogleApiError(
+      error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    student: {
+      studentName: row.student_name || "",
+      company: row.company || "",
+      lastFourCharacters: row.last_four_characters || "",
+      studentSignatureDataUrl: row.signature_file_id || ""
+    },
+    rows: row.rows_json || [],
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  }));
 }
 
 export async function saveGoogleRecord(
