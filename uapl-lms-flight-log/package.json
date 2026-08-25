@@ -8,15 +8,14 @@
     "export": "next build",
     "lint": "next lint"
   },
-"dependencies": {
-  "@supabase/supabase-js": "^2.56.0",
-  "jspdf": "^2.5.2",
-  "lucide-react": "^0.468.0",
-  "next": "16.2.10",
-  "qrcode": "^1.5.4",
-  "react": "19.2.3",
-  "react-dom": "19.2.3" 
-},
+  "dependencies": {
+    "jspdf": "^2.5.2",
+    "lucide-react": "^0.468.0",
+    "next": "16.2.10",
+    "qrcode": "^1.5.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/qrcode": "^1.5.5",
@@ -28,3 +27,4 @@
     "typescript": "^5.7.2"
   }
 }
+
