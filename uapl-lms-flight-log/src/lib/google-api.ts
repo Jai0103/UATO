@@ -682,18 +682,174 @@ export async function fetchGoogleRecordsByIds(
   }));
 }
 
+function flightEntryStartMinutes(value: string) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value || "");
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
 export async function saveGoogleRecord(
   record: FlightLogRecord
 ) {
-  const data =
-    await postToGoogle<{
-      record: FlightLogRecord;
-    }>({
-      action: "saveRecord",
-      record
-    });
+  const now = new Date().toISOString();
+  const createdAt = record.createdAt || now;
+  const updatedAt = now;
+  const flightCount = record.rows.length;
+  const totalMinutes = record.rows.reduce(
+    (sum, row) => sum + (Number(row.duration) || 0),
+    0
+  );
 
-  return data.record;
+  const datedRows = record.rows
+    .map((row) => row.date)
+    .filter(Boolean)
+    .sort();
+
+  const firstFlightDate = datedRows[0] || null;
+  const lastFlightDate =
+    datedRows[datedRows.length - 1] || null;
+
+  const searchText = [
+    record.student.studentName,
+    record.student.company,
+    record.student.lastFourCharacters
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const flightLogRow = {
+    id: record.id,
+    student_name: record.student.studentName,
+    company: record.student.company,
+    last_four_characters: record.student.lastFourCharacters,
+    signature_file_id: record.student.studentSignatureDataUrl,
+    rows_json: record.rows,
+    created_at: createdAt,
+    updated_at: updatedAt
+  };
+
+  const indexRow = {
+    record_id: record.id,
+    student_name: record.student.studentName,
+    company: record.student.company,
+    last_four_characters: record.student.lastFourCharacters,
+    signature_file_id: record.student.studentSignatureDataUrl,
+    flight_count: flightCount,
+    total_minutes: totalMinutes,
+    first_flight_date: firstFlightDate,
+    last_flight_date: lastFlightDate,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    search_text: searchText
+  };
+
+  const entries = record.rows.map((row, index) => {
+    const startMinutes = flightEntryStartMinutes(row.startTime);
+    const duration = Number(row.duration) || 0;
+    const endMinutes =
+      startMinutes === null ? null : startMinutes + duration;
+
+    return {
+      entry_id:
+        `${record.id}-${index + 1}-${crypto.randomUUID()}`,
+      record_id: record.id,
+      row_order: index + 1,
+      student_name: record.student.studentName,
+      date: row.date || null,
+      month: row.date ? Number(row.date.slice(5, 7)) : null,
+      year: row.date ? Number(row.date.slice(0, 4)) : null,
+      location: row.location,
+      start_time: row.startTime,
+      start_minutes: startMinutes,
+      duration,
+      end_minutes: endMinutes,
+      ua_model: row.uaModel,
+      ua_category: row.uaCategory,
+      battery_sn: row.batterySn,
+      pilot_in_command: row.pilotInCommand,
+      instructor_in_command: row.instructorInCommand,
+      remarks: row.remarks,
+      duplicate_key: [
+        row.date,
+        row.location,
+        row.startTime,
+        row.uaModel,
+        row.batterySn
+      ].join("|").toLowerCase(),
+      created_at: createdAt,
+      updated_at: updatedAt
+    };
+  });
+
+  const logResult = await supabase
+    .from("flight_logs")
+    .upsert(flightLogRow, { onConflict: "id" });
+
+  if (logResult.error) {
+    throw new GoogleApiError(
+      logResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const indexResult = await supabase
+    .from("flight_record_index")
+    .upsert(indexRow, { onConflict: "record_id" });
+
+  if (indexResult.error) {
+    throw new GoogleApiError(
+      indexResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const deleteEntriesResult = await supabase
+    .from("flight_entries")
+    .delete()
+    .eq("record_id", record.id);
+
+  if (deleteEntriesResult.error) {
+    throw new GoogleApiError(
+      deleteEntriesResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  if (entries.length) {
+    const entriesResult = await supabase
+      .from("flight_entries")
+      .insert(entries);
+
+    if (entriesResult.error) {
+      throw new GoogleApiError(
+        entriesResult.error.message,
+        "SUPABASE_ERROR"
+      );
+    }
+  }
+
+  invalidateGoogleApiCache();
+
+  return {
+    ...record,
+    createdAt,
+    updatedAt
+  };
 }
 
 export async function fetchGoogleMasterData() {
@@ -817,15 +973,45 @@ export async function saveGeneratedReportPdf(
 export async function deleteGoogleRecord(
   recordId: string
 ) {
-  const data = await postToGoogle<{
-    recordId: string;
-    message?: string;
-  }>({
-    action: "deleteRecord",
-    recordId,
-  });
+  const entriesResult = await supabase
+    .from("flight_entries")
+    .delete()
+    .eq("record_id", recordId);
 
-  return data;
+  if (entriesResult.error) {
+    throw new GoogleApiError(
+      entriesResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const indexResult = await supabase
+    .from("flight_record_index")
+    .delete()
+    .eq("record_id", recordId);
+
+  if (indexResult.error) {
+    throw new GoogleApiError(
+      indexResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const logResult = await supabase
+    .from("flight_logs")
+    .delete()
+    .eq("id", recordId);
+
+  if (logResult.error) {
+    throw new GoogleApiError(
+      logResult.error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  invalidateGoogleApiCache();
+
+  return { recordId };
 }
 
 
@@ -838,15 +1024,70 @@ export type FlightRecordValidation = {
 export async function validateGoogleFlightRecord(
   record: FlightLogRecord
 ) {
-  const data =
-    await postToGoogle<{
-      validation: FlightRecordValidation;
-    }>({
-      action: "validateFlightRecord",
-      record
-    });
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const duplicateKeys = new Set<string>();
 
-  return data.validation;
+  if (!record.student.studentName.trim()) {
+    errors.push("Student name is required.");
+  }
+
+  if (!record.student.company.trim()) {
+    errors.push("Company is required.");
+  }
+
+  if (!record.student.lastFourCharacters.trim()) {
+    errors.push("Last 4 characters are required.");
+  }
+
+  if (!record.student.studentSignatureDataUrl) {
+    errors.push("Student signature is required.");
+  }
+
+  if (!record.rows.length) {
+    errors.push("At least one flight entry is required.");
+  }
+
+  for (const row of record.rows) {
+    const duration = Number(row.duration);
+    const duplicateKey = [
+      row.date,
+      row.location,
+      row.startTime,
+      row.uaModel,
+      row.batterySn
+    ].join("|").toLowerCase();
+
+    if (!row.date) errors.push("Date is required.");
+    if (!row.location.trim()) errors.push("Location is required.");
+    if (!row.startTime.trim()) errors.push("Start time is required.");
+    if (flightEntryStartMinutes(row.startTime) === null) {
+      errors.push("Start time must use HH:MM in 24-hour format.");
+    }
+    if (!Number.isInteger(duration) || duration <= 0) {
+      errors.push("Duration must be a positive whole number.");
+    }
+    if (!row.uaModel.trim()) errors.push("UA Model is required.");
+    if (!row.uaCategory.trim()) errors.push("UA Category is required.");
+    if (!row.batterySn.trim()) errors.push("Battery S/N is required.");
+    if (!row.pilotInCommand.trim()) {
+      errors.push("Pilot in Command is required.");
+    }
+    if (!row.instructorInCommand.trim()) {
+      errors.push("AFE / Instructor is required.");
+    }
+
+    if (duplicateKeys.has(duplicateKey)) {
+      errors.push("Duplicate flight entries are not allowed.");
+    }
+    duplicateKeys.add(duplicateKey);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: Array.from(new Set(errors)),
+    warnings: Array.from(new Set(warnings))
+  };
 }
 
 export async function checkGoogleStudentLastFour(
@@ -855,15 +1096,51 @@ export async function checkGoogleStudentLastFour(
     recordId?: string;
   }
 ) {
-  return postToGoogle<{
-    available: boolean;
-    message: string;
-    conflictingRecordId?: string;
-    conflictingStudentName?: string;
-  }>({
-    action: "checkStudentLastFour",
-    ...payload
-  });
+  const lastFourCharacters =
+    payload.lastFourCharacters.trim();
+
+  if (!lastFourCharacters) {
+    return {
+      available: false,
+      message: "Enter the last 4 characters."
+    };
+  }
+
+  let query = supabase
+    .from("flight_logs")
+    .select("id, student_name")
+    .eq("last_four_characters", lastFourCharacters)
+    .limit(1);
+
+  if (payload.recordId) {
+    query = query.neq("id", payload.recordId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new GoogleApiError(
+      error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  const conflictingRecord = data?.[0];
+
+  if (conflictingRecord) {
+    return {
+      available: false,
+      message: `Last 4 characters already belong to ${conflictingRecord.student_name || "another student"}.`,
+      conflictingRecordId: conflictingRecord.id,
+      conflictingStudentName:
+        conflictingRecord.student_name || undefined
+    };
+  }
+
+  return {
+    available: true,
+    message: "Last 4 characters are available."
+  };
 }
 
 export async function fetchUnavailableBatteriesForDate(
@@ -872,11 +1149,32 @@ export async function fetchUnavailableBatteriesForDate(
     recordId?: string;
   }
 ) {
-  return postToGoogle<{
-    date: string;
-    unavailableBatteries: string[];
-  }>({
-    action: "getUnavailableBatteriesForDate",
-    ...payload
-  });
+  let query = supabase
+    .from("flight_entries")
+    .select("battery_sn")
+    .eq("date", payload.date);
+
+  if (payload.recordId) {
+    query = query.neq("record_id", payload.recordId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new GoogleApiError(
+      error.message,
+      "SUPABASE_ERROR"
+    );
+  }
+
+  return {
+    date: payload.date,
+    unavailableBatteries: Array.from(
+      new Set(
+        (data || [])
+          .map((row) => row.battery_sn)
+          .filter(Boolean)
+      )
+    )
+  };
 }
