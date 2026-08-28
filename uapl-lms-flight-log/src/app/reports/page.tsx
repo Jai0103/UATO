@@ -35,9 +35,16 @@ import {
   downloadEvaluationCsv,
   downloadEvaluationPdf
 } from "@/lib/evaluation-report";
-import type { UaMaintenanceRecord } from "@/lib/ua-maintenance";
+import {
+  fetchUaMaintenanceRecord,
+  fetchUaMaintenanceRecordsPage
+} from "@/lib/ua-maintenance-api";
+import type {
+  UaMaintenanceRecord,
+  UaMaintenanceRecordSummary
+} from "@/lib/ua-maintenance";
 
-type MaintenanceUaOption = {
+type UaMaintenanceReportOption = {
   key: string;
   uaModel: string;
   uaId: string;
@@ -81,11 +88,29 @@ function allowBrowserPaint() {
   });
 }
 
-function maintenanceUaKey(record: Pick<UaMaintenanceRecord, "uaModel" | "uaId">) {
+function maintenanceUaKey(
+  record: Pick<UaMaintenanceRecordSummary, "uaModel" | "uaId">
+) {
   return JSON.stringify([
     String(record.uaModel || "").trim().toLowerCase(),
     String(record.uaId || "").trim().toLowerCase()
   ]);
+}
+
+function maintenanceMonthsBetween(dateFrom: string, dateTo: string) {
+  const months: Array<{ year: string; month: string }> = [];
+  const cursor = new Date(`${dateFrom.slice(0, 7)}-01T00:00:00`);
+  const end = new Date(`${dateTo.slice(0, 7)}-01T00:00:00`);
+
+  while (cursor <= end && months.length < 120) {
+    months.push({
+      year: String(cursor.getFullYear()),
+      month: String(cursor.getMonth() + 1).padStart(2, "0")
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return months;
 }
 
 export default function ReportsPage() {
@@ -105,16 +130,16 @@ export default function ReportsPage() {
   const [maintenancePickerLoading, setMaintenancePickerLoading] = useState(false);
   const [maintenanceSearch, setMaintenanceSearch] = useState("");
   const [maintenanceOptions, setMaintenanceOptions] = useState<
-    MaintenanceUaOption[]
+    UaMaintenanceReportOption[]
   >([]);
   const [selectedMaintenanceUaKeys, setSelectedMaintenanceUaKeys] = useState<
     string[]
   >([]);
   const [maintenanceSelectionApplied, setMaintenanceSelectionApplied] =
     useState(false);
-  const [maintenanceRecordsCache, setMaintenanceRecordsCache] = useState<{
+  const [maintenanceSummaryCache, setMaintenanceSummaryCache] = useState<{
     rangeKey: string;
-    records: UaMaintenanceRecord[];
+    records: UaMaintenanceRecordSummary[];
   } | null>(null);
   const [fatigueFrom, setFatigueFrom] = useState(firstDayOfMonth());
   const [fatigueTo, setFatigueTo] = useState(today());
@@ -168,7 +193,7 @@ export default function ReportsPage() {
     setMaintenanceOptions([]);
     setSelectedMaintenanceUaKeys([]);
     setMaintenanceSelectionApplied(false);
-    setMaintenanceRecordsCache(null);
+    setMaintenanceSummaryCache(null);
   }, [maintenanceFrom, maintenanceTo]);
 
   useEffect(() => {
@@ -352,32 +377,78 @@ export default function ReportsPage() {
     }
   }
 
-  function buildMaintenanceOptions(records: UaMaintenanceRecord[]) {
-    const grouped = new Map<string, MaintenanceUaOption>();
+  async function loadMaintenanceSummaries() {
+    const rangeKey = `${maintenanceFrom}:${maintenanceTo}`;
+    if (maintenanceSummaryCache?.rangeKey === rangeKey) {
+      return maintenanceSummaryCache.records;
+    }
 
-    records.forEach((record) => {
-      const key = maintenanceUaKey(record);
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.recordCount += 1;
-        return;
+    async function loadMonth(year: string, month: string) {
+      const firstPage = await fetchUaMaintenanceRecordsPage({
+        page: 1,
+        pageSize: 25,
+        year,
+        month
+      });
+      const records = [...firstPage.records];
+
+      for (let page = 2; page <= firstPage.totalPages; page += 1) {
+        const nextPage = await fetchUaMaintenanceRecordsPage({
+          page,
+          pageSize: 25,
+          year,
+          month
+        });
+        records.push(...nextPage.records);
       }
 
-      grouped.set(key, {
-        key,
-        uaModel: record.uaModel || "Unspecified model",
-        uaId: record.uaId || "No UA ID",
-        recordCount: 1
-      });
+      return records;
+    }
+
+    const months = maintenanceMonthsBetween(maintenanceFrom, maintenanceTo);
+    const collected: UaMaintenanceRecordSummary[] = [];
+
+    for (let index = 0; index < months.length; index += 3) {
+      const batch = months.slice(index, index + 3);
+      const results = await Promise.all(
+        batch.map(({ year, month }) => loadMonth(year, month))
+      );
+      results.forEach((records) => collected.push(...records));
+    }
+
+    const unique = new Map<string, UaMaintenanceRecordSummary>();
+    collected.forEach((record) => {
+      const date = String(record.inspectionDate || "").slice(0, 10);
+      if (date >= maintenanceFrom && date <= maintenanceTo) {
+        unique.set(record.id, record);
+      }
     });
 
-    return Array.from(grouped.values()).sort((first, second) =>
-      `${first.uaModel} ${first.uaId}`.localeCompare(
-        `${second.uaModel} ${second.uaId}`,
-        undefined,
-        { numeric: true, sensitivity: "base" }
-      )
-    );
+    const records = Array.from(unique.values());
+    setMaintenanceSummaryCache({ rangeKey, records });
+    return records;
+  }
+
+  async function loadSelectedMaintenanceRecords(
+    summaries: UaMaintenanceRecordSummary[]
+  ) {
+    const records: UaMaintenanceRecord[] = [];
+
+    for (let index = 0; index < summaries.length; index += 3) {
+      const batch = summaries.slice(index, index + 3);
+      setWorkingLabel(
+        `Loading UA Maintenance reports ${index + 1}-${Math.min(
+          index + batch.length,
+          summaries.length
+        )} of ${summaries.length}...`
+      );
+      const details = await Promise.all(
+        batch.map((record) => fetchUaMaintenanceRecord(record.id))
+      );
+      records.push(...details);
+    }
+
+    return records;
   }
 
   async function openMaintenancePicker() {
@@ -398,17 +469,32 @@ export default function ReportsPage() {
     setMaintenanceSearch("");
 
     try {
-      const rangeKey = `${maintenanceFrom}:${maintenanceTo}`;
-      const records =
-        maintenanceRecordsCache?.rangeKey === rangeKey
-          ? maintenanceRecordsCache.records
-          : await fetchBulkUaMaintenanceReportRecords({
-              dateFrom: maintenanceFrom,
-              dateTo: maintenanceTo
-            });
+      const summaries = await loadMaintenanceSummaries();
+      const grouped = new Map<string, UaMaintenanceReportOption>();
 
-      setMaintenanceRecordsCache({ rangeKey, records });
-      const options = buildMaintenanceOptions(records);
+      summaries.forEach((record) => {
+        const key = maintenanceUaKey(record);
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.recordCount += 1;
+          return;
+        }
+
+        grouped.set(key, {
+          key,
+          uaModel: record.uaModel || "Unspecified model",
+          uaId: record.uaId || "No UA ID",
+          recordCount: 1
+        });
+      });
+
+      const options = Array.from(grouped.values()).sort((first, second) =>
+        `${first.uaModel} ${first.uaId}`.localeCompare(
+          `${second.uaModel} ${second.uaId}`,
+          undefined,
+          { numeric: true, sensitivity: "base" }
+        )
+      );
       setMaintenanceOptions(options);
       setSelectedMaintenanceUaKeys((current) => {
         if (!maintenanceSelectionApplied) {
@@ -468,24 +554,23 @@ export default function ReportsPage() {
     setWorking("maintenance");
     setWorkingLabel("Loading UA Maintenance records...");
     try {
-      const rangeKey = `${maintenanceFrom}:${maintenanceTo}`;
-      const [allRecords, pdfModule] = await Promise.all([
-        maintenanceRecordsCache?.rangeKey === rangeKey
-          ? Promise.resolve(maintenanceRecordsCache.records)
-          : fetchBulkUaMaintenanceReportRecords({
-              dateFrom: maintenanceFrom,
-              dateTo: maintenanceTo
-            }),
-        import("@/lib/ua-maintenance-pdf")
-      ]);
-      setMaintenanceRecordsCache({ rangeKey, records: allRecords });
+      const pdfPromise = import("@/lib/ua-maintenance-pdf");
+      let records: UaMaintenanceRecord[];
 
-      const selectedKeys = new Set(selectedMaintenanceUaKeys);
-      const records = maintenanceSelectionApplied
-        ? allRecords.filter((record) =>
-            selectedKeys.has(maintenanceUaKey(record))
-          )
-        : allRecords;
+      if (maintenanceSelectionApplied) {
+        const selectedKeys = new Set(selectedMaintenanceUaKeys);
+        const summaries = (await loadMaintenanceSummaries()).filter((record) =>
+          selectedKeys.has(maintenanceUaKey(record))
+        );
+        records = await loadSelectedMaintenanceRecords(summaries);
+      } else {
+        records = await fetchBulkUaMaintenanceReportRecords({
+          dateFrom: maintenanceFrom,
+          dateTo: maintenanceTo
+        });
+      }
+
+      const pdfModule = await pdfPromise;
 
       if (!records.length) {
         message.warning(
