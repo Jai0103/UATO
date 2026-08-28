@@ -7,7 +7,7 @@ import {
   type StaffTrainingType
 } from "@/lib/staff-training";
 
-const LOGO_PATH = "/UATO/apollo-global-academy-logo.png";
+const LOGO_PATH = "/UATO/aga-horizontal-logo.png";
 const FORM_CODE = "ADA-UATO-3-1B";
 
 function safeFileName(value: string) {
