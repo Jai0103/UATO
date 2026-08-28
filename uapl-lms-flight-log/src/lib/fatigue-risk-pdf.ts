@@ -6,7 +6,7 @@ import {
   type FatigueResponseValue
 } from "@/lib/fatigue-risk";
 
-const LOGO_PATH = "/UATO/apollo-global-academy-logo.png";
+const LOGO_PATH = "/UATO/aga-horizontal-logo.png";
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
 const MARGIN = 12;
