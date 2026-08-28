@@ -2,15 +2,18 @@
 
 import {
   CalendarRange,
+  Check,
   Download,
   FileSpreadsheet,
   GraduationCap,
+  ListFilter,
   Loader2,
   MessageSquareText,
   Plane,
   Search,
   ShieldCheck,
-  Wrench
+  Wrench,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -32,6 +35,14 @@ import {
   downloadEvaluationCsv,
   downloadEvaluationPdf
 } from "@/lib/evaluation-report";
+import type { UaMaintenanceRecord } from "@/lib/ua-maintenance";
+
+type MaintenanceUaOption = {
+  key: string;
+  uaModel: string;
+  uaId: string;
+  recordCount: number;
+};
 
 type ReportType =
   | "flight"
@@ -70,6 +81,13 @@ function allowBrowserPaint() {
   });
 }
 
+function maintenanceUaKey(record: Pick<UaMaintenanceRecord, "uaModel" | "uaId">) {
+  return JSON.stringify([
+    String(record.uaModel || "").trim().toLowerCase(),
+    String(record.uaId || "").trim().toLowerCase()
+  ]);
+}
+
 export default function ReportsPage() {
   const message = useAppMessage();
   const session = getSecureSession();
@@ -83,6 +101,21 @@ export default function ReportsPage() {
   const [staffMonthTo, setStaffMonthTo] = useState(currentMonth());
   const [maintenanceFrom, setMaintenanceFrom] = useState(firstDayOfMonth());
   const [maintenanceTo, setMaintenanceTo] = useState(today());
+  const [maintenancePickerOpen, setMaintenancePickerOpen] = useState(false);
+  const [maintenancePickerLoading, setMaintenancePickerLoading] = useState(false);
+  const [maintenanceSearch, setMaintenanceSearch] = useState("");
+  const [maintenanceOptions, setMaintenanceOptions] = useState<
+    MaintenanceUaOption[]
+  >([]);
+  const [selectedMaintenanceUaKeys, setSelectedMaintenanceUaKeys] = useState<
+    string[]
+  >([]);
+  const [maintenanceSelectionApplied, setMaintenanceSelectionApplied] =
+    useState(false);
+  const [maintenanceRecordsCache, setMaintenanceRecordsCache] = useState<{
+    rangeKey: string;
+    records: UaMaintenanceRecord[];
+  } | null>(null);
   const [fatigueFrom, setFatigueFrom] = useState(firstDayOfMonth());
   const [fatigueTo, setFatigueTo] = useState(today());
   const [fatigueTrainerName, setFatigueTrainerName] = useState("");
@@ -106,6 +139,37 @@ export default function ReportsPage() {
       (_, index) => String(currentYear - index)
     );
   }, []);
+
+  const filteredMaintenanceOptions = useMemo(() => {
+    const query = maintenanceSearch.trim().toLowerCase();
+    if (!query) return maintenanceOptions;
+
+    return maintenanceOptions.filter((option) =>
+      `${option.uaModel} ${option.uaId}`.toLowerCase().includes(query)
+    );
+  }, [maintenanceOptions, maintenanceSearch]);
+
+  const maintenanceSelectionLabel = useMemo(() => {
+    if (!maintenanceSelectionApplied) return "All UA in date range";
+    if (!maintenanceOptions.length) return "No UA available";
+    if (selectedMaintenanceUaKeys.length === maintenanceOptions.length) {
+      return `All ${maintenanceOptions.length} UA selected`;
+    }
+    return `${selectedMaintenanceUaKeys.length} of ${maintenanceOptions.length} UA selected`;
+  }, [
+    maintenanceOptions.length,
+    maintenanceSelectionApplied,
+    selectedMaintenanceUaKeys.length
+  ]);
+
+  useEffect(() => {
+    setMaintenancePickerOpen(false);
+    setMaintenanceSearch("");
+    setMaintenanceOptions([]);
+    setSelectedMaintenanceUaKeys([]);
+    setMaintenanceSelectionApplied(false);
+    setMaintenanceRecordsCache(null);
+  }, [maintenanceFrom, maintenanceTo]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -288,6 +352,108 @@ export default function ReportsPage() {
     }
   }
 
+  function buildMaintenanceOptions(records: UaMaintenanceRecord[]) {
+    const grouped = new Map<string, MaintenanceUaOption>();
+
+    records.forEach((record) => {
+      const key = maintenanceUaKey(record);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.recordCount += 1;
+        return;
+      }
+
+      grouped.set(key, {
+        key,
+        uaModel: record.uaModel || "Unspecified model",
+        uaId: record.uaId || "No UA ID",
+        recordCount: 1
+      });
+    });
+
+    return Array.from(grouped.values()).sort((first, second) =>
+      `${first.uaModel} ${first.uaId}`.localeCompare(
+        `${second.uaModel} ${second.uaId}`,
+        undefined,
+        { numeric: true, sensitivity: "base" }
+      )
+    );
+  }
+
+  async function openMaintenancePicker() {
+    if (working || maintenancePickerLoading) return;
+
+    const validation = validateRange(
+      maintenanceFrom,
+      maintenanceTo,
+      "UA Maintenance date range"
+    );
+    if (validation) {
+      message.warning("Select a valid date range", validation);
+      return;
+    }
+
+    setMaintenancePickerOpen(true);
+    setMaintenancePickerLoading(true);
+    setMaintenanceSearch("");
+
+    try {
+      const rangeKey = `${maintenanceFrom}:${maintenanceTo}`;
+      const records =
+        maintenanceRecordsCache?.rangeKey === rangeKey
+          ? maintenanceRecordsCache.records
+          : await fetchBulkUaMaintenanceReportRecords({
+              dateFrom: maintenanceFrom,
+              dateTo: maintenanceTo
+            });
+
+      setMaintenanceRecordsCache({ rangeKey, records });
+      const options = buildMaintenanceOptions(records);
+      setMaintenanceOptions(options);
+      setSelectedMaintenanceUaKeys((current) => {
+        if (!maintenanceSelectionApplied) {
+          return options.map((option) => option.key);
+        }
+
+        const availableKeys = new Set(options.map((option) => option.key));
+        return current.filter((key) => availableKeys.has(key));
+      });
+    } catch (error) {
+      setMaintenancePickerOpen(false);
+      message.error(
+        "UA list could not be loaded",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setMaintenancePickerLoading(false);
+    }
+  }
+
+  function toggleMaintenanceUa(key: string) {
+    setSelectedMaintenanceUaKeys((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    );
+  }
+
+  function applyMaintenanceSelection() {
+    if (!selectedMaintenanceUaKeys.length) {
+      message.warning(
+        "Select at least one UA",
+        "Tick the aircraft that should be included in the report."
+      );
+      return;
+    }
+
+    setMaintenanceSelectionApplied(true);
+    setMaintenancePickerOpen(false);
+    message.success(
+      "UA selection applied",
+      `${selectedMaintenanceUaKeys.length} UA will be included.`
+    );
+  }
+
   async function generateMaintenanceReport() {
     if (working) return;
     const validation = validateRange(
@@ -302,17 +468,31 @@ export default function ReportsPage() {
     setWorking("maintenance");
     setWorkingLabel("Loading UA Maintenance records...");
     try {
-      const [records, pdfModule] = await Promise.all([
-        fetchBulkUaMaintenanceReportRecords({
-          dateFrom: maintenanceFrom,
-          dateTo: maintenanceTo
-        }),
+      const rangeKey = `${maintenanceFrom}:${maintenanceTo}`;
+      const [allRecords, pdfModule] = await Promise.all([
+        maintenanceRecordsCache?.rangeKey === rangeKey
+          ? Promise.resolve(maintenanceRecordsCache.records)
+          : fetchBulkUaMaintenanceReportRecords({
+              dateFrom: maintenanceFrom,
+              dateTo: maintenanceTo
+            }),
         import("@/lib/ua-maintenance-pdf")
       ]);
+      setMaintenanceRecordsCache({ rangeKey, records: allRecords });
+
+      const selectedKeys = new Set(selectedMaintenanceUaKeys);
+      const records = maintenanceSelectionApplied
+        ? allRecords.filter((record) =>
+            selectedKeys.has(maintenanceUaKey(record))
+          )
+        : allRecords;
+
       if (!records.length) {
         message.warning(
           "No UA Maintenance records found",
-          "Try a different date range."
+          maintenanceSelectionApplied
+            ? "No records match the selected UA and date range."
+            : "Try a different date range."
         );
         return;
       }
@@ -594,6 +774,28 @@ export default function ReportsPage() {
                   />
                 </Field>
               </div>
+              <button
+                type="button"
+                onClick={() => void openMaintenancePicker()}
+                disabled={working !== null || maintenancePickerLoading}
+                className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-left transition hover:border-amber-400 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {maintenancePickerLoading ? (
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-amber-700" />
+                ) : (
+                  <ListFilter className="h-5 w-5 shrink-0 text-amber-700" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-slate-800">
+                    Select UA
+                  </span>
+                  <span className="block truncate text-xs text-slate-600">
+                    {maintenancePickerLoading
+                      ? "Loading aircraft in this date range..."
+                      : maintenanceSelectionLabel}
+                  </span>
+                </span>
+              </button>
               <GenerateButton
                 accent="amber"
                 busy={working === "maintenance"}
@@ -782,6 +984,174 @@ export default function ReportsPage() {
           ) : null}
         </div>
       </div>
+
+      {maintenancePickerOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !maintenancePickerLoading) {
+              setMaintenancePickerOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="maintenance-ua-picker-title"
+            className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:max-w-2xl sm:rounded-xl"
+          >
+            <header className="flex items-start gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                <Wrench className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="maintenance-ua-picker-title"
+                  className="text-lg font-bold text-slate-900"
+                >
+                  Select UA for report
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Showing aircraft with maintenance records from {maintenanceFrom} to {maintenanceTo}.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close UA selector"
+                onClick={() => setMaintenancePickerOpen(false)}
+                disabled={maintenancePickerLoading}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+
+            <div className="border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={maintenanceSearch}
+                  onChange={(event) => setMaintenanceSearch(event.target.value)}
+                  placeholder="Search UA model or UA ID"
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-base text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100 sm:text-sm"
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-slate-500">
+                  {selectedMaintenanceUaKeys.length} of {maintenanceOptions.length} selected
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedMaintenanceUaKeys(
+                        maintenanceOptions.map((option) => option.key)
+                      )
+                    }
+                    className="text-xs font-bold text-amber-700 hover:text-amber-800"
+                  >
+                    Select all
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMaintenanceUaKeys([])}
+                    className="text-xs font-bold text-slate-600 hover:text-slate-900"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-48 flex-1 overflow-y-auto px-3 py-3 sm:px-5">
+              {maintenancePickerLoading ? (
+                <div className="flex min-h-48 flex-col items-center justify-center text-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-amber-600" />
+                  <p className="mt-3 text-sm font-semibold text-slate-700">
+                    Loading UA records...
+                  </p>
+                </div>
+              ) : null}
+
+              {!maintenancePickerLoading && !filteredMaintenanceOptions.length ? (
+                <div className="flex min-h-48 flex-col items-center justify-center px-4 text-center">
+                  <Wrench className="h-8 w-8 text-slate-300" />
+                  <p className="mt-3 text-sm font-bold text-slate-700">
+                    No UA records found
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Try another search or close this window and change the date range.
+                  </p>
+                </div>
+              ) : null}
+
+              {!maintenancePickerLoading ? (
+                <div className="divide-y divide-slate-100">
+                  {filteredMaintenanceOptions.map((option) => {
+                    const checked = selectedMaintenanceUaKeys.includes(option.key);
+                    return (
+                      <label
+                        key={option.key}
+                        className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-3 transition hover:bg-amber-50 sm:px-3"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleMaintenanceUa(option.key)}
+                          className="sr-only"
+                        />
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition ${
+                            checked
+                              ? "border-amber-600 bg-amber-600 text-white"
+                              : "border-slate-300 bg-white text-transparent"
+                          }`}
+                        >
+                          <Check className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold text-slate-800">
+                            {option.uaModel}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">
+                            UA ID: {option.uaId}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                          {option.recordCount} {option.recordCount === 1 ? "record" : "records"}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            <footer className="grid gap-2 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:flex sm:justify-end sm:px-6">
+              <button
+                type="button"
+                onClick={() => setMaintenancePickerOpen(false)}
+                className="h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyMaintenanceSelection}
+                disabled={
+                  maintenancePickerLoading || !selectedMaintenanceUaKeys.length
+                }
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Check className="h-4 w-4" />
+                Apply selection
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </AppShell>
   );
 }
