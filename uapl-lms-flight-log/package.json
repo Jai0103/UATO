@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:firebase": "next build && node scripts/prepare-firebase-hosting.mjs",
     "export": "next build",
     "lint": "next lint"
   },
