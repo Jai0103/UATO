@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "uapl-lms-flight-log/out",
+    "public": "firebase-public",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -9,7 +9,7 @@
     "trailingSlash": true,
     "headers": [
       {
-        "source": "/service-worker.js",
+        "source": "/UATO/service-worker.js",
         "headers": [
           {
             "key": "Cache-Control",
@@ -18,13 +18,20 @@
         ]
       },
       {
-        "source": "/_next/static/**",
+        "source": "/UATO/_next/static/**",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "public, max-age=31536000, immutable"
           }
         ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/UATO/",
+        "type": 302
       }
     ]
   }
