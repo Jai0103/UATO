@@ -59,6 +59,12 @@
     match /fatigueRiskSignatures/{recordId} {
       allow read, create, update, delete: if isAdmin();
     }
+    match /auditEvents/{auditId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /auditEventDetails/{auditId} {
+      allow read, create, update, delete: if isAdmin();
+    }
     match /staffTrainingDescriptions/{itemId} {
       allow read, create, update, delete: if isAdmin();
     }
