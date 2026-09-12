@@ -30,6 +30,15 @@ service cloud.firestore {
     match /flightLogSignatures/{recordId} {
       allow read, create, update, delete: if isAdmin();
     }
+    match /flightLogIdentifiers/{identifierId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /flightLogMasterData/{itemId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /migrationRuns/{runId} {
+      allow read, create, update, delete: if isAdmin();
+    }
     match /{document=**} {
       allow read, write: if false;
     }
