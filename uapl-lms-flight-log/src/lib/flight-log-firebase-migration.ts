@@ -40,6 +40,23 @@ export type MigrationAnalysis = {
   oversizedSignatures: string[];
 };
 
+export type MigrationVerification = {
+  verified: boolean;
+  expected: {
+    records: number;
+    flights: number;
+    signatures: number;
+    identifiers: number;
+  };
+  actual: {
+    records: number;
+    flights: number;
+    signatures: number;
+    identifiers: number;
+  };
+  mismatches: string[];
+};
+
 type FirestoreOperation =
   | {
       type: "set";
@@ -446,4 +463,194 @@ export async function migrateFlightLogsToFirestore(
   });
 
   return { runId };
+}
+
+function comparableRecord(record: FlightLogRecord) {
+  const dates = record.rows
+    .map((row) => row.date)
+    .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    .sort();
+
+  return {
+    id: record.id,
+    studentName: record.student.studentName.trim(),
+    company: record.student.company.trim(),
+    lastFourCharacters: normalizedIdentifier(
+      record.student.lastFourCharacters
+    ),
+    flightCount: record.rows.length,
+    totalDurationMinutes: record.rows.reduce(
+      (total, row) => total + (Number(row.duration) || 0),
+      0
+    ),
+    firstFlightDate: dates[0] || "",
+    lastFlightDate: dates[dates.length - 1] || ""
+  };
+}
+
+function comparableEntry(
+  record: FlightLogRecord,
+  rowIndex: number
+) {
+  const row = record.rows[rowIndex];
+  return {
+    id: deterministicEntryId(record.id, rowIndex),
+    recordId: record.id,
+    studentName: record.student.studentName.trim(),
+    company: record.student.company.trim(),
+    lastFourCharacters: normalizedIdentifier(
+      record.student.lastFourCharacters
+    ),
+    date: row.date,
+    location: row.location,
+    startTime: row.startTime,
+    durationMinutes: Number(row.duration) || 0,
+    uaModel: row.uaModel,
+    uaCategory: row.uaCategory,
+    batterySn: row.batterySn,
+    pilotInCommand: row.pilotInCommand,
+    instructorInCommand: row.instructorInCommand,
+    remarks: row.remarks,
+    sourceRowIndex: rowIndex
+  };
+}
+
+function pickComparableData(
+  data: DocumentData,
+  keys: string[]
+) {
+  return Object.fromEntries(keys.map((key) => [key, data[key]]));
+}
+
+export async function verifyFlightLogMigration(
+  analysis: MigrationAnalysis
+): Promise<MigrationVerification> {
+  const [recordSnapshot, entrySnapshot, signatureSnapshot, identifierSnapshot] =
+    await Promise.all([
+      getDocs(collection(firestore, "flightLogRecords")),
+      getDocs(collection(firestore, "flightEntries")),
+      getDocs(collection(firestore, "flightLogSignatures")),
+      getDocs(collection(firestore, "flightLogIdentifiers"))
+    ]);
+
+  const actualRecords = new Map(
+    recordSnapshot.docs.map((snapshot) => [snapshot.id, snapshot.data()])
+  );
+  const actualEntries = new Map(
+    entrySnapshot.docs.map((snapshot) => [snapshot.id, snapshot.data()])
+  );
+  const actualSignatures = new Map(
+    signatureSnapshot.docs.map((snapshot) => [snapshot.id, snapshot.data()])
+  );
+  const actualIdentifiers = new Map(
+    identifierSnapshot.docs.map((snapshot) => [snapshot.id, snapshot.data()])
+  );
+  const expectedRecordIds = new Set<string>();
+  const expectedEntryIds = new Set<string>();
+  const expectedSignatureIds = new Set<string>();
+  const expectedIdentifierIds = new Set<string>();
+  const mismatches: string[] = [];
+
+  function addMismatch(message: string) {
+    if (mismatches.length < 100) mismatches.push(message);
+  }
+
+  analysis.records.forEach((record) => {
+    expectedRecordIds.add(record.id);
+    const expectedRecord = comparableRecord(record);
+    const actualRecord = actualRecords.get(record.id);
+
+    if (!actualRecord) {
+      addMismatch(`Missing student record: ${record.student.studentName}`);
+    } else {
+      const actualComparable = pickComparableData(
+        actualRecord,
+        Object.keys(expectedRecord)
+      );
+      if (JSON.stringify(actualComparable) !== JSON.stringify(expectedRecord)) {
+        addMismatch(`Student summary differs: ${record.student.studentName}`);
+      }
+    }
+
+    record.rows.forEach((_, rowIndex) => {
+      const expectedEntry = comparableEntry(record, rowIndex);
+      expectedEntryIds.add(expectedEntry.id);
+      const actualEntry = actualEntries.get(expectedEntry.id);
+
+      if (!actualEntry) {
+        addMismatch(
+          `Missing flight ${rowIndex + 1}: ${record.student.studentName}`
+        );
+        return;
+      }
+
+      const actualComparable = pickComparableData(
+        actualEntry,
+        Object.keys(expectedEntry)
+      );
+      if (JSON.stringify(actualComparable) !== JSON.stringify(expectedEntry)) {
+        addMismatch(
+          `Flight ${rowIndex + 1} differs: ${record.student.studentName}`
+        );
+      }
+    });
+
+    const signature = record.student.studentSignatureDataUrl || "";
+    if (signature) {
+      expectedSignatureIds.add(record.id);
+      if (actualSignatures.get(record.id)?.dataUrl !== signature) {
+        addMismatch(`Signature differs: ${record.student.studentName}`);
+      }
+    }
+
+    const identifier = normalizedIdentifier(
+      record.student.lastFourCharacters
+    );
+    if (identifier) {
+      const identifierId = identifierDocumentId(identifier);
+      expectedIdentifierIds.add(identifierId);
+      const identifierData = actualIdentifiers.get(identifierId);
+      if (
+        identifierData?.identifier !== identifier ||
+        identifierData?.recordId !== record.id
+      ) {
+        addMismatch(`Identifier differs: ${record.student.studentName}`);
+      }
+    }
+  });
+
+  actualRecords.forEach((_, id) => {
+    if (!expectedRecordIds.has(id)) addMismatch(`Extra student record: ${id}`);
+  });
+  actualEntries.forEach((_, id) => {
+    if (!expectedEntryIds.has(id)) addMismatch(`Extra flight entry: ${id}`);
+  });
+  actualSignatures.forEach((_, id) => {
+    if (!expectedSignatureIds.has(id)) addMismatch(`Extra signature: ${id}`);
+  });
+  actualIdentifiers.forEach((_, id) => {
+    if (!expectedIdentifierIds.has(id)) addMismatch(`Extra identifier: ${id}`);
+  });
+
+  const expected = {
+    records: expectedRecordIds.size,
+    flights: expectedEntryIds.size,
+    signatures: expectedSignatureIds.size,
+    identifiers: expectedIdentifierIds.size
+  };
+  const actual = {
+    records: actualRecords.size,
+    flights: actualEntries.size,
+    signatures: actualSignatures.size,
+    identifiers: actualIdentifiers.size
+  };
+
+  return {
+    verified:
+      mismatches.length === 0 &&
+      JSON.stringify(expected) === JSON.stringify(actual),
+    expected,
+    actual,
+    mismatches
+  };
 }
