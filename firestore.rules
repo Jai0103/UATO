@@ -1,26 +1,17 @@
 
-    match /flightEntries/{entryId} {
+    match /inventoryMasterData/{itemId} {
       allow read, create, update, delete: if isAdmin();
     }
-    match /flightLogSignatures/{recordId} {
+    match /inventoryAssets/{assetId} {
       allow read, create, update, delete: if isAdmin();
     }
-    match /flightLogIdentifiers/{identifierId} {
+    match /inventoryTransactions/{transactionId} {
       allow read, create, update, delete: if isAdmin();
     }
-    match /flightLogMasterData/{itemId} {
+    match /inventoryMaintenance/{maintenanceId} {
       allow read, create, update, delete: if isAdmin();
     }
-    match /uaMaintenanceMasterData/{itemId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceRecords/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceEntries/{entryId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceSignatures/{recordId} {
+    match /inventoryMediaReferences/{referenceId} {
       allow read, create, update, delete: if isAdmin();
     }
     match /staffTrainingDescriptions/{itemId} {
