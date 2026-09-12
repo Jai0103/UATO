@@ -193,11 +193,23 @@ async function loadDetails(
       nextIndex += 1;
       const response = await migrationGooglePost<{ record: AuditRecord }>({
         action: "getAuditHistoryDetail",
-        auditId: recordIds[index]
+        auditId: recordIds[index],
+        // Apps Script currently includes recordId, but not auditId, in the
+        // performance-cache key. Supplying both keeps each detail request unique.
+        recordId: recordIds[index]
       });
       if (!response.record || response.record.detailsLoaded !== true) {
         throw new Error(
           "Audit detail " + recordIds[index] + " was not returned by the current Apps Script deployment."
+        );
+      }
+      if (asText(response.record.id) !== asText(recordIds[index])) {
+        throw new Error(
+          "Google returned the wrong cached Audit History detail. Expected " +
+            recordIds[index] +
+            " but received " +
+            asText(response.record.id) +
+            "."
         );
       }
       records[index] = response.record;
@@ -239,7 +251,7 @@ export function analyzeAuditHistoryMigration(
   records: AuditRecord[]
 ): AuditHistoryMigrationAnalysis {
   const invalidItems: string[] = [];
-  const duplicateItems: string[] = [];
+  const duplicateIds = new Set<string>();
   const oversizedDetails: string[] = [];
   const ids = new Set<string>();
   const actors = new Set<string>();
@@ -251,7 +263,7 @@ export function analyzeAuditHistoryMigration(
     if (!id || !asText(record.timestamp).trim() || !asText(record.action).trim()) {
       invalidItems.push("Audit event " + (index + 1) + " has an empty ID, timestamp, or action.");
     }
-    if (ids.has(id)) duplicateItems.push("Audit ID: " + id);
+    if (ids.has(id)) duplicateIds.add("Audit ID: " + id);
     ids.add(id);
     actors.add(
       asText(record.actorEmail || record.actorUserId || record.actorName)
@@ -279,7 +291,7 @@ export function analyzeAuditHistoryMigration(
     actionCount: actions.size,
     entityTypeCount: entityTypes.size,
     invalidItems,
-    duplicateItems,
+    duplicateItems: Array.from(duplicateIds),
     oversizedDetails
   };
 }
