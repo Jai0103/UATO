@@ -12,14 +12,17 @@ import {
 } from "firebase/firestore";
 import type { FlightLogRecord } from "@/lib/flight-log-storage";
 import {
-  fetchGoogleRecordsByIds,
-  fetchGoogleRecordsPage
+  googleAppsScriptUrl,
+  type RecordsPageResponse
 } from "@/lib/google-api";
 import { firestore } from "@/lib/firebase-client";
+import { sessionKey } from "@/lib/demo-auth";
 
 const PAGE_SIZE = 25;
 const WRITE_BATCH_SIZE = 400;
 const MAX_SIGNATURE_BYTES = 750_000;
+const MIGRATION_READ_TIMEOUT_MS = 90_000;
+const MIGRATION_READ_ATTEMPTS = 3;
 
 export type MigrationProgress = {
   phase: "loading" | "writing";
@@ -76,6 +79,114 @@ function deterministicEntryId(recordId: string, index: number) {
   return `${safeRecordId}-${String(index + 1).padStart(5, "0")}`;
 }
 
+function migrationSessionToken() {
+  try {
+    const rawSession = localStorage.getItem(sessionKey);
+    if (!rawSession) return "";
+    const session = JSON.parse(rawSession) as { sessionToken?: string };
+    return String(session.sessionToken || "");
+  } catch {
+    return "";
+  }
+}
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
+async function migrationGooglePost<T>(payload: Record<string, unknown>) {
+  const sessionToken = migrationSessionToken();
+  if (!sessionToken) {
+    throw new Error(
+      "Your normal application session has expired. Sign in again before migration."
+    );
+  }
+
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MIGRATION_READ_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      MIGRATION_READ_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(googleAppsScriptUrl, {
+        method: "POST",
+        body: JSON.stringify({ ...payload, sessionToken }),
+        cache: "no-store",
+        redirect: "follow",
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google Sheets returned HTTP ${response.status}.`);
+      }
+
+      const data = (await response.json()) as T & {
+        ok?: boolean;
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (data.ok === false || data.success === false) {
+        throw new Error(
+          data.error || data.message || "Google Sheets rejected the request."
+        );
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (attempt < MIGRATION_READ_ATTEMPTS) {
+        await wait(attempt * 1_500);
+      }
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  if (lastError instanceof DOMException && lastError.name === "AbortError") {
+    throw new Error(
+      "Google Sheets did not respond after three extended attempts. Wait one minute and retry."
+    );
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Unable to load Google Sheets for migration.");
+}
+
+async function migrationRecordsPage(page: number) {
+  const data = await migrationGooglePost<RecordsPageResponse>({
+    action: "getRecordsPage",
+    page,
+    pageSize: PAGE_SIZE,
+    query: "",
+    month: "",
+    year: ""
+  });
+
+  return {
+    records: data.records || [],
+    totalRecords: Number(data.totalRecords) || 0,
+    totalPages: Math.max(1, Number(data.totalPages) || 1)
+  };
+}
+
+async function migrationRecordsByIds(recordIds: string[]) {
+  const data = await migrationGooglePost<{ records: FlightLogRecord[] }>({
+    action: "getRecordsByIds",
+    recordIds
+  });
+
+  return data.records || [];
+}
+
 async function commitOperations(operations: FirestoreOperation[]) {
   for (let start = 0; start < operations.length; start += WRITE_BATCH_SIZE) {
     const batch = writeBatch(firestore);
@@ -96,10 +207,7 @@ async function commitOperations(operations: FirestoreOperation[]) {
 export async function loadAllGoogleFlightLogs(
   onProgress?: (progress: MigrationProgress) => void
 ) {
-  const firstPage = await fetchGoogleRecordsPage({
-    page: 1,
-    pageSize: PAGE_SIZE
-  });
+  const firstPage = await migrationRecordsPage(1);
   const summaries = [...firstPage.records];
 
   onProgress?.({
@@ -110,10 +218,7 @@ export async function loadAllGoogleFlightLogs(
   });
 
   for (let page = 2; page <= firstPage.totalPages; page += 1) {
-    const response = await fetchGoogleRecordsPage({
-      page,
-      pageSize: PAGE_SIZE
-    });
+    const response = await migrationRecordsPage(page);
     summaries.push(...response.records);
     onProgress?.({
       phase: "loading",
@@ -130,7 +235,7 @@ export async function loadAllGoogleFlightLogs(
 
   for (let start = 0; start < uniqueIds.length; start += PAGE_SIZE) {
     const ids = uniqueIds.slice(start, start + PAGE_SIZE);
-    const loadedRecords = await fetchGoogleRecordsByIds(ids);
+    const loadedRecords = await migrationRecordsByIds(ids);
     records.push(...loadedRecords);
     onProgress?.({
       phase: "loading",
