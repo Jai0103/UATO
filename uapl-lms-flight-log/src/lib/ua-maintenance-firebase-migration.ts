@@ -6,11 +6,9 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { firestore } from "@/lib/firebase-client";
-import {
-  fetchUaMaintenanceMasterData,
-  fetchUaMaintenanceRecord,
-  fetchUaMaintenanceRecordsPage
-} from "@/lib/ua-maintenance-api";
+import { googleAppsScriptUrl } from "@/lib/google-api";
+import { sessionKey } from "@/lib/demo-auth";
+import type { UaMaintenanceRecordsPage } from "@/lib/ua-maintenance-api";
 import type {
   UaMaintenanceEntry,
   UaMaintenanceMasterData,
@@ -21,8 +19,10 @@ import type {
 } from "@/lib/ua-maintenance";
 
 const WRITE_BATCH_SIZE = 400;
-const SOURCE_PAGE_SIZE = 50;
-const DETAIL_CONCURRENCY = 3;
+const SOURCE_PAGE_SIZE = 25;
+const DETAIL_CONCURRENCY = 2;
+const MIGRATION_READ_TIMEOUT_MS = 90_000;
+const MIGRATION_READ_ATTEMPTS = 3;
 
 const masterSections: UaMaintenanceMasterSection[] = [
   "uaModels",
@@ -78,6 +78,88 @@ function entryDocumentId(recordId: string, itemId: string) {
   return `${safeId(recordId)}__${safeId(itemId)}`;
 }
 
+function migrationSessionToken() {
+  try {
+    const rawSession = localStorage.getItem(sessionKey);
+    if (!rawSession) return "";
+    const session = JSON.parse(rawSession) as { sessionToken?: string };
+    return text(session.sessionToken);
+  } catch {
+    return "";
+  }
+}
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
+async function migrationGooglePost<T>(payload: Record<string, unknown>) {
+  const sessionToken = migrationSessionToken();
+  if (!sessionToken) {
+    throw new Error(
+      "Your normal application session has expired. Sign in again before migration."
+    );
+  }
+
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MIGRATION_READ_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      MIGRATION_READ_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(googleAppsScriptUrl, {
+        method: "POST",
+        body: JSON.stringify({ ...payload, sessionToken }),
+        cache: "no-store",
+        redirect: "follow",
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google Sheets returned HTTP ${response.status}.`);
+      }
+
+      const data = (await response.json()) as T & {
+        ok?: boolean;
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (data.ok === false || data.success === false) {
+        throw new Error(
+          data.error || data.message || "Google Sheets rejected the request."
+        );
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error;
+      if (attempt < MIGRATION_READ_ATTEMPTS) {
+        await wait(attempt * 1_500);
+      }
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  if (lastError instanceof DOMException && lastError.name === "AbortError") {
+    throw new Error(
+      "Google Sheets did not respond after three extended attempts. Wait one minute and retry."
+    );
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Unable to load Google Sheets for migration.");
+}
+
 function comparableMasterItem(
   section: UaMaintenanceMasterSection,
   item: UaMaintenanceMasterItem
@@ -121,18 +203,26 @@ function comparableEntry(recordId: string, item: UaMaintenanceEntry) {
 }
 
 async function loadAllSummaries() {
-  const first = await fetchUaMaintenanceRecordsPage({
+  const first = await migrationGooglePost<UaMaintenanceRecordsPage>({
+    action: "getUaMaintenanceRecordsPage",
     page: 1,
-    pageSize: SOURCE_PAGE_SIZE
+    pageSize: SOURCE_PAGE_SIZE,
+    query: "",
+    year: "",
+    month: ""
   });
-  const summaries: UaMaintenanceRecordSummary[] = [...first.records];
+  const summaries: UaMaintenanceRecordSummary[] = [...(first.records || [])];
 
   for (let page = 2; page <= first.totalPages; page += 1) {
-    const result = await fetchUaMaintenanceRecordsPage({
+    const result = await migrationGooglePost<UaMaintenanceRecordsPage>({
+      action: "getUaMaintenanceRecordsPage",
       page,
-      pageSize: SOURCE_PAGE_SIZE
+      pageSize: SOURCE_PAGE_SIZE,
+      query: "",
+      year: "",
+      month: ""
     });
-    summaries.push(...result.records);
+    summaries.push(...(result.records || []));
   }
 
   return summaries;
@@ -146,7 +236,11 @@ async function loadRecordDetails(recordIds: string[]) {
     while (nextIndex < recordIds.length) {
       const index = nextIndex;
       nextIndex += 1;
-      records[index] = await fetchUaMaintenanceRecord(recordIds[index]);
+      const result = await migrationGooglePost<{ record: UaMaintenanceRecord }>({
+        action: "getUaMaintenanceRecord",
+        recordId: recordIds[index]
+      });
+      records[index] = result.record;
     }
   }
 
@@ -161,15 +255,18 @@ async function loadRecordDetails(recordIds: string[]) {
 }
 
 export async function loadGoogleUaMaintenanceSource() {
-  const [masterData, summaries] = await Promise.all([
-    fetchUaMaintenanceMasterData(),
-    loadAllSummaries()
-  ]);
+  const masterDataResult = await migrationGooglePost<{
+    masterData: UaMaintenanceMasterData;
+  }>({ action: "getUaMaintenanceMasterData" });
+  const summaries = await loadAllSummaries();
   const records = await loadRecordDetails(
     summaries.map((record) => record.id).filter(Boolean)
   );
 
-  return { masterData, records } satisfies UaMaintenanceMigrationSource;
+  return {
+    masterData: masterDataResult.masterData,
+    records
+  } satisfies UaMaintenanceMigrationSource;
 }
 
 export function analyzeUaMaintenanceMigration(
