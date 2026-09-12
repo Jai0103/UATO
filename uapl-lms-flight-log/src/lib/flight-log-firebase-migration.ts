@@ -1,0 +1,344 @@
+import {
+  collection,
+  doc,
+  DocumentData,
+  DocumentReference,
+  getDocs,
+  query,
+  setDoc,
+  Timestamp,
+  where,
+  writeBatch
+} from "firebase/firestore";
+import type { FlightLogRecord } from "@/lib/flight-log-storage";
+import {
+  fetchGoogleRecordsByIds,
+  fetchGoogleRecordsPage
+} from "@/lib/google-api";
+import { firestore } from "@/lib/firebase-client";
+
+const PAGE_SIZE = 25;
+const WRITE_BATCH_SIZE = 400;
+const MAX_SIGNATURE_BYTES = 750_000;
+
+export type MigrationProgress = {
+  phase: "loading" | "writing";
+  current: number;
+  total: number;
+  label: string;
+};
+
+export type MigrationAnalysis = {
+  records: FlightLogRecord[];
+  recordCount: number;
+  flightCount: number;
+  signatureCount: number;
+  duplicateIdentifiers: string[];
+  oversizedSignatures: string[];
+};
+
+type FirestoreOperation =
+  | {
+      type: "set";
+      reference: DocumentReference<DocumentData>;
+      data: DocumentData;
+    }
+  | {
+      type: "delete";
+      reference: DocumentReference<DocumentData>;
+    };
+
+function normalizedIdentifier(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function identifierDocumentId(value: string) {
+  return normalizedIdentifier(value).replace(/[^A-Z0-9_-]/g, "-");
+}
+
+function safeTimestamp(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : Timestamp.fromDate(date);
+}
+
+function dateTimestamp(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T12:00:00+08:00`);
+  return Number.isNaN(date.getTime()) ? null : Timestamp.fromDate(date);
+}
+
+function signatureSize(value: string) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function deterministicEntryId(recordId: string, index: number) {
+  const safeRecordId = recordId.replace(/\//g, "_");
+  return `${safeRecordId}-${String(index + 1).padStart(5, "0")}`;
+}
+
+async function commitOperations(operations: FirestoreOperation[]) {
+  for (let start = 0; start < operations.length; start += WRITE_BATCH_SIZE) {
+    const batch = writeBatch(firestore);
+    const group = operations.slice(start, start + WRITE_BATCH_SIZE);
+
+    group.forEach((operation) => {
+      if (operation.type === "delete") {
+        batch.delete(operation.reference);
+      } else {
+        batch.set(operation.reference, operation.data);
+      }
+    });
+
+    await batch.commit();
+  }
+}
+
+export async function loadAllGoogleFlightLogs(
+  onProgress?: (progress: MigrationProgress) => void
+) {
+  const firstPage = await fetchGoogleRecordsPage({
+    page: 1,
+    pageSize: PAGE_SIZE
+  });
+  const summaries = [...firstPage.records];
+
+  onProgress?.({
+    phase: "loading",
+    current: Math.min(summaries.length, firstPage.totalRecords),
+    total: firstPage.totalRecords,
+    label: "Loading record index"
+  });
+
+  for (let page = 2; page <= firstPage.totalPages; page += 1) {
+    const response = await fetchGoogleRecordsPage({
+      page,
+      pageSize: PAGE_SIZE
+    });
+    summaries.push(...response.records);
+    onProgress?.({
+      phase: "loading",
+      current: Math.min(summaries.length, firstPage.totalRecords),
+      total: firstPage.totalRecords,
+      label: "Loading record index"
+    });
+  }
+
+  const uniqueIds = Array.from(
+    new Set(summaries.map((record) => record.id).filter(Boolean))
+  );
+  const records: FlightLogRecord[] = [];
+
+  for (let start = 0; start < uniqueIds.length; start += PAGE_SIZE) {
+    const ids = uniqueIds.slice(start, start + PAGE_SIZE);
+    const loadedRecords = await fetchGoogleRecordsByIds(ids);
+    records.push(...loadedRecords);
+    onProgress?.({
+      phase: "loading",
+      current: Math.min(start + ids.length, uniqueIds.length),
+      total: uniqueIds.length,
+      label: "Loading complete flight logs"
+    });
+  }
+
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+  return uniqueIds
+    .map((id) => recordsById.get(id))
+    .filter((record): record is FlightLogRecord => Boolean(record));
+}
+
+export function analyzeFlightLogMigration(
+  records: FlightLogRecord[]
+): MigrationAnalysis {
+  const identifiers = new Map<string, string[]>();
+  const oversizedSignatures: string[] = [];
+
+  records.forEach((record) => {
+    const identifier = normalizedIdentifier(
+      record.student.lastFourCharacters
+    );
+    const names = identifiers.get(identifier) || [];
+    names.push(record.student.studentName || record.id);
+    identifiers.set(identifier, names);
+
+    const signature = record.student.studentSignatureDataUrl || "";
+    if (signature && signatureSize(signature) > MAX_SIGNATURE_BYTES) {
+      oversizedSignatures.push(record.student.studentName || record.id);
+    }
+  });
+
+  const duplicateIdentifiers = Array.from(identifiers.entries())
+    .filter(([identifier, names]) => identifier && names.length > 1)
+    .map(([identifier, names]) => `${identifier}: ${names.join(", ")}`);
+
+  return {
+    records,
+    recordCount: records.length,
+    flightCount: records.reduce(
+      (total, record) => total + record.rows.length,
+      0
+    ),
+    signatureCount: records.filter(
+      (record) => Boolean(record.student.studentSignatureDataUrl)
+    ).length,
+    duplicateIdentifiers,
+    oversizedSignatures
+  };
+}
+
+export async function migrateFlightLogsToFirestore(
+  analysis: MigrationAnalysis,
+  migratedBy: { uid: string; email: string },
+  onProgress?: (progress: MigrationProgress) => void
+) {
+  if (analysis.duplicateIdentifiers.length) {
+    throw new Error("Resolve duplicate last-four identifiers before migration.");
+  }
+
+  if (analysis.oversizedSignatures.length) {
+    throw new Error("Compress oversized signatures before migration.");
+  }
+
+  for (let index = 0; index < analysis.records.length; index += 1) {
+    const record = analysis.records[index];
+    const identifier = normalizedIdentifier(
+      record.student.lastFourCharacters
+    );
+    const dates = record.rows
+      .map((row) => row.date)
+      .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+      .sort();
+    const existingEntries = await getDocs(
+      query(
+        collection(firestore, "flightEntries"),
+        where("recordId", "==", record.id)
+      )
+    );
+    const operations: FirestoreOperation[] = existingEntries.docs.map(
+      (entry) => ({ type: "delete", reference: entry.ref })
+    );
+
+    operations.push({
+      type: "set",
+      reference: doc(firestore, "flightLogRecords", record.id),
+      data: {
+        id: record.id,
+        studentName: record.student.studentName.trim(),
+        studentNameLower: record.student.studentName.trim().toLowerCase(),
+        company: record.student.company.trim(),
+        companyLower: record.student.company.trim().toLowerCase(),
+        lastFourCharacters: identifier,
+        flightCount: record.rows.length,
+        totalDurationMinutes: record.rows.reduce(
+          (total, row) => total + (Number(row.duration) || 0),
+          0
+        ),
+        firstFlightDate: dates[0] || "",
+        lastFlightDate: dates[dates.length - 1] || "",
+        createdAt: safeTimestamp(record.createdAt),
+        updatedAt: safeTimestamp(record.updatedAt),
+        source: "google-sheets-migration",
+        schemaVersion: 1
+      }
+    });
+
+    if (identifier) {
+      operations.push({
+        type: "set",
+        reference: doc(
+          firestore,
+          "flightLogIdentifiers",
+          identifierDocumentId(identifier)
+        ),
+        data: {
+          identifier,
+          recordId: record.id,
+          studentName: record.student.studentName.trim(),
+          updatedAt: Timestamp.now()
+        }
+      });
+    }
+
+    const signature = record.student.studentSignatureDataUrl || "";
+    const signatureReference = doc(
+      firestore,
+      "flightLogSignatures",
+      record.id
+    );
+
+    operations.push(
+      signature
+        ? {
+            type: "set",
+            reference: signatureReference,
+            data: {
+              recordId: record.id,
+              dataUrl: signature,
+              byteLength: signatureSize(signature),
+              updatedAt: safeTimestamp(record.updatedAt),
+              schemaVersion: 1
+            }
+          }
+        : {
+            type: "delete",
+            reference: signatureReference
+          }
+    );
+
+    record.rows.forEach((row, rowIndex) => {
+      const entryId = deterministicEntryId(record.id, rowIndex);
+      operations.push({
+        type: "set",
+        reference: doc(firestore, "flightEntries", entryId),
+        data: {
+          id: entryId,
+          recordId: record.id,
+          studentName: record.student.studentName.trim(),
+          company: record.student.company.trim(),
+          lastFourCharacters: identifier,
+          date: row.date,
+          dateTimestamp: dateTimestamp(row.date),
+          month: /^\d{4}-\d{2}/.test(row.date)
+            ? Number(row.date.slice(5, 7))
+            : null,
+          year: /^\d{4}/.test(row.date)
+            ? Number(row.date.slice(0, 4))
+            : null,
+          location: row.location,
+          startTime: row.startTime,
+          durationMinutes: Number(row.duration) || 0,
+          uaModel: row.uaModel,
+          uaCategory: row.uaCategory,
+          batterySn: row.batterySn,
+          pilotInCommand: row.pilotInCommand,
+          instructorInCommand: row.instructorInCommand,
+          remarks: row.remarks,
+          sourceRowIndex: rowIndex,
+          schemaVersion: 1
+        }
+      });
+    });
+
+    await commitOperations(operations);
+    onProgress?.({
+      phase: "writing",
+      current: index + 1,
+      total: analysis.records.length,
+      label: record.student.studentName || record.id
+    });
+  }
+
+  const runId = `flight-logs-${Date.now()}`;
+  await setDoc(doc(firestore, "migrationRuns", runId), {
+    id: runId,
+    type: "flight-logs",
+    recordCount: analysis.recordCount,
+    flightCount: analysis.flightCount,
+    signatureCount: analysis.signatureCount,
+    migratedByUid: migratedBy.uid,
+    migratedByEmail: migratedBy.email,
+    completedAt: Timestamp.now(),
+    source: "google-sheets"
+  });
+
+  return { runId };
+}
