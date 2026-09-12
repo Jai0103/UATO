@@ -21,8 +21,10 @@ import {
   analyzeFlightLogMigration,
   loadAllGoogleFlightLogs,
   migrateFlightLogsToFirestore,
+  verifyFlightLogMigration,
   type MigrationAnalysis,
-  type MigrationProgress
+  type MigrationProgress,
+  type MigrationVerification
 } from "@/lib/flight-log-firebase-migration";
 
 type ConnectedAdmin = {
@@ -72,12 +74,15 @@ export default function FirebaseMigrationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [completedRunId, setCompletedRunId] = useState("");
+  const [verification, setVerification] =
+    useState<MigrationVerification | null>(null);
 
   async function connectFirebase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
     setCompletedRunId("");
+    setVerification(null);
 
     try {
       await setPersistence(firebaseAuth, browserSessionPersistence);
@@ -125,6 +130,7 @@ export default function FirebaseMigrationPage() {
     setError("");
     setAnalysis(null);
     setCompletedRunId("");
+    setVerification(null);
 
     try {
       const records = await loadAllGoogleFlightLogs(setProgress);
@@ -142,6 +148,7 @@ export default function FirebaseMigrationPage() {
     setBusy(true);
     setError("");
     setCompletedRunId("");
+    setVerification(null);
 
     try {
       const result = await migrateFlightLogsToFirestore(
@@ -154,6 +161,21 @@ export default function FirebaseMigrationPage() {
       setError(readableError(migrationError));
     } finally {
       setProgress(null);
+      setBusy(false);
+    }
+  }
+
+  async function verifyRecords() {
+    if (!admin || !analysis) return;
+    setBusy(true);
+    setError("");
+    setVerification(null);
+
+    try {
+      setVerification(await verifyFlightLogMigration(analysis));
+    } catch (verificationError) {
+      setError(readableError(verificationError));
+    } finally {
       setBusy(false);
     }
   }
@@ -286,6 +308,16 @@ export default function FirebaseMigrationPage() {
                     {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <DatabaseZap className="h-5 w-5" />}
                     Copy Flight Logs to Firestore
                   </button>
+
+                  <button
+                    className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 text-sm font-bold text-cyan-100 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={busy || migrationBlocked}
+                    onClick={verifyRecords}
+                    type="button"
+                  >
+                    {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+                    Verify Firestore Copy
+                  </button>
                 </section>
               ) : null}
             </div>
@@ -319,6 +351,41 @@ export default function FirebaseMigrationPage() {
             <div className="m-6 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-100 sm:m-8">
               <p className="font-bold">Flight Log migration completed successfully.</p>
               <p className="mt-1 break-all text-emerald-200/80">Run ID: {completedRunId}</p>
+            </div>
+          ) : null}
+
+          {verification ? (
+            <div
+              className={`m-6 rounded-xl border p-4 text-sm sm:m-8 ${
+                verification.verified
+                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
+                  : "border-amber-400/30 bg-amber-400/10 text-amber-100"
+              }`}
+            >
+              <p className="font-bold">
+                {verification.verified
+                  ? "Firestore copy verified exactly."
+                  : "Firestore verification found differences."}
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(["records", "flights", "signatures", "identifiers"] as const).map(
+                  (key) => (
+                    <div className="rounded-lg bg-slate-950/40 p-3" key={key}>
+                      <p className="text-xs capitalize opacity-75">{key}</p>
+                      <p className="mt-1 font-bold">
+                        {verification.actual[key]} / {verification.expected[key]}
+                      </p>
+                    </div>
+                  )
+                )}
+              </div>
+              {verification.mismatches.length ? (
+                <div className="mt-4 space-y-1">
+                  {verification.mismatches.slice(0, 20).map((mismatch) => (
+                    <p className="break-words" key={mismatch}>{mismatch}</p>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </section>
