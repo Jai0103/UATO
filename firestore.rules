@@ -1,29 +1,4 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-    function currentUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-    function isActiveUser() {
-      return signedIn()
-        && currentUser().data.status == "active";
-    }
-    function isAdmin() {
-      return isActiveUser()
-        && currentUser().data.role == "admin";
-    }
-    match /users/{userId} {
-      allow read: if signedIn()
-        && (request.auth.uid == userId || isAdmin());
-      allow write: if false;
-    }
-    // Migration collections are admin-only until trainer permissions are enabled.
-    match /flightLogRecords/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
+
     match /flightEntries/{entryId} {
       allow read, create, update, delete: if isAdmin();
     }
@@ -70,6 +45,18 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
     match /approvalDocuments/{documentId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /fatigueRiskQuestions/{questionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /fatigueRiskRecords/{recordId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /fatigueRiskResponses/{responseId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /fatigueRiskSignatures/{recordId} {
       allow read, create, update, delete: if isAdmin();
     }
     match /staffTrainingDescriptions/{itemId} {
