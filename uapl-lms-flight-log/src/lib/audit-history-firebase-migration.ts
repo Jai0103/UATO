@@ -191,28 +191,44 @@ async function loadDetails(
     while (nextIndex < recordIds.length) {
       const index = nextIndex;
       nextIndex += 1;
-      const response = await migrationGooglePost<{ record: AuditRecord }>({
-        action: "getAuditHistoryDetail",
-        auditId: recordIds[index],
-        // Apps Script currently includes recordId, but not auditId, in the
-        // performance-cache key. Supplying both keeps each detail request unique.
-        recordId: recordIds[index]
-      });
-      if (!response.record || response.record.detailsLoaded !== true) {
+      const auditId = recordIds[index];
+      let detailedRecord: AuditRecord | null = null;
+      let lastProblem = "an incomplete response";
+
+      for (let detailAttempt = 1; detailAttempt <= 3; detailAttempt += 1) {
+        const response = await migrationGooglePost<{ record?: AuditRecord }>({
+          action: "getAuditHistoryDetail",
+          auditId,
+          // These fields are part of the current Apps Script cache descriptor.
+          // They prevent audit-detail calls from sharing stale cached responses.
+          recordId: auditId,
+          sortBy: "audit-detail",
+          sortDirection: "migration-" + detailAttempt
+        });
+        const candidate = response.record;
+
+        if (!candidate) {
+          lastProblem = "no record";
+        } else if (asText(candidate.id) !== asText(auditId)) {
+          lastProblem = "the wrong cached record " + asText(candidate.id);
+        } else if (candidate.detailsLoaded !== true) {
+          lastProblem = "a summary without its detail fields";
+        } else {
+          detailedRecord = candidate;
+          break;
+        }
+
+        if (detailAttempt < 3) await wait(detailAttempt * 500);
+      }
+
+      if (!detailedRecord) {
         throw new Error(
-          "Audit detail " + recordIds[index] + " was not returned by the current Apps Script deployment."
+          "Audit detail " + auditId + " returned " + lastProblem +
+            " after three cache-safe attempts."
         );
       }
-      if (asText(response.record.id) !== asText(recordIds[index])) {
-        throw new Error(
-          "Google returned the wrong cached Audit History detail. Expected " +
-            recordIds[index] +
-            " but received " +
-            asText(response.record.id) +
-            "."
-        );
-      }
-      records[index] = response.record;
+
+      records[index] = detailedRecord;
       completed += 1;
       onProgress?.({
         current: completed,
