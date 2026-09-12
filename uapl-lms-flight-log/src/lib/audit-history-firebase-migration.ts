@@ -199,8 +199,12 @@ async function loadDetails(
         const response = await migrationGooglePost<{ record?: AuditRecord }>({
           action: "getAuditHistoryDetail",
           auditId,
-          // These fields are part of the current Apps Script cache descriptor.
-          // They prevent audit-detail calls from sharing stale cached responses.
+          // Older and newer Apps Script cache descriptors both include page,
+          // pageSize, and search. The detail endpoint ignores these fields, but
+          // they ensure every audit row and retry receives an isolated cache key.
+          page: 100_000 + index * 10 + detailAttempt,
+          pageSize: PAGE_SIZE,
+          search: auditId,
           recordId: auditId,
           sortBy: "audit-detail",
           sortDirection: "migration-" + detailAttempt
