@@ -5,15 +5,14 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { sessionKey } from "@/lib/demo-auth";
 import {
-  checkGoogleStudentLastFour,
-  fetchGoogleRecordById,
-  fetchGoogleMasterData,
-  fetchUnavailableBatteriesForDate,
-  GoogleApiError,
-  saveGoogleRecord,
-  validateGoogleFlightRecord,
-} from "@/lib/google-api";
-import { mirrorFlightLogRecordToFirebase } from "@/lib/flight-log-firebase";
+  checkFirebaseStudentLastFour,
+  fetchFirebaseFlightMasterData,
+  fetchFirebaseFlightLogRecordById,
+  fetchFirebaseUnavailableBatteriesForDate,
+  FlightLogFirebaseError,
+  logFirebaseFlightAudit,
+  saveFirebaseFlightLogRecord,
+} from "@/lib/flight-log-firebase";
 import {
   createFlightLogRecord,
   emptyRow,
@@ -256,7 +255,7 @@ export default function FlightLogsPage() {
     const requestId = ++masterDataRequestSequence.current;
     setMasterData(getMasterData());
 
-    fetchGoogleMasterData()
+    fetchFirebaseFlightMasterData()
       .then((googleMasterData) => {
         if (requestId !== masterDataRequestSequence.current) return;
         setMasterData(googleMasterData);
@@ -267,7 +266,7 @@ export default function FlightLogsPage() {
         notify({
           type: "warning",
           title: "Using local Master Data",
-          message: "The latest active reference values could not be loaded from Google Sheets.",
+            message: "The latest active reference values could not be loaded from Firebase.",
         });
       });
 
@@ -404,7 +403,7 @@ export default function FlightLogsPage() {
     const timer = window.setTimeout(() => {
       setCheckingBatteries(true);
 
-      void fetchUnavailableBatteriesForDate({
+      void fetchFirebaseUnavailableBatteriesForDate({
         date: flightForm.date,
         recordId: activeRecordId || undefined,
       })
@@ -533,7 +532,7 @@ export default function FlightLogsPage() {
     setCheckingStudent(true);
 
     try {
-      const result = await checkGoogleStudentLastFour({
+      const result = await checkFirebaseStudentLastFour({
         lastFourCharacters: student.lastFourCharacters,
         recordId: activeRecordId || undefined,
       });
@@ -895,7 +894,7 @@ export default function FlightLogsPage() {
         type: "warning",
         title: "Internet connection required",
         message:
-          "Your draft is safe on this device. Reconnect before submitting it to Google Sheets.",
+          "Your draft is safe on this device. Reconnect before submitting it to Firebase.",
       });
       return;
     }
@@ -915,50 +914,20 @@ export default function FlightLogsPage() {
     notify({
       type: "loading",
       title: "Saving flight log...",
-      message: "Please wait while the record syncs with Google Sheets.",
+      message: "Validating and saving the record securely in Firebase.",
     });
 
     try {
-      const validation = await validateGoogleFlightRecord(record);
+      const result = await saveFirebaseFlightLogRecord(record);
+      const savedRecord = result.record;
 
-      if (validation.errors.length) {
-        throw new Error(validation.errors.join(" "));
-      }
-
-      if (validation.warnings.length) {
-        clearMessage();
-
-        const proceed = await confirm({
-          title: "Battery overlap detected",
-          message: validation.warnings.join(" "),
-          confirmLabel: "Save anyway",
-        });
-
-        if (!proceed) {
-          notify({
-            type: "info",
-            title: "Save cancelled",
-            message: "Review the battery allocation before saving.",
-          });
-          return;
-        }
-
-        notify({
-          type: "loading",
-          title: "Saving flight log...",
-          message: "Battery warning acknowledged. Syncing with Google Sheets.",
-        });
-      }
-
-      const savedRecord = await saveGoogleRecord(record);
-      let firebaseMirrorFailed = false;
-
-      try {
-        await mirrorFlightLogRecordToFirebase(savedRecord);
-      } catch (mirrorError) {
-        firebaseMirrorFailed = true;
-        console.error("Flight Log Firebase mirror failed", mirrorError);
-      }
+      void logFirebaseFlightAudit(
+        result.previousRecord ? "FLIGHT_UPDATED" : "FLIGHT_CREATED",
+        savedRecord,
+        result.previousRecord
+      ).catch((auditError) => {
+        console.error("Flight Log audit sync failed", auditError);
+      });
 
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
@@ -979,30 +948,21 @@ export default function FlightLogsPage() {
       );
 
       clearMessage();
-      notify(
-        firebaseMirrorFailed
-          ? {
-              type: "warning",
-              title: "Record saved; Firebase sync pending",
-              message:
-                "Google Sheets saved the record, but Firebase did not update. Run the Flight Log migration before relying on Firebase Records.",
-            }
-          : {
-              type: "success",
-              title: "Record saved",
-              message: "Flight log record saved and synchronized to Firebase.",
-            }
-      );
+      notify({
+        type: "success",
+        title: "Record saved",
+        message: "Flight log record saved securely in Firebase.",
+      });
     } catch (error) {
       clearMessage();
 
       if (
-        error instanceof GoogleApiError &&
+        error instanceof FlightLogFirebaseError &&
         error.code === "RECORD_CONFLICT" &&
         activeRecordId
       ) {
         try {
-          const latestRecord = await fetchGoogleRecordById(activeRecordId);
+          const latestRecord = await fetchFirebaseFlightLogRecordById(activeRecordId);
           const shouldMerge = await confirm({
             title: "Record updated by another trainer",
             message:
