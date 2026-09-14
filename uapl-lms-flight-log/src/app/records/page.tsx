@@ -4,14 +4,12 @@ import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { flightLogDraftKey, type FlightLogRecord } from "@/lib/flight-log-storage";
-import {
-  deleteGoogleRecord,
-  type FlightLogRecordSummary,
-} from "@/lib/google-api";
+import type { FlightLogRecordSummary } from "@/lib/google-api";
 import {
   deleteFirebaseFlightLogRecord,
   fetchFirebaseFlightLogRecordById,
   fetchFirebaseFlightLogRecordsPage,
+  logFirebaseFlightAudit,
 } from "@/lib/flight-log-firebase";
 import {
   CalendarDays,
@@ -257,8 +255,19 @@ export default function RecordsPage() {
     setDeleting(true);
 
     try {
-      await deleteGoogleRecord(record.id);
+      const deletedRecord =
+        selectedRecord?.id === record.id
+          ? selectedRecord
+          : await fetchFirebaseFlightLogRecordById(record.id);
       await deleteFirebaseFlightLogRecord(record.id);
+
+      void logFirebaseFlightAudit(
+        "FLIGHT_DELETED",
+        deletedRecord,
+        deletedRecord
+      ).catch((auditError) => {
+        console.error("Flight Log delete audit sync failed", auditError);
+      });
 
       if (selectedRecord?.id === record.id) {
         setSelectedRecord(null);
@@ -267,7 +276,7 @@ export default function RecordsPage() {
       notify({
         type: "success",
         title: "Flight record deleted",
-        message: `${record.student.studentName} was removed and recorded in Audit History.`,
+        message: `${record.student.studentName} was removed from the live Firebase records.`,
       });
 
       const shouldReturnToPreviousPage = records.length === 1 && page > 1;
