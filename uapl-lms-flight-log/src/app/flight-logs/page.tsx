@@ -13,6 +13,7 @@ import {
   saveGoogleRecord,
   validateGoogleFlightRecord,
 } from "@/lib/google-api";
+import { mirrorFlightLogRecordToFirebase } from "@/lib/flight-log-firebase";
 import {
   createFlightLogRecord,
   emptyRow,
@@ -950,6 +951,15 @@ export default function FlightLogsPage() {
       }
 
       const savedRecord = await saveGoogleRecord(record);
+      let firebaseMirrorFailed = false;
+
+      try {
+        await mirrorFlightLogRecordToFirebase(savedRecord);
+      } catch (mirrorError) {
+        firebaseMirrorFailed = true;
+        console.error("Flight Log Firebase mirror failed", mirrorError);
+      }
+
       saveFlightLogRecord(savedRecord.student, savedRecord.rows);
       setActiveRecordId(savedRecord.id);
       setActiveCreatedAt(savedRecord.createdAt);
@@ -969,11 +979,20 @@ export default function FlightLogsPage() {
       );
 
       clearMessage();
-      notify({
-        type: "success",
-        title: "Record saved",
-        message: "Flight log record saved to Google Sheets.",
-      });
+      notify(
+        firebaseMirrorFailed
+          ? {
+              type: "warning",
+              title: "Record saved; Firebase sync pending",
+              message:
+                "Google Sheets saved the record, but Firebase did not update. Run the Flight Log migration before relying on Firebase Records.",
+            }
+          : {
+              type: "success",
+              title: "Record saved",
+              message: "Flight log record saved and synchronized to Firebase.",
+            }
+      );
     } catch (error) {
       clearMessage();
 
