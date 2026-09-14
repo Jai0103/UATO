@@ -19,6 +19,7 @@ import { firestore } from "@/lib/firebase-client";
 import { sessionKey } from "@/lib/demo-auth";
 
 const PAGE_SIZE = 25;
+const DETAIL_BATCH_SIZE = 2;
 const WRITE_BATCH_SIZE = 400;
 const MAX_SIGNATURE_BYTES = 750_000;
 const MIGRATION_READ_TIMEOUT_MS = 90_000;
@@ -250,8 +251,8 @@ export async function loadAllGoogleFlightLogs(
   );
   const records: FlightLogRecord[] = [];
 
-  for (let start = 0; start < uniqueIds.length; start += PAGE_SIZE) {
-    const ids = uniqueIds.slice(start, start + PAGE_SIZE);
+  for (let start = 0; start < uniqueIds.length; start += DETAIL_BATCH_SIZE) {
+    const ids = uniqueIds.slice(start, start + DETAIL_BATCH_SIZE);
     const loadedRecords = await migrationRecordsByIds(ids);
     records.push(...loadedRecords);
     onProgress?.({
