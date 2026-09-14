@@ -229,8 +229,177 @@ export async function fetchFirebaseFlightLogRecordById(recordId: string) {
 }
 
 export async function fetchFirebaseFlightLogRecordsByIds(recordIds: string[]) {
-  const uniqueIds = Array.from(new Set(recordIds.filter(Boolean))).slice(0, 25);
-  return Promise.all(uniqueIds.map(fetchFirebaseFlightLogRecordById));
+  const uniqueIds = Array.from(new Set(recordIds.filter(Boolean))).slice(0, 100);
+  const records: FlightLogRecord[] = [];
+
+  for (let start = 0; start < uniqueIds.length; start += 20) {
+    const group = uniqueIds.slice(start, start + 20);
+    records.push(...(await Promise.all(group.map(fetchFirebaseFlightLogRecordById))));
+  }
+
+  return records;
+}
+
+export async function fetchFirebaseFlightLogsByDateRange(
+  dateFrom: string,
+  dateTo: string
+) {
+  await requireFirebaseUser();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    throw new Error("Select a valid Flight Log date range.");
+  }
+  if (dateFrom > dateTo) {
+    throw new Error("Flight Log start date cannot be after its end date.");
+  }
+
+  const entrySnapshot = await getDocs(
+    query(
+      collection(firestore, "flightEntries"),
+      where("date", ">=", dateFrom),
+      where("date", "<=", dateTo)
+    )
+  );
+  const recordIds = Array.from(
+    new Set(
+      entrySnapshot.docs
+        .map((entry) => String(entry.data().recordId || ""))
+        .filter(Boolean)
+    )
+  );
+
+  if (recordIds.length > 100) {
+    throw new Error(
+      "This date range contains more than 100 students. Select a shorter range."
+    );
+  }
+
+  const records = await fetchFirebaseFlightLogRecordsByIds(recordIds);
+  return records
+    .map((record) => ({
+      ...record,
+      rows: record.rows.filter((row) => row.date >= dateFrom && row.date <= dateTo)
+    }))
+    .filter((record) => record.rows.length > 0);
+}
+
+export type FirebaseFlightDashboard = {
+  totalStudents: number;
+  totalRecords: number;
+  pendingRecords: number;
+  completedRecords: number;
+  activeTrainers: number;
+  totalFlights: number;
+  totalMinutes: number;
+  recentRecords: Array<{
+    id: string;
+    studentName: string;
+    company: string;
+    flightCount: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  monthlyActivity: Array<{
+    key: string;
+    label: string;
+    count: number;
+  }>;
+};
+
+function singaporeMonthKey(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value || "";
+  const month = parts.find((part) => part.type === "month")?.value || "";
+  return `${year}-${month}`;
+}
+
+function latestTwelveMonths() {
+  const values: Array<{ key: string; label: string; count: number }> = [];
+  const current = new Date();
+  current.setDate(1);
+
+  for (let offset = 11; offset >= 0; offset -= 1) {
+    const date = new Date(current.getFullYear(), current.getMonth() - offset, 1);
+    values.push({
+      key: singaporeMonthKey(date),
+      label: new Intl.DateTimeFormat("en-SG", {
+        month: "short",
+        year: "numeric"
+      }).format(date),
+      count: 0
+    });
+  }
+
+  return values;
+}
+
+export async function fetchFirebaseFlightDashboard(): Promise<FirebaseFlightDashboard> {
+  await requireFirebaseUser();
+
+  const [recordSnapshot, signatureSnapshot, userSnapshot] = await Promise.all([
+    getDocs(collection(firestore, "flightLogRecords")),
+    getDocs(collection(firestore, "flightLogSignatures")),
+    getDocs(collection(firestore, "users"))
+  ]);
+  const records = recordSnapshot.docs.map((snapshot) => ({
+    summary: summaryFromDocument(snapshot.id, snapshot.data()),
+    totalMinutes: Number(snapshot.data().totalDurationMinutes) || 0
+  }));
+  const signedRecordIds = new Set(signatureSnapshot.docs.map((item) => item.id));
+  const monthlyActivity = latestTwelveMonths();
+  const monthCounts = new Map(monthlyActivity.map((month) => [month.key, 0]));
+
+  records.forEach(({ summary }) => {
+    const updated = new Date(summary.updatedAt);
+    if (Number.isNaN(updated.getTime())) return;
+    const key = singaporeMonthKey(updated);
+    if (monthCounts.has(key)) monthCounts.set(key, (monthCounts.get(key) || 0) + 1);
+  });
+
+  monthlyActivity.forEach((month) => {
+    month.count = monthCounts.get(month.key) || 0;
+  });
+
+  const completedRecords = records.filter(
+    ({ summary }) => signedRecordIds.has(summary.id) && summary.flightCount > 0
+  ).length;
+  const recentRecords = records
+    .map(({ summary }) => ({
+      id: summary.id,
+      studentName: summary.student.studentName,
+      company: summary.student.company,
+      flightCount: summary.flightCount,
+      createdAt: summary.createdAt,
+      updatedAt: summary.updatedAt
+    }))
+    .sort(
+      (first, second) =>
+        new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime()
+    )
+    .slice(0, 5);
+  const activeTrainers = userSnapshot.docs.filter((snapshot) => {
+    const user = snapshot.data();
+    return user.status === "active" && user.role === "trainer";
+  }).length;
+
+  return {
+    totalStudents: records.length,
+    totalRecords: records.length,
+    pendingRecords: records.length - completedRecords,
+    completedRecords,
+    activeTrainers,
+    totalFlights: records.reduce(
+      (total, { summary }) => total + summary.flightCount,
+      0
+    ),
+    totalMinutes: records.reduce((total, record) => total + record.totalMinutes, 0),
+    recentRecords,
+    monthlyActivity
+  };
 }
 
 export async function mirrorFlightLogRecordToFirebase(record: FlightLogRecord) {
