@@ -9,6 +9,7 @@ import {
   type ApprovalDashboardSummary
 } from "@/lib/approvals";
 import { postToGoogle } from "@/lib/google-api";
+import { fetchFirebaseFlightDashboard } from "@/lib/flight-log-firebase";
 import {
   AlertTriangle,
   BellRing,
@@ -138,14 +139,29 @@ export default function AdminPage() {
     async function loadDashboard() {
       setLoading(true);
       try {
+        const firebaseDashboard = await fetchFirebaseFlightDashboard();
+        setDashboard(firebaseDashboard);
+      } catch (error) {
+        setDashboard(emptyDashboard);
+        notify({
+          type: "error",
+          title: "Unable to load Flight Log dashboard",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Firebase statistics could not be loaded."
+        });
+      } finally {
+        setLoading(false);
+      }
+
+      try {
         const response = await postToGoogle<{
           bundle: AdminDashboardBundle;
         }>({
           action: "getAdminDashboardBundle"
         });
         const bundle = response.bundle;
-
-        setDashboard(bundle?.dashboard || emptyDashboard);
 
         if (bundle?.approvals?.available) {
           setApprovalDashboard(
@@ -165,17 +181,16 @@ export default function AdminPage() {
         }
 
       } catch (error) {
-        setDashboard(emptyDashboard);
+        setApprovalDashboard(emptyApprovalDashboard);
+        setApprovalMonitoringAvailable(false);
         notify({
-          type: "error",
-          title: "Unable to load dashboard",
+          type: "warning",
+          title: "Approval monitoring unavailable",
           message:
             error instanceof Error
               ? error.message
-              : "Dashboard statistics could not be loaded."
+              : "Approval expiry information could not be loaded."
         });
-      } finally {
-        setLoading(false);
       }
     }
 
