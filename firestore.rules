@@ -1,15 +1,20 @@
-
+      allow delete: if isAdmin();
+    }
     match /flightEntries/{entryId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read, create, update: if isActiveUser();
+      allow delete: if isActiveUser();
     }
     match /flightLogSignatures/{recordId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read, create, update: if isActiveUser();
+      allow delete: if isActiveUser();
     }
     match /flightLogIdentifiers/{identifierId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read, create, update: if isActiveUser();
+      allow delete: if isActiveUser();
     }
     match /flightLogMasterData/{itemId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read: if isActiveUser();
+      allow create, update, delete: if isAdmin();
     }
     match /uaMaintenanceMasterData/{itemId} {
       allow read, create, update, delete: if isAdmin();
