@@ -1,5 +1,4 @@
-      allow delete: if isAdmin();
-    }
+
     match /flightEntries/{entryId} {
       allow read, create, update: if isActiveUser();
       allow delete: if isActiveUser();
@@ -9,6 +8,13 @@
       allow delete: if isActiveUser();
     }
     match /flightLogIdentifiers/{identifierId} {
+      allow read, create, update: if isActiveUser();
+      allow delete: if isActiveUser();
+    }
+    match /flightBatteryReservations/{reservationId} {
+      allow read, create, update, delete: if isActiveUser();
+    }
+    match /flightLogTombstones/{recordId} {
       allow read, create, update: if isActiveUser();
       allow delete: if isActiveUser();
     }
