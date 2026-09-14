@@ -5,6 +5,10 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { postToGoogle } from "@/lib/google-api";
 import {
+  fetchFirebaseFlightMasterDataCatalog,
+  saveFirebaseFlightMasterDataCatalog,
+} from "@/lib/flight-log-firebase";
+import {
   getMasterData,
   masterDataLabels,
   saveMasterData,
@@ -321,13 +325,8 @@ export default function MasterDataPage() {
       setLoading(true);
 
       try {
-        const result = await postCatalog({
-          action:
-            "getMasterDataCatalog"
-        });
-
         const loadedCatalog =
-          result.catalog as MasterDataCatalog;
+          await fetchFirebaseFlightMasterDataCatalog() as MasterDataCatalog;
 
         if (
           requestId !==
@@ -363,7 +362,7 @@ export default function MasterDataPage() {
           title:
             "Using local master data",
           message:
-            "The catalog could not be loaded from Google Sheets."
+            "The catalog could not be loaded from Firebase."
         });
       } finally {
         if (
@@ -488,16 +487,9 @@ export default function MasterDataPage() {
     );
 
     try {
-      const result = await postCatalog({
-        action:
-          "saveMasterDataCatalog",
-        catalog: nextCatalog
-      });
-
-      const savedCatalog =
-        result.catalog as
-          | MasterDataCatalog
-          | undefined;
+      const savedCatalog = await saveFirebaseFlightMasterDataCatalog(
+        nextCatalog
+      ) as MasterDataCatalog;
 
       if (savedCatalog) {
         setCatalog(savedCatalog);
@@ -515,6 +507,13 @@ export default function MasterDataPage() {
         message: successMessage
       });
 
+      void postCatalog({
+        action: "saveMasterDataCatalog",
+        catalog: savedCatalog
+      }).catch((syncError) => {
+        console.error("Flight Log Master Data backup sync failed", syncError);
+      });
+
       return true;
     } catch (error) {
       setCatalog(previousCatalog);
@@ -528,7 +527,7 @@ export default function MasterDataPage() {
       notify({
         type: "error",
         title:
-          "Google Sheets sync failed",
+          "Firebase save failed",
         message:
           error instanceof Error
             ? error.message
