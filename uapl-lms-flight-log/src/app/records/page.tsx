@@ -6,10 +6,13 @@ import { useAppMessage } from "@/components/message-provider";
 import { flightLogDraftKey, type FlightLogRecord } from "@/lib/flight-log-storage";
 import {
   deleteGoogleRecord,
-  fetchGoogleRecordById,
-  fetchGoogleRecordsPage,
   type FlightLogRecordSummary,
 } from "@/lib/google-api";
+import {
+  deleteFirebaseFlightLogRecord,
+  fetchFirebaseFlightLogRecordById,
+  fetchFirebaseFlightLogRecordsPage,
+} from "@/lib/flight-log-firebase";
 import {
   CalendarDays,
   ChevronLeft,
@@ -120,7 +123,7 @@ export default function RecordsPage() {
         month: selectedMonth,
         year: selectedYear,
       };
-      const result = await fetchGoogleRecordsPage(request);
+      const result = await fetchFirebaseFlightLogRecordsPage(request);
 
       if (requestId !== requestSequence.current) return;
 
@@ -159,7 +162,7 @@ export default function RecordsPage() {
     setLoadingDetail(true);
 
     try {
-      return await fetchGoogleRecordById(recordId);
+      return await fetchFirebaseFlightLogRecordById(recordId);
     } catch (error) {
       notify({
         type: "error",
@@ -211,7 +214,7 @@ export default function RecordsPage() {
       const detail =
         selectedRecord?.id === recordId
           ? selectedRecord
-          : await fetchGoogleRecordById(recordId);
+          : await fetchFirebaseFlightLogRecordById(recordId);
 
       const pdfModule = await import("@/lib/pdf");
 
@@ -255,6 +258,7 @@ export default function RecordsPage() {
 
     try {
       await deleteGoogleRecord(record.id);
+      await deleteFirebaseFlightLogRecord(record.id);
 
       if (selectedRecord?.id === record.id) {
         setSelectedRecord(null);
