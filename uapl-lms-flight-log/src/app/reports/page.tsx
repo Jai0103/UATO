@@ -20,12 +20,12 @@ import { AppShell } from "@/components/app-shell";
 import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
 import {
-  fetchBulkFlightReportRecords,
   fetchBulkFatigueRiskReportRecords,
   fetchBulkStaffTrainingReportRecords,
   fetchBulkUaMaintenanceReportRecords,
   fetchFatigueRiskReportTrainerNames
 } from "@/lib/bulk-report-api";
+import { fetchFirebaseFlightLogsByDateRange } from "@/lib/flight-log-firebase";
 import {
   fetchAllEvaluationResponses,
   fetchEvaluationSessionsPage,
@@ -295,10 +295,7 @@ export default function ReportsPage() {
     setWorkingLabel("Loading Flight Log records...");
     try {
       const [records, pdfModule] = await Promise.all([
-        fetchBulkFlightReportRecords({
-          dateFrom: flightFrom,
-          dateTo: flightTo
-        }),
+        fetchFirebaseFlightLogsByDateRange(flightFrom, flightTo),
         import("@/lib/pdf")
       ]);
       if (!records.length) {
