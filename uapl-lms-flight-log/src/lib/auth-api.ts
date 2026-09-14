@@ -1,4 +1,12 @@
 import { sessionKey } from "@/lib/demo-auth";
+import { FirebaseError } from "firebase/app";
+import {
+  browserLocalPersistence,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut
+} from "firebase/auth";
+import { firebaseAuth } from "@/lib/firebase-client";
 import {
   googleAppsScriptUrl,
   invalidateGoogleApiCache
@@ -39,6 +47,34 @@ type SecureLoginResponse =
     expiresAt?: string;
     remainingAttempts?: number;
   };
+
+function firebaseLoginMessage(error: unknown) {
+  if (!(error instanceof FirebaseError)) {
+    return "Unable to sign in with Firebase. Check your connection and try again.";
+  }
+
+  if (
+    error.code === "auth/invalid-credential" ||
+    error.code === "auth/user-not-found" ||
+    error.code === "auth/wrong-password"
+  ) {
+    return "Invalid email or password.";
+  }
+
+  if (error.code === "auth/too-many-requests") {
+    return "Too many sign-in attempts. Wait a moment before trying again.";
+  }
+
+  if (error.code === "auth/network-request-failed") {
+    return "Unable to reach Firebase Authentication. Check your connection and try again.";
+  }
+
+  if (error.code === "auth/user-disabled") {
+    return "This account is inactive. Contact your administrator.";
+  }
+
+  return "Firebase Authentication could not complete the sign-in.";
+}
 
 type VerifySessionResponse =
   BaseAuthResponse & {
@@ -136,10 +172,60 @@ export async function loginSecurely(
   identifier: string,
   password: string
 ): Promise<SecureSession> {
+  const cleanIdentifier = identifier.trim().toLowerCase();
+
+  // Firebase Authentication uses email addresses. Username-only login remains
+  // on the legacy path until every account has completed Firebase setup.
+  if (cleanIdentifier.includes("@")) {
+    try {
+      await setPersistence(firebaseAuth, browserLocalPersistence);
+      const credential = await signInWithEmailAndPassword(
+        firebaseAuth,
+        cleanIdentifier,
+        password
+      );
+      const idToken = await credential.user.getIdToken();
+      const result = await postAuthentication<SecureLoginResponse>({
+        action: "exchangeFirebaseSession",
+        idToken
+      });
+
+      if (
+        !responseSucceeded(result) ||
+        !result.user ||
+        !result.sessionToken ||
+        !result.expiresAt
+      ) {
+        await signOut(firebaseAuth).catch(() => undefined);
+        throw new AuthApiError(
+          result.message || "Unable to start the application session.",
+          result.code || "SESSION_EXCHANGE_FAILED"
+        );
+      }
+
+      const session: SecureSession = {
+        name: result.user.name,
+        email: result.user.email,
+        role: result.user.role,
+        mustChangePassword: false,
+        sessionToken: result.sessionToken,
+        expiresAt: result.expiresAt
+      };
+
+      saveSecureSession(session);
+      return session;
+    } catch (error) {
+      if (error instanceof AuthApiError) throw error;
+
+      await signOut(firebaseAuth).catch(() => undefined);
+      throw new AuthApiError(firebaseLoginMessage(error), "FIREBASE_LOGIN_FAILED");
+    }
+  }
+
   const result =
     await postAuthentication<SecureLoginResponse>({
       action: "secureLogin",
-      identifier: identifier.trim(),
+      identifier: cleanIdentifier,
       password
     });
 
@@ -308,19 +394,21 @@ export async function logoutSecurely() {
 
   clearSecureSession();
 
+  const firebaseLogout = signOut(firebaseAuth).catch(() => undefined);
+
   if (!session?.sessionToken) {
+    await firebaseLogout;
     return;
   }
 
-  try {
-    await postAuthentication<BaseAuthResponse>({
+  await Promise.allSettled([
+    postAuthentication<BaseAuthResponse>({
       action: "secureLogout",
       sessionToken:
         session.sessionToken
-    });
-  } catch {
-    // Local logout remains successful.
-  }
+    }),
+    firebaseLogout
+  ]);
 }
 
 export function saveSecureSession(
