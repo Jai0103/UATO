@@ -21,7 +21,6 @@ import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
 import {
   fetchBulkFatigueRiskReportRecords,
-  fetchBulkStaffTrainingReportRecords,
   fetchFatigueRiskReportTrainerNames
 } from "@/lib/bulk-report-api";
 import { fetchFirebaseFlightLogsByDateRange } from "@/lib/flight-log-firebase";
@@ -34,6 +33,7 @@ import {
   downloadEvaluationCsv,
   downloadEvaluationPdf
 } from "@/lib/evaluation-report";
+import { fetchStaffTrainingReportRecords } from "@/lib/staff-training-api";
 import {
   fetchUaMaintenanceRecord,
   fetchUaMaintenanceRecordsPage
@@ -337,7 +337,7 @@ export default function ReportsPage() {
     setWorkingLabel("Loading Staff Training records...");
     try {
       const [records, pdfModule] = await Promise.all([
-        fetchBulkStaffTrainingReportRecords({
+        fetchStaffTrainingReportRecords({
           staffName: staffName.trim(),
           monthFrom: staffMonthFrom,
           monthTo: staffMonthTo
