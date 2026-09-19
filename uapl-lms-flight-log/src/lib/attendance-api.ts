@@ -7,8 +7,8 @@ import {
   getDoc,
   getDocs,
   query,
-  runTransaction,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
   where,
@@ -234,21 +234,13 @@ export async function submitPublicAttendance(input: {
 
   const identityHash = await sha256(`${learnerName.toLowerCase()}|${lastFour}`);
   const submissionId = `${input.session.id}_${input.period}_${identityHash.slice(0, 36)}`;
-  const publicReference = doc(firestore, "attendancePublicSessions", input.session.token);
   const submissionReference = doc(firestore, "attendanceSubmissions", submissionId);
 
-  await runTransaction(firestore, async (transaction) => {
-    const [publicSnapshot, existing] = await Promise.all([
-      transaction.get(publicReference),
-      transaction.get(submissionReference)
-    ]);
-    if (!publicSnapshot.exists()) throw new Error("This attendance session is no longer available.");
-    const publicData = publicSnapshot.data();
-    if (publicData.status !== "open" || publicData[`${input.period}Open`] !== true) {
-      throw new Error(`${input.period.toUpperCase()} attendance is not open.`);
-    }
-    if (existing.exists()) throw new Error(`Your ${input.period.toUpperCase()} attendance has already been submitted.`);
-    transaction.set(submissionReference, {
+  try {
+    // The deterministic document ID makes a second set an update. Public
+    // users may create but cannot update, so duplicates remain protected
+    // without allowing access to read another learner's signature.
+    await setDoc(submissionReference, {
       id: submissionId,
       sessionId: input.session.id,
       publicToken: input.session.token,
@@ -261,7 +253,15 @@ export async function submitPublicAttendance(input: {
       submittedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-  });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
+    if (errorMessage.includes("permission") || errorMessage.includes("insufficient")) {
+      throw new Error(
+        `Your ${input.period.toUpperCase()} attendance may already be submitted, or this signing window has closed.`
+      );
+    }
+    throw error;
+  }
 
   return submissionId;
 }
