@@ -100,7 +100,8 @@ const adminOnlyPages = [
   "/ua-maintenance",
   "/inventory",
   "/fatigue-risk",
-  "/evaluations"
+  "/evaluations",
+  "/attendance"
 ];
 
 const adminLinks: NavigationItem[] = [
@@ -127,6 +128,7 @@ const adminLinks: NavigationItem[] = [
         label: "Fatigue Risk Identification",
         exact: true
       },
+      { href: "/attendance", label: "QR Attendance", exact: true },
       { href: "/inventory", label: "Inventory", exact: true }
     ]
   },
