@@ -8,6 +8,7 @@ import {
   Smartphone,
   X,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type BeforeInstallPromptEvent = Event & {
@@ -23,6 +24,10 @@ const INSTALL_DISMISS_KEY = "uapl-pwa-install-dismissed-v2";
 const INSTALL_DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000;
 
 export function PwaManager() {
+  const pathname = usePathname();
+  const suppressInstallPrompt =
+    pathname.startsWith("/attendance/check-in") ||
+    pathname.startsWith("/evaluation");
   const [online, setOnline] = useState(true);
   const [reconnected, setReconnected] = useState(false);
   const [installPrompt, setInstallPrompt] =
@@ -251,7 +256,7 @@ export function PwaManager() {
         </div>
       ) : null}
 
-      {online && showInstall && !updateReady ? (
+      {online && showInstall && !updateReady && !suppressInstallPrompt ? (
         <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[110] mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-2xl sm:bottom-5 sm:left-auto sm:right-5 sm:mx-0">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
