@@ -1,25 +1,4 @@
     }
-    match /uaMaintenanceRecords/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceEntries/{entryId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceSignatures/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceTombstones/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /inventoryMasterData/{itemId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /inventoryAssets/{assetId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /inventoryTransactions/{transactionId} {
-      allow read, create, update, delete: if isAdmin();
-    }
     match /inventoryMaintenance/{maintenanceId} {
       allow read, create, update, delete: if isAdmin();
     }
@@ -67,6 +46,55 @@
     }
     match /staffTrainingTombstones/{recordId} {
       allow read, create, update, delete: if isAdmin();
+    }
+    match /attendanceSessions/{sessionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /attendancePublicSessions/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+    match /attendanceSubmissions/{submissionId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if
+        request.resource.data.keys().hasOnly([
+          "id",
+          "sessionId",
+          "publicToken",
+          "period",
+          "learnerName",
+          "learnerNameLower",
+          "lastFour",
+          "identityHash",
+          "signatureDataUrl",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.id == submissionId
+        && request.resource.data.period in ["am", "pm"]
+        && request.resource.data.learnerName is string
+        && request.resource.data.learnerName.size() >= 2
+        && request.resource.data.learnerName.size() <= 100
+        && request.resource.data.learnerNameLower is string
+        && request.resource.data.lastFour is string
+        && request.resource.data.lastFour.matches("^[A-Z0-9]{4}$")
+        && request.resource.data.identityHash is string
+        && request.resource.data.identityHash.matches("^[a-f0-9]{64}$")
+        && request.resource.data.signatureDataUrl is string
+        && request.resource.data.signatureDataUrl.matches("^data:image/png;base64,.*")
+        && request.resource.data.signatureDataUrl.size() <= 350000
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && publicAttendanceSession(request.resource.data.publicToken).data.sessionId == request.resource.data.sessionId
+        && publicAttendanceSession(request.resource.data.publicToken).data.status == "open"
+        && (
+          (request.resource.data.period == "am"
+            && publicAttendanceSession(request.resource.data.publicToken).data.amOpen == true)
+          ||
+          (request.resource.data.period == "pm"
+            && publicAttendanceSession(request.resource.data.publicToken).data.pmOpen == true)
+        );
     }
     match /migrationRuns/{runId} {
       allow read, create, update, delete: if isAdmin();
