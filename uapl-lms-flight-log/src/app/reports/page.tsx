@@ -22,7 +22,6 @@ import { getSecureSession } from "@/lib/auth-api";
 import {
   fetchBulkFatigueRiskReportRecords,
   fetchBulkStaffTrainingReportRecords,
-  fetchBulkUaMaintenanceReportRecords,
   fetchFatigueRiskReportTrainerNames
 } from "@/lib/bulk-report-api";
 import { fetchFirebaseFlightLogsByDateRange } from "@/lib/flight-log-firebase";
@@ -561,10 +560,9 @@ export default function ReportsPage() {
         );
         records = await loadSelectedMaintenanceRecords(summaries);
       } else {
-        records = await fetchBulkUaMaintenanceReportRecords({
-          dateFrom: maintenanceFrom,
-          dateTo: maintenanceTo
-        });
+        records = await loadSelectedMaintenanceRecords(
+          await loadMaintenanceSummaries()
+        );
       }
 
       const pdfModule = await pdfPromise;
