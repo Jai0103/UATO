@@ -19,6 +19,7 @@ import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import type {
   AttendanceDashboard,
   AttendancePeriod,
+  AttendanceRecordSummary,
   AttendanceSession,
   AttendanceSessionInput,
   AttendanceSubmission,
@@ -167,6 +168,44 @@ export async function fetchAttendanceSubmissions(sessionId: string) {
   return snapshot.docs
     .map((item) => submissionFromDoc(item.id, item.data()))
     .sort((a, b) => a.learnerName.localeCompare(b.learnerName) || a.period.localeCompare(b.period));
+}
+
+export async function fetchAttendanceRecordSummaries(): Promise<AttendanceRecordSummary[]> {
+  await requireAdmin();
+  const [sessions, submissionSnapshot] = await Promise.all([
+    fetchAttendanceSessions(),
+    getDocs(collection(firestore, "attendanceSubmissions"))
+  ]);
+  const counts = new Map<
+    string,
+    { amCount: number; pmCount: number; learners: Set<string> }
+  >();
+
+  submissionSnapshot.docs.forEach((item) => {
+    const data = item.data();
+    const sessionId = String(data.sessionId || "");
+    if (!sessionId) return;
+    const current = counts.get(sessionId) || {
+      amCount: 0,
+      pmCount: 0,
+      learners: new Set<string>()
+    };
+    if (data.period === "pm") current.pmCount += 1;
+    else current.amCount += 1;
+    const identity = String(data.identityHash || `${data.learnerNameLower || ""}|${data.lastFour || ""}`);
+    if (identity) current.learners.add(identity);
+    counts.set(sessionId, current);
+  });
+
+  return sessions.map((session) => {
+    const current = counts.get(session.id);
+    return {
+      ...session,
+      amCount: current?.amCount || 0,
+      pmCount: current?.pmCount || 0,
+      uniqueLearnerCount: current?.learners.size || 0
+    };
+  });
 }
 
 export async function deleteAttendanceSubmission(id: string) {
