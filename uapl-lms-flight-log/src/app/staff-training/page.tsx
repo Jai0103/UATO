@@ -202,7 +202,7 @@ export default function StaffTrainingPage() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-    // Search is intentionally debounced before requesting Google Sheets.
+    // Search is intentionally debounced before filtering Firestore records.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, selectedYear, routeMode, loading]);
 
@@ -397,15 +397,12 @@ export default function StaffTrainingPage() {
     }
     setWorking("Saving staff training record...");
     try {
-      const saved = await saveStaffTrainingRecord({
-        ...record,
-        updatedAt: new Date().toISOString()
-      });
+      const saved = await saveStaffTrainingRecord(record);
       setRecord(saved);
       await loadRecordsPage(recordsPage.page, search);
       message.success(
         "Staff training saved",
-        `${saved.staffName}'s checklist is now stored in Google Sheets.`
+        `${saved.staffName}'s checklist is now stored securely in Firebase.`
       );
     } catch (errorValue) {
       message.error(
