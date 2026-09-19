@@ -71,3 +71,8 @@ export type AttendanceDashboard = {
   thisMonthSessions: number;
 };
 
+export type AttendanceRecordSummary = AttendanceSession & {
+  amCount: number;
+  pmCount: number;
+  uniqueLearnerCount: number;
+};
