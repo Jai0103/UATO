@@ -306,10 +306,7 @@ export default function UaMaintenancePage() {
     const returnToRecordsAfterSave = isDuplicateDraft;
     setWorking("Saving UA Maintenance Check...");
     try {
-      const saved = await saveUaMaintenanceRecord({
-        ...record,
-        updatedAt: new Date().toISOString()
-      });
+      const saved = await saveUaMaintenanceRecord(record);
       setRecord(saved);
 
       if (returnToRecordsAfterSave) {
