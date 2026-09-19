@@ -1,29 +1,3 @@
-
-    match /flightEntries/{entryId} {
-      allow read, create, update: if isActiveUser();
-      allow delete: if isActiveUser();
-    }
-    match /flightLogSignatures/{recordId} {
-      allow read, create, update: if isActiveUser();
-      allow delete: if isActiveUser();
-    }
-    match /flightLogIdentifiers/{identifierId} {
-      allow read, create, update: if isActiveUser();
-      allow delete: if isActiveUser();
-    }
-    match /flightBatteryReservations/{reservationId} {
-      allow read, create, update, delete: if isActiveUser();
-    }
-    match /flightLogTombstones/{recordId} {
-      allow read, create, update: if isActiveUser();
-      allow delete: if isActiveUser();
-    }
-    match /flightLogMasterData/{itemId} {
-      allow read: if isActiveUser();
-      allow create, update, delete: if isAdmin();
-    }
-    match /uaMaintenanceMasterData/{itemId} {
-      allow read, create, update, delete: if isAdmin();
     }
     match /uaMaintenanceRecords/{recordId} {
       allow read, create, update, delete: if isAdmin();
@@ -91,8 +65,14 @@
     match /staffTrainingSignatures/{recordId} {
       allow read, create, update, delete: if isAdmin();
     }
+    match /staffTrainingTombstones/{recordId} {
+      allow read, create, update, delete: if isAdmin();
+    }
     match /migrationRuns/{runId} {
       allow read, create, update, delete: if isAdmin();
     }
     match /{document=**} {
       allow read, write: if false;
+    }
+  }
+}
