@@ -34,6 +34,9 @@
     match /uaMaintenanceSignatures/{recordId} {
       allow read, create, update, delete: if isAdmin();
     }
+    match /uaMaintenanceTombstones/{recordId} {
+      allow read, create, update, delete: if isAdmin();
+    }
     match /inventoryMasterData/{itemId} {
       allow read, create, update, delete: if isAdmin();
     }
@@ -93,6 +96,3 @@
     }
     match /{document=**} {
       allow read, write: if false;
-    }
-  }
-}
