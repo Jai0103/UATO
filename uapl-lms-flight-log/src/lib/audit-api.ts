@@ -93,7 +93,9 @@ async function fetchFirebaseLiveRecords(request: AuditHistoryRequest) {
   const dateTo = String(request.dateTo || "");
   return snapshot.docs
     .map((item) => eventFromDocument(item.id, item.data()))
-    .filter((record) => ["attendance", "fatigueRisk", "user"].includes(record.entityType))
+    .filter((record) =>
+      ["attendance", "fatigueRisk", "uaMaintenance", "user"].includes(record.entityType)
+    )
     .filter((record) => {
       const day = record.timestamp.slice(0, 10);
       if (request.auditAction && record.action !== request.auditAction) return false;
@@ -142,13 +144,14 @@ export async function fetchAuditHistoryPage(
     request.entityType === "attendance" ||
     request.entityType === "user" ||
     request.entityType === "fatigueRisk" ||
+    request.entityType === "uaMaintenance" ||
     Boolean(request.auditAction && firebaseActions.includes(request.auditAction))
   ) {
     return paginateFirebaseRecords(
       firebaseRecords,
       request,
       firebaseActions.sort(),
-      ["attendance", "fatigueRisk", "user"]
+      ["attendance", "fatigueRisk", "uaMaintenance", "user"]
     );
   }
 
@@ -160,7 +163,13 @@ export async function fetchAuditHistoryPage(
     new Set([...(googleResult.actionOptions || []), ...firebaseActions])
   ).sort();
   const entityTypeOptions = Array.from(
-    new Set([...(googleResult.entityTypeOptions || []), "attendance", "fatigueRisk", "user"])
+    new Set([
+      ...(googleResult.entityTypeOptions || []),
+      "attendance",
+      "fatigueRisk",
+      "uaMaintenance",
+      "user"
+    ])
   ).sort();
 
   if (request.entityType || request.page !== 1 || !firebaseRecords.length) {
