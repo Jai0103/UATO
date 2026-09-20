@@ -50,6 +50,7 @@ const actionLabels: Record<string, string> = {
   MASTER_DATA_ACTIVATED: "Master Data activated",
   MASTER_DATA_DEACTIVATED: "Master Data deactivated",
   MASTER_DATA_DELETED: "Master Data deleted",
+  FLIGHT_MASTER_DATA_UPDATED: "Flight Log Master Data updated",
   REPORT_GENERATED: "Report generated",
   APPROVAL_CREATED: "Approval created",
   APPROVAL_UPDATED: "Approval updated",
