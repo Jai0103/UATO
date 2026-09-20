@@ -59,6 +59,16 @@ const actionLabels: Record<string, string> = {
   FATIGUE_RISK_CREATED: "Fatigue-risk checklist created",
   FATIGUE_RISK_UPDATED: "Fatigue-risk checklist updated",
   FATIGUE_RISK_DELETED: "Fatigue-risk checklist deleted",
+  UA_MAINTENANCE_CREATED: "UA Maintenance record created",
+  UA_MAINTENANCE_UPDATED: "UA Maintenance record updated",
+  UA_MAINTENANCE_DELETED: "UA Maintenance record deleted",
+  UA_MAINTENANCE_MASTER_DATA_UPDATED: "UA Maintenance Master Data updated",
+  ATTENDANCE_SESSION_CREATED: "Attendance session created",
+  ATTENDANCE_SESSION_UPDATED: "Attendance session updated",
+  ATTENDANCE_SESSION_DELETED: "Attendance session deleted",
+  ATTENDANCE_CHECKED_IN: "Learner attendance submitted",
+  ATTENDANCE_CHECK_IN_UPDATED: "Learner attendance corrected",
+  ATTENDANCE_CHECK_IN_DELETED: "Learner attendance deleted",
 };
 
 function humanize(value: string) {
@@ -181,7 +191,7 @@ export default function AuditHistoryPage() {
         message:
           error instanceof Error
             ? error.message
-            : "Check the Apps Script deployment and try again.",
+            : "Check the Firebase connection and try again.",
       });
     } finally {
       setLoading(false);
@@ -252,7 +262,7 @@ export default function AuditHistoryPage() {
 
       if (!hasAuditValues) {
         throw new Error(
-          "This AuditLog row has no saved detail values. Check columns K, L, and M in the AuditLog sheet."
+          "This audit event does not contain previous, updated, or additional detail values."
         );
       }
 
