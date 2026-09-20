@@ -69,6 +69,12 @@
     match /evaluationSessions/{sessionId} {
       allow read, create, update, delete: if isAdmin();
     }
+    match /evaluationPublicSessions/{token} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationResponseKeys/{keyId} {
+      allow read, write: if false;
+    }
     match /evaluationSessionQuestions/{questionId} {
       allow read, create, update, delete: if isAdmin();
     }
