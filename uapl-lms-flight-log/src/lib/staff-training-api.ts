@@ -12,7 +12,10 @@ import {
   type DocumentReference
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
-import { postToGoogle } from "@/lib/google-api";
+import {
+  addFirebaseAuditToTransaction,
+  writeFirebaseAudit
+} from "@/lib/firebase-audit";
 import type {
   StaffTrainingDescription,
   StaffTrainingEntry,
@@ -49,6 +52,13 @@ let descriptionCache: {
   expiresAt: number;
   descriptions: StaffTrainingDescription[];
 } | null = null;
+let actorCache: {
+  expiresAt: number;
+  uid: string;
+  name: string;
+  email: string;
+  role: "admin";
+} | null = null;
 
 export class StaffTrainingFirebaseError extends Error {
   code: string;
@@ -69,7 +79,30 @@ async function requireFirebaseUser() {
       "AUTH_REQUIRED"
     );
   }
-  return user;
+  if (actorCache && actorCache.uid === user.uid && actorCache.expiresAt > Date.now()) {
+    return actorCache;
+  }
+
+  const profile = await getDoc(doc(firestore, "users", user.uid));
+  if (
+    !profile.exists() ||
+    profile.data().status !== "active" ||
+    profile.data().role !== "admin"
+  ) {
+    throw new StaffTrainingFirebaseError(
+      "Administrator access is required.",
+      "ADMIN_REQUIRED"
+    );
+  }
+
+  actorCache = {
+    expiresAt: Date.now() + 2 * 60_000,
+    uid: user.uid,
+    name: text(profile.data().name || user.displayName || user.email || "Administrator"),
+    email: text(profile.data().email || user.email).trim().toLowerCase(),
+    role: "admin"
+  };
+  return actorCache;
 }
 
 function text(value: unknown) {
@@ -211,23 +244,28 @@ function validateRecord(record: StaffTrainingRecord) {
   return "";
 }
 
-function writeAudit(
-  auditAction:
-    | "STAFF_TRAINING_CREATED"
-    | "STAFF_TRAINING_UPDATED"
-    | "STAFF_TRAINING_DELETED"
-    | "STAFF_TRAINING_DESCRIPTIONS_UPDATED",
-  record: StaffTrainingRecord | StaffTrainingDescription[],
-  previousRecord: StaffTrainingRecord | StaffTrainingDescription[] | null
-) {
-  void postToGoogle<{ auditId?: string }>({
-    action: "recordFirebaseStaffTrainingAudit",
-    auditAction,
-    record,
-    previousRecord
-  }).catch((error) => {
-    console.error("Staff Training audit sync failed", error);
-  });
+function recordAuditValue(record: StaffTrainingRecord) {
+  return {
+    id: record.id,
+    staffName: record.staffName,
+    staffEmail: record.staffEmail,
+    designation: record.designation,
+    headOfTrainingName: record.headOfTrainingName,
+    signatureCaptured: Boolean(record.signatureDataUrl),
+    items: record.items,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt
+  };
+}
+
+function descriptionAuditValue(descriptions: StaffTrainingDescription[]) {
+  return descriptions.map((item) => ({
+    id: item.id,
+    trainingType: item.trainingType,
+    description: item.description,
+    sortOrder: item.sortOrder,
+    status: item.status
+  }));
 }
 
 export async function fetchStaffTrainingDescriptions(force = false) {
@@ -255,7 +293,7 @@ export async function fetchStaffTrainingDescriptions(force = false) {
 export async function saveStaffTrainingDescriptions(
   descriptions: StaffTrainingDescription[]
 ) {
-  await requireFirebaseUser();
+  const actor = await requireFirebaseUser();
   const previousDescriptions = await fetchStaffTrainingDescriptions(true);
   const existing = await getDocs(collection(firestore, "staffTrainingDescriptions"));
   const operations: FirestoreOperation[] = existing.docs.map((item) => ({
@@ -283,11 +321,22 @@ export async function saveStaffTrainingDescriptions(
 
   await commitOperations(operations);
   invalidateCaches();
-  writeAudit(
-    "STAFF_TRAINING_DESCRIPTIONS_UPDATED",
-    descriptions,
-    previousDescriptions
-  );
+  await writeFirebaseAudit({
+    actorUserId: actor.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "STAFF_TRAINING_DESCRIPTIONS_UPDATED",
+    entityType: "staffTraining",
+    entityId: "descriptions",
+    entityName: "Staff Training Descriptions",
+    previousValue: descriptionAuditValue(previousDescriptions),
+    updatedValue: descriptionAuditValue(descriptions),
+    details: {
+      descriptionCount: descriptions.length,
+      activeCount: descriptions.filter((item) => item.status === "active").length
+    }
+  });
   return descriptions;
 }
 
@@ -471,14 +520,26 @@ export async function saveStaffTrainingRecord(record: StaffTrainingRecord) {
       transaction.delete(signatureReference);
     }
     transaction.delete(doc(firestore, "staffTrainingTombstones", cleanId));
+    addFirebaseAuditToTransaction(transaction, {
+      actorUserId: user.uid,
+      actorName: user.name,
+      actorEmail: user.email,
+      actorRole: user.role,
+      action: previousRecord ? "STAFF_TRAINING_UPDATED" : "STAFF_TRAINING_CREATED",
+      entityType: "staffTraining",
+      entityId: record.id,
+      entityName: record.staffName.trim(),
+      previousValue: previousRecord ? recordAuditValue(previousRecord) : null,
+      updatedValue: recordAuditValue(savedRecord),
+      details: {
+        designation: record.designation.trim(),
+        completedCount: record.items.filter((item) => item.status === "completed").length,
+        totalCount: record.items.length
+      }
+    });
   });
 
   invalidateCaches();
-  writeAudit(
-    previousRecord ? "STAFF_TRAINING_UPDATED" : "STAFF_TRAINING_CREATED",
-    savedRecord,
-    previousRecord
-  );
   return savedRecord;
 }
 
@@ -515,7 +576,19 @@ export async function deleteStaffTrainingRecord(recordId: string) {
 
   await commitOperations(operations);
   invalidateCaches();
-  writeAudit("STAFF_TRAINING_DELETED", existingRecord, existingRecord);
+  await writeFirebaseAudit({
+    actorUserId: user.uid,
+    actorName: user.name,
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: "STAFF_TRAINING_DELETED",
+    entityType: "staffTraining",
+    entityId: recordId,
+    entityName: existingRecord.staffName,
+    previousValue: recordAuditValue(existingRecord),
+    updatedValue: null,
+    details: { designation: existingRecord.designation }
+  });
   return { recordId };
 }
 
