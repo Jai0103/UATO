@@ -2,22 +2,22 @@
 
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
+  getCountFromServer,
   getDocs,
   query,
   serverTimestamp,
-  setDoc,
   Timestamp,
-  updateDoc,
   where,
   writeBatch,
   type DocumentData
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
 import type {
   AttendanceDashboard,
+  AttendanceDashboardAnalytics,
   AttendancePeriod,
   AttendanceRecordSummary,
   AttendanceSession,
@@ -76,7 +76,40 @@ async function requireAdmin() {
   if (!profile.exists() || profile.data().status !== "active" || profile.data().role !== "admin") {
     throw new Error("Administrator access is required.");
   }
-  return user;
+  return {
+    user,
+    name: String(profile.data().name || user.displayName || user.email || "Administrator"),
+    email: String(profile.data().email || user.email || ""),
+    role: "admin"
+  };
+}
+
+function sessionAuditValue(session: AttendanceSession) {
+  return {
+    id: session.id,
+    courseName: session.courseName,
+    courseCode: session.courseCode,
+    courseDate: session.courseDate,
+    instructorName: session.instructorName,
+    instructorEmail: session.instructorEmail,
+    schedule: session.schedule,
+    status: session.status,
+    amOpen: session.amOpen,
+    pmOpen: session.pmOpen,
+    trainerComments: session.trainerComments
+  };
+}
+
+function submissionAuditValue(submission: AttendanceSubmission) {
+  return {
+    id: submission.id,
+    sessionId: submission.sessionId,
+    period: submission.period,
+    learnerName: submission.learnerName,
+    lastFour: submission.lastFour,
+    submittedAt: submission.submittedAt,
+    updatedAt: submission.updatedAt
+  };
 }
 
 function publicProjection(session: AttendanceSessionInput, id: string, token: string) {
@@ -117,11 +150,55 @@ export async function fetchAttendanceDashboard(): Promise<AttendanceDashboard> {
   };
 }
 
+export async function fetchAttendanceDashboardAnalytics(): Promise<AttendanceDashboardAnalytics> {
+  await requireAdmin();
+  const sessionsPromise = fetchAttendanceSessions();
+  const submissions = collection(firestore, "attendanceSubmissions");
+  const current = new Date();
+  const monthRanges = Array.from({ length: 12 }, (_, index) => {
+    const offset = 11 - index;
+    const start = new Date(current.getFullYear(), current.getMonth() - offset, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    return {
+      key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      start: Timestamp.fromDate(start),
+      end: Timestamp.fromDate(end)
+    };
+  });
+
+  const [sessions, totalSnapshot, ...monthlySnapshots] = await Promise.all([
+    sessionsPromise,
+    getCountFromServer(submissions),
+    ...monthRanges.map((month) =>
+      getCountFromServer(
+        query(
+          submissions,
+          where("submittedAt", ">=", month.start),
+          where("submittedAt", "<", month.end)
+        )
+      )
+    )
+  ]);
+
+  return {
+    sessions,
+    totalCheckIns: totalSnapshot.data().count,
+    monthlyCheckIns: monthRanges.map((month, index) => ({
+      key: month.key,
+      count: monthlySnapshots[index].data().count
+    }))
+  };
+}
+
 export async function saveAttendanceSession(input: AttendanceSessionInput) {
-  const user = await requireAdmin();
+  const actor = await requireAdmin();
+  const user = actor.user;
   const id = input.id || crypto.randomUUID();
   const reference = doc(firestore, "attendanceSessions", id);
   const existing = await getDoc(reference);
+  const previousSession = existing.exists()
+    ? sessionFromDoc(existing.id, existing.data())
+    : null;
   const token = existing.exists() ? String(existing.data().token || "") : crypto.randomUUID();
   const now = serverTimestamp();
   const batch = writeBatch(firestore);
@@ -138,13 +215,48 @@ export async function saveAttendanceSession(input: AttendanceSessionInput) {
     updatedAt: now
   });
   batch.set(doc(firestore, "attendancePublicSessions", token), publicProjection(input, id, token));
+  const auditSession: AttendanceSession = {
+    id,
+    token,
+    courseName: input.courseName.trim(),
+    courseCode: input.courseCode.trim(),
+    courseDate: input.courseDate,
+    instructorName: input.instructorName.trim(),
+    instructorEmail: input.instructorEmail.trim().toLowerCase(),
+    schedule: input.schedule,
+    status: input.status,
+    amOpen: input.status === "open" && input.amOpen,
+    pmOpen: input.status === "open" && input.pmOpen,
+    trainerComments: input.trainerComments.trim(),
+    createdByUid: previousSession?.createdByUid || user.uid,
+    createdByEmail: previousSession?.createdByEmail || user.email || "",
+    createdAt: previousSession?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: previousSession ? "ATTENDANCE_SESSION_UPDATED" : "ATTENDANCE_SESSION_CREATED",
+    entityType: "attendance",
+    entityId: id,
+    entityName: auditSession.courseName,
+    previousValue: previousSession ? sessionAuditValue(previousSession) : null,
+    updatedValue: sessionAuditValue(auditSession),
+    details: {
+      courseDate: auditSession.courseDate,
+      instructorName: auditSession.instructorName,
+      schedule: auditSession.schedule
+    }
+  });
   await batch.commit();
   const saved = await getDoc(reference);
   return sessionFromDoc(saved.id, saved.data() || {});
 }
 
 export async function deleteAttendanceSession(session: AttendanceSession) {
-  await requireAdmin();
+  const actor = await requireAdmin();
   const submissions = await getDocs(
     query(collection(firestore, "attendanceSubmissions"), where("sessionId", "==", session.id))
   );
@@ -157,6 +269,19 @@ export async function deleteAttendanceSession(session: AttendanceSession) {
   const batch = writeBatch(firestore);
   batch.delete(doc(firestore, "attendanceSessions", session.id));
   batch.delete(doc(firestore, "attendancePublicSessions", session.token));
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "ATTENDANCE_SESSION_DELETED",
+    entityType: "attendance",
+    entityId: session.id,
+    entityName: session.courseName,
+    previousValue: sessionAuditValue(session),
+    updatedValue: null,
+    details: { deletedSubmissions: submissions.size }
+  });
   await batch.commit();
 }
 
@@ -209,26 +334,71 @@ export async function fetchAttendanceRecordSummaries(): Promise<AttendanceRecord
 }
 
 export async function deleteAttendanceSubmission(id: string) {
-  await requireAdmin();
-  await deleteDoc(doc(firestore, "attendanceSubmissions", id));
+  const actor = await requireAdmin();
+  const reference = doc(firestore, "attendanceSubmissions", id);
+  const existing = await getDoc(reference);
+  if (!existing.exists()) throw new Error("Attendance submission was not found.");
+  const submission = submissionFromDoc(existing.id, existing.data());
+  const batch = writeBatch(firestore);
+  batch.delete(reference);
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "ATTENDANCE_CHECK_IN_DELETED",
+    entityType: "attendance",
+    entityId: submission.id,
+    entityName: submission.learnerName,
+    previousValue: submissionAuditValue(submission),
+    updatedValue: null,
+    details: { sessionId: submission.sessionId, period: submission.period }
+  });
+  await batch.commit();
 }
 
 export async function updateAttendanceSubmission(
   id: string,
   values: Pick<AttendanceSubmission, "learnerName" | "lastFour">
 ) {
-  await requireAdmin();
+  const actor = await requireAdmin();
   const learnerName = values.learnerName.trim();
   const lastFour = values.lastFour.trim().toUpperCase();
   if (!learnerName || !/^[A-Z0-9]{4}$/.test(lastFour)) {
     throw new Error("Enter the learner name and exactly four NRIC/FIN characters.");
   }
-  await updateDoc(doc(firestore, "attendanceSubmissions", id), {
+  const reference = doc(firestore, "attendanceSubmissions", id);
+  const existing = await getDoc(reference);
+  if (!existing.exists()) throw new Error("Attendance submission was not found.");
+  const previousSubmission = submissionFromDoc(existing.id, existing.data());
+  const updatedSubmission: AttendanceSubmission = {
+    ...previousSubmission,
+    learnerName,
+    learnerNameLower: learnerName.toLowerCase(),
+    lastFour,
+    updatedAt: new Date().toISOString()
+  };
+  const batch = writeBatch(firestore);
+  batch.update(reference, {
     learnerName,
     learnerNameLower: learnerName.toLowerCase(),
     lastFour,
     updatedAt: serverTimestamp()
   });
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "ATTENDANCE_CHECK_IN_UPDATED",
+    entityType: "attendance",
+    entityId: id,
+    entityName: learnerName,
+    previousValue: submissionAuditValue(previousSubmission),
+    updatedValue: submissionAuditValue(updatedSubmission),
+    details: { sessionId: previousSubmission.sessionId, period: previousSubmission.period }
+  });
+  await batch.commit();
 }
 
 export async function fetchPublicAttendanceSession(token: string) {
@@ -279,7 +449,8 @@ export async function submitPublicAttendance(input: {
     // The deterministic document ID makes a second set an update. Public
     // users may create but cannot update, so duplicates remain protected
     // without allowing access to read another learner's signature.
-    await setDoc(submissionReference, {
+    const batch = writeBatch(firestore);
+    batch.set(submissionReference, {
       id: submissionId,
       sessionId: input.session.id,
       publicToken: input.session.token,
@@ -292,6 +463,31 @@ export async function submitPublicAttendance(input: {
       submittedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
+    addFirebaseAuditToBatch(batch, {
+      id: `${submissionId}_checkin`,
+      actorUserId: identityHash,
+      actorName: learnerName,
+      actorEmail: "",
+      actorRole: "learner",
+      action: "ATTENDANCE_CHECKED_IN",
+      entityType: "attendance",
+      entityId: submissionId,
+      entityName: learnerName,
+      previousValue: null,
+      updatedValue: {
+        sessionId: input.session.id,
+        period: input.period,
+        learnerName,
+        lastFour
+      },
+      details: {
+        courseName: input.session.courseName,
+        courseDate: input.session.courseDate,
+        instructorName: input.session.instructorName,
+        period: input.period
+      }
+    });
+    await batch.commit();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
     if (errorMessage.includes("permission") || errorMessage.includes("insufficient")) {
