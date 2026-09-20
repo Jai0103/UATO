@@ -36,7 +36,7 @@ import {
   fetchFatigueRiskRecord,
   saveFatigueRiskRecord
 } from "@/lib/fatigue-risk-api";
-import { fetchGoogleUsers } from "@/lib/google-api";
+import { fetchFirebaseUsers } from "@/lib/firebase-users-api";
 import {
   createFatigueRiskPdf,
   fatigueRiskPdfFileName
@@ -47,7 +47,7 @@ type TrainerOption = {
   name: string;
   email: string;
   role: "admin" | "trainer";
-  accountStatus?: "active" | "inactive";
+  status: "active" | "inactive";
 };
 
 function formatDate(value: string) {
@@ -92,13 +92,13 @@ export default function FatigueRiskPage() {
       if (!storedSession) return;
       setSession(storedSession);
 
-      void fetchGoogleUsers()
+      void fetchFirebaseUsers()
         .then((users) => {
           if (!active) return;
           const activeUsers = (users as TrainerOption[])
             .filter(
               (user) =>
-                user.accountStatus !== "inactive" &&
+                user.status === "active" &&
                 Boolean(user.name?.trim()) &&
                 Boolean(user.email?.trim())
             )
