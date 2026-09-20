@@ -1266,7 +1266,7 @@ export default function FlightLogsPage() {
                 }
                 maxLength={4}
                 className="app-input uppercase"
-                placeholder="A123"
+                placeholder="XXXXX123A"
               />
             </label>
           </div>
