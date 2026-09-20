@@ -12,6 +12,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { writeFirebaseAudit } from "@/lib/firebase-audit";
 import type {
   FlightLogRecord,
   FlightLogRow
@@ -29,7 +30,15 @@ const WRITE_BATCH_SIZE = 400;
 // this below 125 leaves headroom under Firestore's 500-write transaction limit.
 const MAX_LIVE_ROWS = 120;
 const MASTER_DATA_CACHE_MS = 5 * 60_000;
+const ADMIN_CACHE_MS = 2 * 60_000;
 let masterDataCache: { expiresAt: number; value: MasterData } | null = null;
+let adminCache: {
+  expiresAt: number;
+  uid: string;
+  name: string;
+  email: string;
+  role: "admin";
+} | null = null;
 
 export class FlightLogFirebaseError extends Error {
   code: string;
@@ -77,6 +86,33 @@ async function requireFirebaseUser() {
   }
 
   return firebaseAuth.currentUser;
+}
+
+async function requireFirebaseAdmin() {
+  const user = await requireFirebaseUser();
+  if (adminCache && adminCache.uid === user.uid && adminCache.expiresAt > Date.now()) {
+    return adminCache;
+  }
+
+  const profile = await getDoc(doc(firestore, "users", user.uid));
+  if (
+    !profile.exists() ||
+    profile.data().status !== "active" ||
+    profile.data().role !== "admin"
+  ) {
+    throw new Error("Administrator access is required.");
+  }
+
+  adminCache = {
+    expiresAt: Date.now() + ADMIN_CACHE_MS,
+    uid: user.uid,
+    name: String(
+      profile.data().name || user.displayName || user.email || "Administrator"
+    ).trim(),
+    email: String(profile.data().email || user.email || "").trim().toLowerCase(),
+    role: "admin"
+  };
+  return adminCache;
 }
 
 function normalizedIdentifier(value: string) {
@@ -513,8 +549,34 @@ export async function fetchFirebaseFlightMasterDataCatalog() {
 export async function saveFirebaseFlightMasterDataCatalog(
   catalog: FirebaseFlightMasterDataCatalog
 ) {
-  await requireFirebaseUser();
+  const actor = await requireFirebaseAdmin();
   const existing = await getDocs(collection(firestore, "flightLogMasterData"));
+  const previousCatalog: FirebaseFlightMasterDataCatalog = {
+    sections: {
+      locations: [],
+      batterySerialNumbers: [],
+      afeInstructors: [],
+      uaModels: [],
+      uaCategories: []
+    }
+  };
+
+  existing.docs
+    .sort(
+      (first, second) =>
+        (Number(first.data().sortOrder) || 0) -
+        (Number(second.data().sortOrder) || 0)
+    )
+    .forEach((item) => {
+      const data = item.data();
+      const section = String(data.section || "") as MasterDataKey;
+      if (!(section in previousCatalog.sections)) return;
+      previousCatalog.sections[section].push({
+        id: String(data.id || item.id),
+        value: String(data.value || ""),
+        status: data.status === "inactive" ? "inactive" : "active"
+      });
+    });
   const operations: FirestoreOperation[] = existing.docs.map((item) => ({
     type: "delete",
     reference: item.ref
@@ -541,6 +603,33 @@ export async function saveFirebaseFlightMasterDataCatalog(
   });
 
   await commitOperations(operations);
+  const sectionCounts = Object.fromEntries(
+    (Object.keys(catalog.sections) as MasterDataKey[]).map((section) => {
+      const items = catalog.sections[section];
+      return [
+        section,
+        {
+          total: items.length,
+          active: items.filter((item) => item.status === "active").length,
+          inactive: items.filter((item) => item.status === "inactive").length
+        }
+      ];
+    })
+  );
+
+  await writeFirebaseAudit({
+    actorUserId: actor.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "FLIGHT_MASTER_DATA_UPDATED",
+    entityType: "flightMasterData",
+    entityId: "catalog",
+    entityName: "Flight Log Master Data",
+    previousValue: previousCatalog,
+    updatedValue: catalog,
+    details: { sectionCounts }
+  });
   masterDataCache = null;
   return catalog;
 }
