@@ -12,9 +12,9 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-
-const GOOGLE_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
+import { FirebaseError } from "firebase/app";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { firebaseAuth } from "@/lib/firebase-client";
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
@@ -36,49 +36,31 @@ export default function ForgotPasswordPage() {
     const cleanIdentifier = identifier.trim();
 
     if (!cleanIdentifier) {
-      setError("Enter your email or username.");
+      setError("Enter your registered email address.");
+      return;
+    }
+
+    if (!cleanIdentifier.includes("@")) {
+      setError("Enter a valid email address.");
       return;
     }
 
     setSending(true);
 
     try {
-      const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "forgotPassword",
-          identifier: cleanIdentifier,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to reach the reset service.");
-      }
-
-      const result = (await response.json()) as {
-        success?: boolean;
-        ok?: boolean;
-        message?: string;
-      };
-      const succeeded = result.success ?? result.ok;
-
-      if (!succeeded) {
-        setError(result.message || "Password reset failed.");
-        return;
-      }
+      await sendPasswordResetEmail(firebaseAuth, cleanIdentifier.toLowerCase());
 
       setSubmittedIdentifier(cleanIdentifier);
-      setMessage(
-        result.message ||
-          "A temporary password has been sent to your registered email."
-      );
+      setMessage("A secure password reset link has been sent to your registered email.");
       setIdentifier("");
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error && caughtError.message
-          ? caughtError.message
-          : "Unable to send the reset email. Please try again."
-      );
+      if (caughtError instanceof FirebaseError && caughtError.code === "auth/invalid-email") {
+        setError("Enter a valid email address.");
+      } else if (caughtError instanceof FirebaseError && caughtError.code === "auth/too-many-requests") {
+        setError("Too many reset requests. Wait a moment and try again.");
+      } else {
+        setError("Unable to send the reset email. Check your connection and try again.");
+      }
     } finally {
       setSending(false);
     }
@@ -113,8 +95,8 @@ export default function ForgotPasswordPage() {
           </h1>
           <p className="mt-1.5 text-sm leading-6 text-[#6b7d92]">
             {message
-              ? "Use the temporary password in the email to sign in."
-              : "Enter your registered email or username to request a temporary password."}
+              ? "Use the secure link in the email to create a new password."
+              : "Enter your registered email to request a Firebase password reset link."}
           </p>
         </header>
 
@@ -158,7 +140,7 @@ export default function ForgotPasswordPage() {
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-[#405168]">
-                    Email or username
+                    Email address
                   </span>
                   <div className="relative">
                     <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
@@ -169,8 +151,9 @@ export default function ForgotPasswordPage() {
                         if (error) setError("");
                       }}
                       className="app-input mt-0 pl-10"
-                      placeholder="Enter your account"
-                      autoComplete="username"
+                      placeholder="name@example.com"
+                      type="email"
+                      autoComplete="email"
                       autoCapitalize="none"
                       spellCheck={false}
                       disabled={sending}
@@ -202,7 +185,7 @@ export default function ForgotPasswordPage() {
                   ) : (
                     <Mail className="h-4 w-4" />
                   )}
-                  {sending ? "Sending reset email..." : "Send temporary password"}
+                  {sending ? "Sending reset email..." : "Send reset link"}
                 </button>
               </form>
 
