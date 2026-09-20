@@ -3,7 +3,6 @@
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
-import { postToGoogle } from "@/lib/google-api";
 import {
   fetchFirebaseFlightMasterDataCatalog,
   saveFirebaseFlightMasterDataCatalog,
@@ -235,22 +234,6 @@ function getActiveMasterData(
         )
         .map((item) => item.value)
   };
-}
-
-type CatalogApiResponse = {
-  ok?: boolean;
-  success?: boolean;
-  message?: string;
-  catalog?: MasterDataCatalog;
-  masterData?: MasterData;
-};
-
-async function postCatalog(
-  payload: Record<string, unknown>
-) {
-  return postToGoogle<CatalogApiResponse>(
-    payload
-  );
 }
 
 function createItemId() {
@@ -505,13 +488,6 @@ export default function MasterDataPage() {
         type: "success",
         title: successTitle,
         message: successMessage
-      });
-
-      void postCatalog({
-        action: "saveMasterDataCatalog",
-        catalog: savedCatalog
-      }).catch((syncError) => {
-        console.error("Flight Log Master Data backup sync failed", syncError);
       });
 
       return true;
