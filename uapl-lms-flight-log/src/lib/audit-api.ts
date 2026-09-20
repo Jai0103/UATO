@@ -51,6 +51,18 @@ export type AuditHistoryResponse = {
   entityTypeOptions: string[];
 };
 
+const FIREBASE_LIVE_ENTITY_TYPES = [
+  "approval",
+  "attendance",
+  "fatigueRisk",
+  "flightMasterData",
+  "staffTraining",
+  "uaMaintenance",
+  "user"
+];
+
+const firebaseLiveEntityTypeSet = new Set(FIREBASE_LIVE_ENTITY_TYPES);
+
 function asIso(value: unknown) {
   if (value instanceof Timestamp) return value.toDate().toISOString();
   return typeof value === "string" ? value : "";
@@ -95,10 +107,10 @@ async function fetchFirebaseLiveRecords(request: AuditHistoryRequest) {
     .map((item) => eventFromDocument(item.id, item.data()))
     .filter((record) =>
       ["approval", "attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"].includes(
-      ["approval", "attendance", "fatigueRisk", "flightMasterData", "staffTraining", "uaMaintenance", "user"].includes(
         record.entityType
       )
     )
+    .filter((record) => firebaseLiveEntityTypeSet.has(record.entityType))
     .filter((record) => {
       const day = record.timestamp.slice(0, 10);
       if (request.auditAction && record.action !== request.auditAction) return false;
@@ -158,7 +170,7 @@ export async function fetchAuditHistoryPage(
       request,
       firebaseActions.sort(),
       ["approval", "attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"]
-      ["approval", "attendance", "fatigueRisk", "flightMasterData", "staffTraining", "uaMaintenance", "user"]
+      FIREBASE_LIVE_ENTITY_TYPES
     );
   }
 
@@ -175,10 +187,10 @@ export async function fetchAuditHistoryPage(
       "approval",
       "attendance",
       "fatigueRisk",
-      "flightMasterData",
       "staffTraining",
       "uaMaintenance",
       "user"
+      ...FIREBASE_LIVE_ENTITY_TYPES
     ])
   ).sort();
 
