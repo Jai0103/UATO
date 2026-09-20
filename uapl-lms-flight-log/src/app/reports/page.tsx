@@ -3,6 +3,7 @@
 import {
   CalendarRange,
   Check,
+  ClipboardCheck,
   Download,
   FileSpreadsheet,
   GraduationCap,
@@ -19,6 +20,14 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
+import {
+  fetchAttendanceRecordSummaries,
+  fetchAttendanceSubmissions
+} from "@/lib/attendance-api";
+import type {
+  AttendanceRecordSummary,
+  AttendanceSubmission
+} from "@/lib/attendance";
 import {
   fetchBulkFatigueRiskReportRecords,
   fetchFatigueRiskReportTrainerNames
@@ -54,6 +63,7 @@ type ReportType =
   | "flight"
   | "staff"
   | "maintenance"
+  | "attendance"
   | "fatigue"
   | "evaluation-pdf"
   | "evaluation-csv";
@@ -155,6 +165,17 @@ export default function ReportsPage() {
   const [evaluationSessionsLoading, setEvaluationSessionsLoading] =
     useState(false);
   const [evaluationLoadError, setEvaluationLoadError] = useState("");
+  const [attendanceFrom, setAttendanceFrom] = useState(firstDayOfMonth());
+  const [attendanceTo, setAttendanceTo] = useState(today());
+  const [attendanceSearch, setAttendanceSearch] = useState("");
+  const [attendanceInstructor, setAttendanceInstructor] = useState("");
+  const [attendanceRecords, setAttendanceRecords] = useState<
+    AttendanceRecordSummary[]
+  >([]);
+  const [selectedAttendanceIds, setSelectedAttendanceIds] = useState<string[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceLoadError, setAttendanceLoadError] = useState("");
+  const [attendancePreviewOpen, setAttendancePreviewOpen] = useState(false);
 
   const evaluationYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -163,6 +184,60 @@ export default function ReportsPage() {
       (_, index) => String(currentYear - index)
     );
   }, []);
+
+  const attendanceInstructorNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          attendanceRecords
+            .map((record) => record.instructorName.trim())
+            .filter(Boolean)
+        )
+      ).sort((first, second) => first.localeCompare(second)),
+    [attendanceRecords]
+  );
+
+  const filteredAttendanceRecords = useMemo(() => {
+    const query = attendanceSearch.trim().toLowerCase();
+    return attendanceRecords.filter((record) => {
+      const date = String(record.courseDate || "").slice(0, 10);
+      if (date < attendanceFrom || date > attendanceTo) return false;
+      if (
+        attendanceInstructor &&
+        record.instructorName !== attendanceInstructor
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      return `${record.courseName} ${record.courseCode}`
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [
+    attendanceFrom,
+    attendanceInstructor,
+    attendanceRecords,
+    attendanceSearch,
+    attendanceTo
+  ]);
+
+  const selectedAttendanceRecords = useMemo(() => {
+    const selected = new Set(selectedAttendanceIds);
+    return filteredAttendanceRecords.filter((record) => selected.has(record.id));
+  }, [filteredAttendanceRecords, selectedAttendanceIds]);
+
+  const attendanceTotals = useMemo(
+    () =>
+      selectedAttendanceRecords.reduce(
+        (totals, record) => ({
+          learners: totals.learners + record.uniqueLearnerCount,
+          am: totals.am + record.amCount,
+          pm: totals.pm + record.pmCount
+        }),
+        { learners: 0, am: 0, pm: 0 }
+      ),
+    [selectedAttendanceRecords]
+  );
 
   const filteredMaintenanceOptions = useMemo(() => {
     const query = maintenanceSearch.trim().toLowerCase();
@@ -194,6 +269,42 @@ export default function ReportsPage() {
     setMaintenanceSelectionApplied(false);
     setMaintenanceSummaryCache(null);
   }, [maintenanceFrom, maintenanceTo]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let active = true;
+    setAttendanceLoading(true);
+    setAttendanceLoadError("");
+
+    void fetchAttendanceRecordSummaries()
+      .then((records) => {
+        if (!active) return;
+        setAttendanceRecords(records);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAttendanceRecords([]);
+        setAttendanceLoadError(
+          error instanceof Error
+            ? error.message
+            : "Attendance sessions could not be loaded."
+        );
+      })
+      .finally(() => {
+        if (active) setAttendanceLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
+
+  useEffect(() => {
+    setSelectedAttendanceIds(
+      filteredAttendanceRecords.map((record) => record.id)
+    );
+  }, [filteredAttendanceRecords]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -314,6 +425,92 @@ export default function ReportsPage() {
     } catch (error) {
       message.error(
         "Combined Flight Log could not be generated",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setWorking(null);
+      setWorkingLabel("");
+    }
+  }
+
+  function toggleAttendanceSession(recordId: string) {
+    setSelectedAttendanceIds((current) =>
+      current.includes(recordId)
+        ? current.filter((id) => id !== recordId)
+        : [...current, recordId]
+    );
+  }
+
+  async function loadAttendanceReportRecords() {
+    const records: Array<{
+      session: AttendanceRecordSummary;
+      submissions: AttendanceSubmission[];
+    }> = [];
+
+    for (let index = 0; index < selectedAttendanceRecords.length; index += 4) {
+      const batch = selectedAttendanceRecords.slice(index, index + 4);
+      setWorkingLabel(
+        `Loading attendance sessions ${index + 1}-${Math.min(
+          index + batch.length,
+          selectedAttendanceRecords.length
+        )} of ${selectedAttendanceRecords.length}...`
+      );
+      const loaded = await Promise.all(
+        batch.map(async (session) => ({
+          session,
+          submissions: await fetchAttendanceSubmissions(session.id)
+        }))
+      );
+      records.push(...loaded);
+    }
+
+    return records;
+  }
+
+  async function generateAttendanceReport() {
+    if (working) return;
+    const validation = validateRange(
+      attendanceFrom,
+      attendanceTo,
+      "Attendance date range"
+    );
+    if (validation) {
+      message.warning("Select a valid date range", validation);
+      return;
+    }
+    if (!selectedAttendanceRecords.length) {
+      message.warning(
+        "Select at least one attendance session",
+        "Tick the sessions that should be included in the combined PDF."
+      );
+      return;
+    }
+
+    setWorking("attendance");
+    setWorkingLabel("Loading attendance records...");
+    try {
+      const pdfPromise = import("@/lib/attendance-pdf");
+      const records = await loadAttendanceReportRecords();
+      const pdfModule = await pdfPromise;
+
+      setWorkingLabel(
+        `Building ${records.length} attendance report${
+          records.length === 1 ? "" : "s"
+        }...`
+      );
+      await allowBrowserPaint();
+      const doc = await pdfModule.createCombinedAttendancePdf(records);
+
+      setWorkingLabel("Starting PDF download...");
+      await allowBrowserPaint();
+      doc.save(`ATTENDANCE - ${attendanceFrom} TO ${attendanceTo}.pdf`);
+      message.success(
+        `${records.length} attendance report${records.length === 1 ? "" : "s"} combined`
+      );
+      setAttendancePreviewOpen(false);
+    } catch (error) {
+      message.error(
+        "Combined Attendance report could not be generated",
         error instanceof Error ? error.message : "Please try again."
       );
     } finally {
@@ -889,6 +1086,165 @@ export default function ReportsPage() {
 
           {isAdmin ? (
             <ReportCard
+              icon={<ClipboardCheck className="h-5 w-5" />}
+              title="Attendance"
+              description="Combined learner attendance sheets"
+              accent="sky"
+            >
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <Field label="Date from">
+                  <input
+                    type="date"
+                    className={fieldClass}
+                    value={attendanceFrom}
+                    max={attendanceTo || today()}
+                    onChange={(event) => setAttendanceFrom(event.target.value)}
+                  />
+                </Field>
+                <Field label="Date to">
+                  <input
+                    type="date"
+                    className={fieldClass}
+                    value={attendanceTo}
+                    min={attendanceFrom}
+                    max={today()}
+                    onChange={(event) => setAttendanceTo(event.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <Field label="Course">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
+                    <input
+                      type="search"
+                      className={`${fieldClass} pl-10`}
+                      value={attendanceSearch}
+                      onChange={(event) => setAttendanceSearch(event.target.value)}
+                      placeholder="All courses"
+                    />
+                  </div>
+                </Field>
+                <Field label="Instructor">
+                  <select
+                    className={fieldClass}
+                    value={attendanceInstructor}
+                    onChange={(event) =>
+                      setAttendanceInstructor(event.target.value)
+                    }
+                    disabled={attendanceLoading}
+                  >
+                    <option value="">All instructors</option>
+                    {attendanceInstructorNames.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              {attendanceLoadError ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                  {attendanceLoadError}
+                </p>
+              ) : null}
+
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">
+                      {selectedAttendanceRecords.length} of {filteredAttendanceRecords.length} sessions selected
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {attendanceTotals.learners} learner records · AM {attendanceTotals.am} · PM {attendanceTotals.pm}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedAttendanceIds(
+                          filteredAttendanceRecords.map((record) => record.id)
+                        )
+                      }
+                      className="text-xs font-bold text-sky-700 hover:text-sky-900"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAttendanceIds([])}
+                      className="text-xs font-bold text-slate-500 hover:text-slate-800"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-44 overflow-y-auto p-2">
+                  {attendanceLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading attendance sessions...
+                    </div>
+                  ) : filteredAttendanceRecords.length ? (
+                    filteredAttendanceRecords.map((record) => (
+                      <label
+                        key={record.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-md px-2.5 py-2 transition hover:bg-white"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAttendanceIds.includes(record.id)}
+                          onChange={() => toggleAttendanceSession(record.id)}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-800">
+                            {record.courseName}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {record.courseDate} · {record.instructorName} · {record.uniqueLearnerCount} learners
+                          </span>
+                        </span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="py-6 text-center text-sm text-slate-500">
+                      No attendance sessions match these filters.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-auto grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAttendancePreviewOpen(true)}
+                  disabled={!selectedAttendanceRecords.length || working !== null}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 text-sm font-bold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <ListFilter className="h-4 w-4" /> Preview
+                </button>
+                <GenerateButton
+                  accent="sky"
+                  busy={working === "attendance"}
+                  busyLabel={workingLabel}
+                  disabled={
+                    working !== null ||
+                    attendanceLoading ||
+                    !selectedAttendanceRecords.length
+                  }
+                  label="Combined PDF"
+                  onClick={() => void generateAttendanceReport()}
+                />
+              </div>
+            </ReportCard>
+          ) : null}
+
+          {isAdmin ? (
+            <ReportCard
               icon={<MessageSquareText className="h-5 w-5" />}
               title="Student Evaluations"
               description="Training feedback summary and response data"
@@ -1064,6 +1420,102 @@ export default function ReportsPage() {
           ) : null}
         </div>
       </div>
+
+      {attendancePreviewOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && working !== "attendance") {
+              setAttendancePreviewOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="attendance-preview-title"
+            className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:max-w-3xl sm:rounded-xl"
+          >
+            <header className="flex items-start gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+                <ClipboardCheck className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 id="attendance-preview-title" className="text-lg font-bold text-slate-900">
+                  Attendance report preview
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedAttendanceRecords.length} sessions · {attendanceTotals.learners} learner records · AM {attendanceTotals.am} · PM {attendanceTotals.pm}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close attendance preview"
+                onClick={() => setAttendancePreviewOpen(false)}
+                disabled={working === "attendance"}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+
+            <div className="overflow-y-auto px-4 py-4 sm:px-6">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                {selectedAttendanceRecords.map((record) => (
+                  <div
+                    key={record.id}
+                    className="grid gap-2 border-b border-slate-200 px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-900">
+                        {record.courseName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {record.courseDate} · {record.courseCode || "No course code"} · {record.instructorName}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 text-xs font-bold">
+                      <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">
+                        {record.uniqueLearnerCount} learners
+                      </span>
+                      <span className="rounded-md bg-sky-50 px-2 py-1 text-sky-700">
+                        AM {record.amCount}
+                      </span>
+                      <span className="rounded-md bg-emerald-50 px-2 py-1 text-emerald-700">
+                        PM {record.pmCount}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <footer className="grid gap-2 border-t border-slate-200 bg-slate-50 px-4 py-4 sm:grid-cols-[auto_1fr] sm:px-6">
+              <button
+                type="button"
+                onClick={() => setAttendancePreviewOpen(false)}
+                disabled={working === "attendance"}
+                className="h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => void generateAttendanceReport()}
+                disabled={working !== null}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-sky-700 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {working === "attendance" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {working === "attendance" ? workingLabel || "Preparing PDF..." : "Download combined PDF"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {maintenancePickerOpen ? (
         <div
