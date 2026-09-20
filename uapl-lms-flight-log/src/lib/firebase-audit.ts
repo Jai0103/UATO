@@ -1,6 +1,13 @@
 "use client";
 
-import { doc, writeBatch, type WriteBatch } from "firebase/firestore";
+import {
+  doc,
+  writeBatch,
+  type DocumentData,
+  type DocumentReference,
+  type Transaction,
+  type WriteBatch
+} from "firebase/firestore";
 import { firestore } from "@/lib/firebase-client";
 import type { AuditValue } from "@/lib/audit-api";
 
@@ -20,13 +27,18 @@ export type FirebaseAuditInput = {
   timestamp?: string;
 };
 
-export function addFirebaseAuditToBatch(batch: WriteBatch, input: FirebaseAuditInput) {
+function addFirebaseAudit(
+  writer: {
+    set(reference: DocumentReference<DocumentData>, data: DocumentData): unknown;
+  },
+  input: FirebaseAuditInput
+) {
   const id = input.id || crypto.randomUUID();
   const timestamp = input.timestamp || new Date().toISOString();
   const actorName = input.actorName.trim() || "System User";
   const entityName = input.entityName.trim() || input.entityType;
 
-  batch.set(doc(firestore, "auditEvents", id), {
+  writer.set(doc(firestore, "auditEvents", id), {
     id,
     timestamp,
     actorUserId: input.actorUserId,
@@ -43,7 +55,7 @@ export function addFirebaseAuditToBatch(batch: WriteBatch, input: FirebaseAuditI
     source: "firebase-live",
     schemaVersion: 2
   });
-  batch.set(doc(firestore, "auditEventDetails", id), {
+  writer.set(doc(firestore, "auditEventDetails", id), {
     auditId: id,
     entityId: input.entityId,
     previousValue: input.previousValue ?? null,
@@ -54,6 +66,17 @@ export function addFirebaseAuditToBatch(batch: WriteBatch, input: FirebaseAuditI
   });
 
   return id;
+}
+
+export function addFirebaseAuditToBatch(batch: WriteBatch, input: FirebaseAuditInput) {
+  return addFirebaseAudit(batch, input);
+}
+
+export function addFirebaseAuditToTransaction(
+  transaction: Transaction,
+  input: FirebaseAuditInput
+) {
+  return addFirebaseAudit(transaction, input);
 }
 
 export async function writeFirebaseAudit(input: FirebaseAuditInput) {
