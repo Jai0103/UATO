@@ -1,6 +1,6 @@
-import type {
-  FlightLogRecord
-} from "@/lib/flight-log-storage";
+import {
+  fetchFirebaseFlightLogsByDateRange
+} from "@/lib/flight-log-firebase";
 
 import type {
   StaffTrainingRecord
@@ -29,25 +29,16 @@ import {
   fetchFatigueRiskReportTrainerNames as fetchFirebaseFatigueRiskReportTrainerNames
 } from "@/lib/fatigue-risk-api";
 
-import {
-  postToGoogle
-} from "@/lib/google-api";
-
 export async function fetchBulkFlightReportRecords(
   request: {
     dateFrom: string;
     dateTo: string;
   }
 ) {
-  const data = await postToGoogle<{
-    records: FlightLogRecord[];
-  }>({
-    action:
-      "getBulkFlightReportRecords",
-    ...request
-  });
-
-  return data.records || [];
+  return fetchFirebaseFlightLogsByDateRange(
+    request.dateFrom,
+    request.dateTo
+  );
 }
 
 export async function fetchBulkStaffTrainingReportRecords(
