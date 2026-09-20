@@ -1,13 +1,19 @@
+"use client";
+
 import { postToGoogle } from "@/lib/google-api";
 import {
   collection,
   doc,
   getDoc,
   getDocs,
+  query,
   Timestamp,
+  where,
+  writeBatch,
   type DocumentData
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
 import type {
   ApprovalDashboardSummary,
   ApprovalDocument,
@@ -16,7 +22,11 @@ import type {
   ApprovalRecordSummary,
   ApprovalType
 } from "@/lib/approvals";
-import { buildApprovalDashboardSummary } from "@/lib/approvals";
+import {
+  buildApprovalDashboardSummary,
+  summarizeApprovalRecord,
+  validateApprovalRecord
+} from "@/lib/approvals";
 
 export type ApprovalsPage = {
   records: ApprovalRecordSummary[];
@@ -78,13 +88,29 @@ async function requireFirebaseAdmin() {
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error("Your Firebase session has expired. Please sign in again.");
   const profile = await getDoc(doc(firestore, "users", user.uid));
-  if (
-    !profile.exists() ||
-    profile.data().status !== "active" ||
-    profile.data().role !== "admin"
-  ) {
+  if (!profile.exists()) throw new Error("Administrator access is required.");
+  const data = profile.data();
+  if (data.status !== "active" || data.role !== "admin") {
     throw new Error("Administrator access is required.");
   }
+  return {
+    user,
+    name: asText(data.name || user.displayName || user.email || "Administrator"),
+    email: asText(data.email || user.email || ""),
+    role: "admin"
+  };
+}
+
+function safeId(value: unknown) {
+  return asText(value).trim().replace(/\//g, "_");
+}
+
+function locationDocumentId(approvalId: string, locationId: string) {
+  return `${safeId(approvalId)}__${safeId(locationId)}`;
+}
+
+function documentDocumentId(approvalId: string, documentId: string) {
+  return `${safeId(approvalId)}__${safeId(documentId)}`;
 }
 
 function locationFromDocument(data: DocumentData) {
@@ -118,59 +144,106 @@ function documentFromDocument(data: DocumentData) {
   };
 }
 
-export async function setupApprovals() {
-  return postToGoogle<{
-    message: string;
-    folderId: string;
-    folderUrl: string;
-  }>({
-    action: "setupApprovals"
-  });
-}
-
-export async function fetchApprovalsPage(
-  request: ApprovalsPageRequest = {}
-) {
-  const data = await postToGoogle<{
-    records?: ApprovalRecordSummary[];
-    page?: number;
-    pageSize?: number;
-    total?: number;
-    totalPages?: number;
-  }>({
-    action: "getApprovalsPage",
-    page: request.page || 1,
-    pageSize: request.pageSize || 10,
-    search: request.search?.trim() || "",
-    approvalType: request.approvalType || "",
-    expiryStatus: request.expiryStatus || "",
-    includeArchived: Boolean(request.includeArchived)
-  });
-
-  const page = Math.max(1, data.page || 1);
-  const totalPages = Math.max(1, data.totalPages || 1);
-
+function recordFromDocument(
+  id: string,
+  data: DocumentData,
+  locations: ReturnType<typeof locationFromDocument>[],
+  documents: ReturnType<typeof documentFromDocument>[]
+): ApprovalRecord {
   return {
-    records: data.records || [],
-    page,
-    pageSize: Math.max(1, data.pageSize || 10),
-    total: Math.max(0, data.total || 0),
-    totalPages,
-    hasPreviousPage: page > 1,
-    hasNextPage: page < totalPages
-  } satisfies ApprovalsPage;
+    id: asText(data.id || id),
+    approvalType: asText(data.approvalType) as ApprovalType,
+    approvalNumber: asText(data.approvalNumber),
+    issuingAuthority: asText(data.issuingAuthority),
+    effectiveDate: asText(data.effectiveDate).slice(0, 10),
+    expiryDate: asText(data.expiryDate).slice(0, 10),
+    responsiblePerson: asText(data.responsiblePerson),
+    responsibleEmail: asText(data.responsibleEmail),
+    renewalLeadDays: Number(data.renewalLeadDays) || 90,
+    renewalStatus: asText(data.renewalStatus) as ApprovalRecord["renewalStatus"],
+    renewalSubmittedAt: asText(data.renewalSubmittedAt),
+    renewalReference: asText(data.renewalReference),
+    generalConditions: asText(data.generalConditions),
+    remarks: asText(data.remarks),
+    locations,
+    documents,
+    archived: data.archived === true,
+    version: Number(data.version) || 1,
+    supersedesRecordId: asText(data.supersedesRecordId),
+    createdAt: asText(data.createdAt),
+    updatedAt: asText(data.updatedAt)
+  };
 }
 
-export async function fetchApprovalRecord(approvalId: string) {
-  const data = await postToGoogle<{ record: ApprovalRecord }>({
-    action: "getApprovalRecord",
-    approvalId
-  });
-
-  return data.record;
+function recordDocument(record: ApprovalRecord) {
+  const activeLocations = record.locations.filter((location) => location.active);
+  return {
+    id: record.id,
+    approvalType: record.approvalType,
+    approvalNumber: record.approvalNumber.trim(),
+    approvalNumberLower: record.approvalNumber.trim().toLowerCase(),
+    issuingAuthority: record.issuingAuthority.trim(),
+    effectiveDate: record.effectiveDate,
+    expiryDate: record.expiryDate,
+    responsiblePerson: record.responsiblePerson.trim(),
+    responsibleEmail: record.responsibleEmail.trim().toLowerCase(),
+    renewalLeadDays: Number(record.renewalLeadDays) || 90,
+    renewalStatus: record.renewalStatus,
+    renewalSubmittedAt: record.renewalSubmittedAt,
+    renewalReference: record.renewalReference.trim(),
+    generalConditions: record.generalConditions.trim(),
+    remarks: record.remarks.trim(),
+    archived: record.archived,
+    version: record.version,
+    supersedesRecordId: record.supersedesRecordId,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    locationCount: record.locations.length,
+    activeLocationCount: activeLocations.length,
+    permittedLocations: activeLocations.map((location) => location.name.trim()).filter(Boolean),
+    documentCount: record.documents.length,
+    hasCurrentDocument: record.documents.some(
+      (item) => item.status === "current" && Boolean(item.driveFileId)
+    ),
+    source: "firebase-live",
+    schemaVersion: 2
+  };
 }
 
-export async function fetchFirebaseApprovalDashboardSummary() {
+function locationDocument(approvalId: string, location: ApprovalRecord["locations"][number]) {
+  return {
+    ...location,
+    approvalId,
+    nameLower: location.name.trim().toLowerCase(),
+    source: "firebase-live",
+    schemaVersion: 2
+  };
+}
+
+function approvalDocumentData(document: ApprovalDocument) {
+  return {
+    ...document,
+    sourceSystem: "google-drive",
+    source: "firebase-live",
+    schemaVersion: 2
+  };
+}
+
+function approvalAuditValue(record: ApprovalRecord) {
+  const { documents, ...value } = record;
+  return {
+    ...value,
+    documents: documents.map((item) => ({
+      id: item.id,
+      fileName: item.fileName,
+      locationId: item.locationId,
+      status: item.status,
+      driveFileId: item.driveFileId
+    }))
+  };
+}
+
+async function loadFirebaseApprovalRecords() {
   await requireFirebaseAdmin();
   const [recordSnapshot, locationSnapshot, documentSnapshot] = await Promise.all([
     getDocs(collection(firestore, "approvalRecords")),
@@ -193,63 +266,186 @@ export async function fetchFirebaseApprovalDashboardSummary() {
     documentsByApproval.set(approvalId, values);
   });
 
-  const records: ApprovalRecord[] = recordSnapshot.docs.map((item) => {
-    const data = item.data();
-    const id = asText(data.id || item.id);
-    return {
-      id,
-      approvalType: asText(data.approvalType) as ApprovalType,
-      approvalNumber: asText(data.approvalNumber),
-      issuingAuthority: asText(data.issuingAuthority),
-      effectiveDate: asText(data.effectiveDate).slice(0, 10),
-      expiryDate: asText(data.expiryDate).slice(0, 10),
-      responsiblePerson: asText(data.responsiblePerson),
-      responsibleEmail: asText(data.responsibleEmail),
-      renewalLeadDays: Number(data.renewalLeadDays) || 90,
-      renewalStatus: asText(data.renewalStatus) as ApprovalRecord["renewalStatus"],
-      renewalSubmittedAt: asText(data.renewalSubmittedAt),
-      renewalReference: asText(data.renewalReference),
-      generalConditions: asText(data.generalConditions),
-      remarks: asText(data.remarks),
-      locations: locationsByApproval.get(id) || [],
-      documents: documentsByApproval.get(id) || [],
-      archived: data.archived === true,
-      version: Number(data.version) || 1,
-      supersedesRecordId: asText(data.supersedesRecordId),
-      createdAt: asText(data.createdAt),
-      updatedAt: asText(data.updatedAt)
-    };
+  return recordSnapshot.docs.map((item) => {
+    const id = asText(item.data().id || item.id);
+    return recordFromDocument(
+      item.id,
+      item.data(),
+      locationsByApproval.get(id) || [],
+      documentsByApproval.get(id) || []
+    );
   });
+}
 
-  return buildApprovalDashboardSummary(records);
+export async function setupApprovals() {
+  return postToGoogle<{
+    message: string;
+    folderId: string;
+    folderUrl: string;
+  }>({
+    action: "setupApprovals"
+  });
+}
+
+export async function fetchApprovalsPage(
+  request: ApprovalsPageRequest = {}
+) {
+  const queryText = request.search?.trim().toLowerCase() || "";
+  const records = (await loadFirebaseApprovalRecords())
+    .map((record) => summarizeApprovalRecord(record))
+    .filter((record) => request.includeArchived || !record.archived)
+    .filter((record) => !request.approvalType || record.approvalType === request.approvalType)
+    .filter((record) => !request.expiryStatus || record.expiryStatus === request.expiryStatus)
+    .filter((record) => {
+      if (!queryText) return true;
+      return `${record.approvalNumber} ${record.issuingAuthority} ${record.responsiblePerson} ${record.permittedLocations.join(" ")}`
+        .toLowerCase()
+        .includes(queryText);
+    })
+    .sort(
+      (first, second) =>
+        Number(first.archived) - Number(second.archived) ||
+        (first.daysRemaining ?? Number.MAX_SAFE_INTEGER) -
+          (second.daysRemaining ?? Number.MAX_SAFE_INTEGER) ||
+        second.updatedAt.localeCompare(first.updatedAt)
+    );
+  const pageSize = Math.max(1, Math.min(Number(request.pageSize) || 10, 50));
+  const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
+  const page = Math.max(1, Math.min(Number(request.page) || 1, totalPages));
+
+  return {
+    records: records.slice((page - 1) * pageSize, page * pageSize),
+    page,
+    pageSize,
+    total: records.length,
+    totalPages,
+    hasPreviousPage: page > 1,
+    hasNextPage: page < totalPages
+  } satisfies ApprovalsPage;
+}
+
+export async function fetchApprovalRecord(approvalId: string) {
+  const record = (await loadFirebaseApprovalRecords()).find(
+    (item) => item.id === approvalId
+  );
+  if (!record) throw new Error("The approval record was not found.");
+  return record;
+}
+
+export async function fetchFirebaseApprovalDashboardSummary() {
+  return buildApprovalDashboardSummary(await loadFirebaseApprovalRecords());
 }
 
 export async function fetchApprovalDashboardSummary() {
-  const data = await postToGoogle<{
-    dashboard: ApprovalDashboardSummary;
-  }>({
-    action: "getApprovalDashboardSummary"
-  });
-
-  return data.dashboard;
+  return fetchFirebaseApprovalDashboardSummary();
 }
 
 export async function saveApprovalRecord(approval: ApprovalRecord) {
-  const data = await postToGoogle<{ record: ApprovalRecord }>({
-    action: "saveApprovalRecord",
-    approval
+  const validation = validateApprovalRecord(approval, false);
+  if (!validation.valid) throw new Error(validation.errors[0]);
+  const actor = await requireFirebaseAdmin();
+  const existing = (await loadFirebaseApprovalRecords()).find(
+    (record) => record.id === approval.id
+  ) || null;
+  const now = new Date().toISOString();
+  const saved: ApprovalRecord = {
+    ...approval,
+    approvalNumber: approval.approvalNumber.trim(),
+    issuingAuthority: approval.issuingAuthority.trim(),
+    responsiblePerson: approval.responsiblePerson.trim(),
+    responsibleEmail: approval.responsibleEmail.trim().toLowerCase(),
+    renewalReference: approval.renewalReference.trim(),
+    generalConditions: approval.generalConditions.trim(),
+    remarks: approval.remarks.trim(),
+    locations: approval.locations.map((location) => ({
+      ...location,
+      name: location.name.trim(),
+      code: location.code.trim(),
+      address: location.address.trim(),
+      coordinates: location.coordinates.trim(),
+      operationalLimitations: location.operationalLimitations.trim(),
+      remarks: location.remarks.trim()
+    })),
+    documents: existing?.documents || approval.documents,
+    version: existing ? existing.version + 1 : Math.max(1, approval.version),
+    createdAt: existing?.createdAt || approval.createdAt || now,
+    updatedAt: now
+  };
+  const existingLocations = await getDocs(
+    query(collection(firestore, "approvalLocations"), where("approvalId", "==", saved.id))
+  );
+  const batch = writeBatch(firestore);
+  existingLocations.docs.forEach((item) => batch.delete(item.ref));
+  batch.set(doc(firestore, "approvalRecords", safeId(saved.id)), recordDocument(saved));
+  saved.locations.forEach((location) => {
+    batch.set(
+      doc(firestore, "approvalLocations", locationDocumentId(saved.id, location.id)),
+      locationDocument(saved.id, location)
+    );
   });
-
-  return data.record;
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: existing ? "APPROVAL_UPDATED" : "APPROVAL_CREATED",
+    entityType: "approval",
+    entityId: saved.id,
+    entityName: saved.approvalNumber,
+    previousValue: existing ? approvalAuditValue(existing) : null,
+    updatedValue: approvalAuditValue(saved),
+    details: { approvalType: saved.approvalType, source: "firebase-primary" }
+  });
+  await batch.commit();
+  const backupSync = postToGoogle<{ record: ApprovalRecord }>({
+    action: "saveApprovalRecord",
+    approval: saved
+  }).catch((error) => {
+    console.error("Approval Google backup sync failed", error);
+    return { record: saved };
+  });
+  if (!existing) {
+    // A new Drive upload may still use the legacy register to resolve its folder.
+    await backupSync;
+  } else {
+    void backupSync;
+  }
+  return saved;
 }
 
 export async function archiveApprovalRecord(approvalId: string) {
-  const data = await postToGoogle<{ record: ApprovalRecord }>({
+  const actor = await requireFirebaseAdmin();
+  const existing = await fetchApprovalRecord(approvalId);
+  const archived: ApprovalRecord = {
+    ...existing,
+    archived: true,
+    version: existing.version + 1,
+    updatedAt: new Date().toISOString()
+  };
+  const batch = writeBatch(firestore);
+  batch.set(doc(firestore, "approvalRecords", safeId(approvalId)), recordDocument(archived));
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "APPROVAL_ARCHIVED",
+    entityType: "approval",
+    entityId: archived.id,
+    entityName: archived.approvalNumber,
+    previousValue: approvalAuditValue(existing),
+    updatedValue: approvalAuditValue(archived),
+    details: { approvalType: archived.approvalType, source: "firebase-primary" }
+  });
+  await batch.commit();
+  void postToGoogle<{ record: ApprovalRecord }>({
     action: "archiveApprovalRecord",
     approvalId
+  }).catch((error) => {
+    console.error("Approval archive Google backup sync failed", error);
+    return { record: archived };
   });
-
-  return data.record;
+  return archived;
 }
 
 export async function uploadApprovalDocument({
@@ -273,8 +469,80 @@ export async function uploadApprovalDocument({
     fileName: file.name,
     dataUrl
   });
-
-  return data.document;
+  const savedDocument: ApprovalDocument = {
+    ...data.document,
+    approvalId,
+    locationId: data.document.locationId || locationId,
+    fileName: data.document.fileName || file.name,
+    mimeType: data.document.mimeType || "application/pdf",
+    driveFileId: data.document.driveFileId || "",
+    driveUrl: data.document.driveUrl || "",
+    status: data.document.status === "superseded" ? "superseded" : "current",
+    uploadedAt: data.document.uploadedAt || new Date().toISOString(),
+    uploadedByName: data.document.uploadedByName || "",
+    uploadedByEmail: data.document.uploadedByEmail || ""
+  };
+  const actor = await requireFirebaseAdmin();
+  const existingRecord = await fetchApprovalRecord(approvalId);
+  const existingDocuments = await getDocs(
+    query(collection(firestore, "approvalDocuments"), where("approvalId", "==", approvalId))
+  );
+  const batch = writeBatch(firestore);
+  existingDocuments.docs.forEach((item) => {
+    const existingDocument = documentFromDocument(item.data());
+    if (
+      existingDocument.status === "current" &&
+      existingDocument.locationId === locationId
+    ) {
+      batch.update(item.ref, { status: "superseded" });
+    }
+  });
+  batch.set(
+    doc(
+      firestore,
+      "approvalDocuments",
+      documentDocumentId(approvalId, savedDocument.id)
+    ),
+    approvalDocumentData(savedDocument)
+  );
+  const updatedRecord: ApprovalRecord = {
+    ...existingRecord,
+    documents: [
+      ...existingRecord.documents.map((item) =>
+        item.status === "current" && item.locationId === locationId
+          ? { ...item, status: "superseded" as const }
+          : item
+      ),
+      savedDocument
+    ],
+    version: existingRecord.version + 1,
+    updatedAt: new Date().toISOString()
+  };
+  batch.set(
+    doc(firestore, "approvalRecords", safeId(approvalId)),
+    recordDocument(updatedRecord)
+  );
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "APPROVAL_DOCUMENT_UPLOADED",
+    entityType: "approval",
+    entityId: approvalId,
+    entityName: existingRecord.approvalNumber,
+    previousValue: null,
+    updatedValue: {
+      id: savedDocument.id,
+      fileName: savedDocument.fileName,
+      locationId: savedDocument.locationId,
+      status: savedDocument.status,
+      driveFileId: savedDocument.driveFileId
+    },
+    details: { approvalType: existingRecord.approvalType, source: "google-drive" }
+  });
+  await batch.commit();
+  return savedDocument;
 }
 
 export async function fetchApprovalDocumentFile(documentId: string) {
@@ -285,8 +553,49 @@ export async function fetchApprovalDocumentFile(documentId: string) {
 }
 
 export async function deleteApprovalDocument(documentId: string) {
-  return postToGoogle<{ documentId: string }>({
+  const actor = await requireFirebaseAdmin();
+  const documentSnapshot = await getDocs(
+    query(collection(firestore, "approvalDocuments"), where("id", "==", documentId))
+  );
+  const matched = documentSnapshot.docs[0];
+  if (!matched) throw new Error("The approval document was not found.");
+  const existingDocument = documentFromDocument(matched.data());
+  const existingRecord = await fetchApprovalRecord(existingDocument.approvalId);
+  const result = await postToGoogle<{ documentId: string }>({
     action: "deleteApprovalDocument",
     documentId
   });
+  const updatedRecord: ApprovalRecord = {
+    ...existingRecord,
+    documents: existingRecord.documents.filter((item) => item.id !== documentId),
+    version: existingRecord.version + 1,
+    updatedAt: new Date().toISOString()
+  };
+  const batch = writeBatch(firestore);
+  batch.delete(matched.ref);
+  batch.set(
+    doc(firestore, "approvalRecords", safeId(existingRecord.id)),
+    recordDocument(updatedRecord)
+  );
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "APPROVAL_DOCUMENT_DELETED",
+    entityType: "approval",
+    entityId: existingRecord.id,
+    entityName: existingRecord.approvalNumber,
+    previousValue: {
+      id: existingDocument.id,
+      fileName: existingDocument.fileName,
+      locationId: existingDocument.locationId,
+      status: existingDocument.status,
+      driveFileId: existingDocument.driveFileId
+    },
+    updatedValue: null,
+    details: { approvalType: existingRecord.approvalType, source: "google-drive" }
+  });
+  await batch.commit();
+  return result;
 }
