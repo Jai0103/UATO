@@ -535,17 +535,17 @@ canvas {
   background-color: #075ce5 !important;
 }
 
-button[class*="bg-[#102a43]"],
-a[class*="bg-[#102a43]"],
-button[class*="bg-[#075f8f]"],
-a[class*="bg-[#075f8f]"] {
+button[class*="bg-[#102a43]"]:not(.app-nav-item-active),
+a[class*="bg-[#102a43]"]:not(.app-nav-item-active),
+button[class*="bg-[#075f8f]"]:not(.app-nav-item-active),
+a[class*="bg-[#075f8f]"]:not(.app-nav-item-active) {
   background-color: #0866ff !important;
 }
 
-button[class*="bg-[#102a43]"]:hover,
-a[class*="bg-[#102a43]"]:hover,
-button[class*="bg-[#075f8f]"]:hover,
-a[class*="bg-[#075f8f]"]:hover {
+button[class*="bg-[#102a43]"]:not(.app-nav-item-active):hover,
+a[class*="bg-[#102a43]"]:not(.app-nav-item-active):hover,
+button[class*="bg-[#075f8f]"]:not(.app-nav-item-active):hover,
+a[class*="bg-[#075f8f]"]:not(.app-nav-item-active):hover {
   background-color: #075ce5 !important;
 }
 
