@@ -382,7 +382,7 @@ export default function ChangePasswordPage() {
         </div>
 
         <footer className="border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
-          Changing your password signs out all previous sessions.
+          Your password is updated securely through Firebase Authentication.
         </footer>
       </section>
     </main>
