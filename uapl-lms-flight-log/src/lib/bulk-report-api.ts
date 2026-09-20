@@ -15,6 +15,11 @@ import type {
 } from "@/lib/fatigue-risk";
 
 import {
+  fetchFatigueRiskReportRecords,
+  fetchFatigueRiskReportTrainerNames as fetchFirebaseFatigueRiskReportTrainerNames
+} from "@/lib/fatigue-risk-api";
+
+import {
   postToGoogle
 } from "@/lib/google-api";
 
@@ -77,15 +82,7 @@ export async function fetchBulkFatigueRiskReportRecords(
     trainerName: string;
   }
 ) {
-  const data = await postToGoogle<{
-    records: FatigueRiskRecord[];
-  }>({
-    action:
-      "getBulkFatigueRiskReportRecords",
-    ...request
-  });
-
-  return data.records || [];
+  return fetchFatigueRiskReportRecords(request) satisfies Promise<FatigueRiskRecord[]>;
 }
 
 export async function fetchFatigueRiskReportTrainerNames(
@@ -94,12 +91,5 @@ export async function fetchFatigueRiskReportTrainerNames(
     dateTo: string;
   }
 ) {
-  const data = await postToGoogle<{
-    trainerNames: string[];
-  }>({
-    action: "getFatigueRiskReportTrainerNames",
-    ...request
-  });
-
-  return data.trainerNames || [];
+  return fetchFirebaseFatigueRiskReportTrainerNames(request);
 }
