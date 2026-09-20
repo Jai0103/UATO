@@ -10,9 +10,10 @@ import type {
 import {
   sessionKey
 } from "@/lib/demo-auth";
+import { ensureLegacySessionToken } from "@/lib/auth-api";
+import { googleAppsScriptUrl } from "@/lib/google-config";
 
-export const googleAppsScriptUrl =
-  "https://script.google.com/macros/s/AKfycbwjmTFIGbGSHhaxj9ds86l5_Vgx6vuovgQZpfNRSexZH5T336eLEylJiWoKaPkAkHnZPg/exec";
+export { googleAppsScriptUrl } from "@/lib/google-config";
 
 type ApiResponse<T> = {
   ok?: boolean;
@@ -378,16 +379,17 @@ function handleAuthenticationError(
     code === "AUTH_REQUIRED"
   ) {
     invalidateGoogleApiCache();
-
-    localStorage.removeItem(
-      sessionKey
-    );
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "uapl-auth-expired"
-      )
-    );
+    try {
+      const rawSession = localStorage.getItem(sessionKey);
+      if (!rawSession) return;
+      const session = JSON.parse(rawSession) as StoredSession & Record<string, unknown>;
+      localStorage.setItem(
+        sessionKey,
+        JSON.stringify({ ...session, sessionToken: "" })
+      );
+    } catch {
+      localStorage.removeItem(sessionKey);
+    }
   }
 }
 
@@ -432,8 +434,11 @@ async function fetchGoogleOnce(
 export async function postToGoogle<T>(
   payload: Record<string, unknown>
 ): Promise<T> {
-  const sessionToken =
-    getStoredSessionToken();
+  let sessionToken = getStoredSessionToken();
+
+  if (!sessionToken) {
+    sessionToken = await ensureLegacySessionToken();
+  }
 
   if (!sessionToken) {
     throw new GoogleApiError(
@@ -772,4 +777,3 @@ export async function fetchUnavailableBatteriesForDate(
     ...payload
   });
 }
-
