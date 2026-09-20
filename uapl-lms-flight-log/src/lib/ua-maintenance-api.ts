@@ -12,7 +12,10 @@ import {
   type DocumentReference
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
-import { postToGoogle } from "@/lib/google-api";
+import {
+  addFirebaseAuditToTransaction,
+  writeFirebaseAudit
+} from "@/lib/firebase-audit";
 import type {
   UaMaintenanceEntry,
   UaMaintenanceMasterData,
@@ -53,6 +56,13 @@ let masterDataCache: {
   expiresAt: number;
   value: UaMaintenanceMasterData;
 } | null = null;
+let actorCache: {
+  expiresAt: number;
+  uid: string;
+  name: string;
+  email: string;
+  role: "admin";
+} | null = null;
 
 export class UaMaintenanceFirebaseError extends Error {
   code: string;
@@ -73,7 +83,30 @@ async function requireFirebaseUser() {
       "AUTH_REQUIRED"
     );
   }
-  return user;
+  if (actorCache && actorCache.uid === user.uid && actorCache.expiresAt > Date.now()) {
+    return actorCache;
+  }
+
+  const profile = await getDoc(doc(firestore, "users", user.uid));
+  if (
+    !profile.exists() ||
+    profile.data().status !== "active" ||
+    profile.data().role !== "admin"
+  ) {
+    throw new UaMaintenanceFirebaseError(
+      "Administrator access is required.",
+      "ADMIN_REQUIRED"
+    );
+  }
+
+  actorCache = {
+    expiresAt: Date.now() + 2 * 60_000,
+    uid: user.uid,
+    name: text(profile.data().name || user.displayName || user.email || "Administrator"),
+    email: text(profile.data().email || user.email).trim().toLowerCase(),
+    role: "admin"
+  };
+  return actorCache;
 }
 
 function text(value: unknown) {
@@ -213,23 +246,28 @@ function validateRecord(record: UaMaintenanceRecord) {
   return "";
 }
 
-function writeAudit(
-  auditAction:
-    | "UA_MAINTENANCE_CREATED"
-    | "UA_MAINTENANCE_UPDATED"
-    | "UA_MAINTENANCE_DELETED"
-    | "UA_MAINTENANCE_MASTER_DATA_UPDATED",
-  record: UaMaintenanceRecord | UaMaintenanceMasterData,
-  previousRecord: UaMaintenanceRecord | UaMaintenanceMasterData | null
-) {
-  void postToGoogle<{ auditId?: string }>({
-    action: "recordFirebaseUaMaintenanceAudit",
-    auditAction,
-    record,
-    previousRecord
-  }).catch((error) => {
-    console.error("UA Maintenance audit sync failed", error);
-  });
+function recordAuditValue(record: UaMaintenanceRecord) {
+  return {
+    id: record.id,
+    uaModel: record.uaModel,
+    uaId: record.uaId,
+    inspectionDate: record.inspectionDate,
+    recommendation: record.recommendation,
+    checkedByName: record.checkedByName,
+    checkedByIdNo: record.checkedByIdNo,
+    signatureCaptured: Boolean(record.signatureDataUrl),
+    items: record.items,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt
+  };
+}
+
+function masterDataAuditValue(masterData: UaMaintenanceMasterData) {
+  return {
+    uaModels: masterData.uaModels,
+    uaIds: masterData.uaIds,
+    descriptions: masterData.descriptions
+  };
 }
 
 export async function fetchUaMaintenanceMasterData(force = false) {
@@ -257,7 +295,7 @@ export async function fetchUaMaintenanceMasterData(force = false) {
 export async function saveUaMaintenanceMasterData(
   masterData: UaMaintenanceMasterData
 ) {
-  await requireFirebaseUser();
+  const actor = await requireFirebaseUser();
   const previousMasterData = await fetchUaMaintenanceMasterData(true);
   const existing = await getDocs(collection(firestore, "uaMaintenanceMasterData"));
   const operations: FirestoreOperation[] = existing.docs.map((item) => ({
@@ -292,11 +330,22 @@ export async function saveUaMaintenanceMasterData(
 
   await commitOperations(operations);
   invalidateCaches();
-  writeAudit(
-    "UA_MAINTENANCE_MASTER_DATA_UPDATED",
-    masterData,
-    previousMasterData
-  );
+  await writeFirebaseAudit({
+    actorUserId: actor.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "UA_MAINTENANCE_MASTER_DATA_UPDATED",
+    entityType: "uaMaintenance",
+    entityId: "master-data",
+    entityName: "UA Maintenance Master Data",
+    previousValue: masterDataAuditValue(previousMasterData),
+    updatedValue: masterDataAuditValue(masterData),
+    details: {
+      uaModels: masterData.uaModels.length,
+      descriptions: masterData.descriptions.length
+    }
+  });
   return masterData;
 }
 
@@ -484,14 +533,26 @@ export async function saveUaMaintenanceRecord(record: UaMaintenanceRecord) {
       transaction.delete(signatureReference);
     }
     transaction.delete(doc(firestore, "uaMaintenanceTombstones", cleanId));
+    addFirebaseAuditToTransaction(transaction, {
+      actorUserId: user.uid,
+      actorName: user.name,
+      actorEmail: user.email,
+      actorRole: user.role,
+      action: previousRecord ? "UA_MAINTENANCE_UPDATED" : "UA_MAINTENANCE_CREATED",
+      entityType: "uaMaintenance",
+      entityId: record.id,
+      entityName: `${record.uaModel.trim()} - ${record.uaId.trim()}`,
+      previousValue: previousRecord ? recordAuditValue(previousRecord) : null,
+      updatedValue: recordAuditValue(savedRecord),
+      details: {
+        inspectionDate: record.inspectionDate,
+        passCount,
+        failCount
+      }
+    });
   });
 
   invalidateCaches();
-  writeAudit(
-    previousRecord ? "UA_MAINTENANCE_UPDATED" : "UA_MAINTENANCE_CREATED",
-    savedRecord,
-    previousRecord
-  );
   return savedRecord;
 }
 
@@ -529,6 +590,18 @@ export async function deleteUaMaintenanceRecord(recordId: string) {
 
   await commitOperations(operations);
   invalidateCaches();
-  writeAudit("UA_MAINTENANCE_DELETED", existingRecord, existingRecord);
+  await writeFirebaseAudit({
+    actorUserId: user.uid,
+    actorName: user.name,
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: "UA_MAINTENANCE_DELETED",
+    entityType: "uaMaintenance",
+    entityId: recordId,
+    entityName: `${existingRecord.uaModel} - ${existingRecord.uaId}`,
+    previousValue: recordAuditValue(existingRecord),
+    updatedValue: null,
+    details: { inspectionDate: existingRecord.inspectionDate }
+  });
   return { recordId };
 }
