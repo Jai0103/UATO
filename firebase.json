@@ -1,43 +1,44 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-    function currentUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-    function isActiveUser() {
-      return signedIn()
-        && currentUser().data.status == "active";
-    }
-    function isAdmin() {
-      return isActiveUser()
-        && currentUser().data.role == "admin";
-    }
-    match /users/{userId} {
-      allow read: if signedIn()
-        && (request.auth.uid == userId || isAdmin());
-      allow write: if false;
-    }
-    // Migration collections are admin-only until trainer permissions are enabled.
-    match /flightLogRecords/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /flightEntries/{entryId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /flightLogSignatures/{recordId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /flightLogIdentifiers/{identifierId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /migrationRuns/{runId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
+{
+  "functions": {
+    "source": "functions"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "firebase-public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "trailingSlash": true,
+    "headers": [
+      {
+        "source": "/UATO/service-worker.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/UATO/_next/static/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/",
+        "destination": "/UATO/",
+        "type": 302
+      }
+    ]
   }
 }
