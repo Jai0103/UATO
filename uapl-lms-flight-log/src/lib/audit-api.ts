@@ -95,6 +95,7 @@ async function fetchFirebaseLiveRecords(request: AuditHistoryRequest) {
     .map((item) => eventFromDocument(item.id, item.data()))
     .filter((record) =>
       ["approval", "attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"].includes(
+      ["approval", "attendance", "fatigueRisk", "flightMasterData", "staffTraining", "uaMaintenance", "user"].includes(
         record.entityType
       )
     )
@@ -145,6 +146,7 @@ export async function fetchAuditHistoryPage(
   if (
     request.entityType === "approval" ||
     request.entityType === "attendance" ||
+    request.entityType === "flightMasterData" ||
     request.entityType === "user" ||
     request.entityType === "fatigueRisk" ||
     request.entityType === "staffTraining" ||
@@ -156,6 +158,7 @@ export async function fetchAuditHistoryPage(
       request,
       firebaseActions.sort(),
       ["approval", "attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"]
+      ["approval", "attendance", "fatigueRisk", "flightMasterData", "staffTraining", "uaMaintenance", "user"]
     );
   }
 
@@ -172,6 +175,7 @@ export async function fetchAuditHistoryPage(
       "approval",
       "attendance",
       "fatigueRisk",
+      "flightMasterData",
       "staffTraining",
       "uaMaintenance",
       "user"
