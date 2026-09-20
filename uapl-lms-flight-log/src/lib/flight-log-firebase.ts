@@ -17,8 +17,7 @@ import type {
   FlightLogRecord,
   FlightLogRow
 } from "@/lib/flight-log-storage";
-import {
-  postToGoogle,
+import type {
   FlightLogRecordSummary,
   RecordsPageRequest,
   RecordsPageResponse
@@ -30,14 +29,14 @@ const WRITE_BATCH_SIZE = 400;
 // this below 125 leaves headroom under Firestore's 500-write transaction limit.
 const MAX_LIVE_ROWS = 120;
 const MASTER_DATA_CACHE_MS = 5 * 60_000;
-const ADMIN_CACHE_MS = 2 * 60_000;
+const ACTOR_CACHE_MS = 2 * 60_000;
 let masterDataCache: { expiresAt: number; value: MasterData } | null = null;
-let adminCache: {
+let actorCache: {
   expiresAt: number;
   uid: string;
   name: string;
   email: string;
-  role: "admin";
+  role: "admin" | "trainer";
 } | null = null;
 
 export class FlightLogFirebaseError extends Error {
@@ -88,31 +87,40 @@ async function requireFirebaseUser() {
   return firebaseAuth.currentUser;
 }
 
-async function requireFirebaseAdmin() {
+async function requireFirebaseActor() {
   const user = await requireFirebaseUser();
-  if (adminCache && adminCache.uid === user.uid && adminCache.expiresAt > Date.now()) {
-    return adminCache;
+  if (actorCache && actorCache.uid === user.uid && actorCache.expiresAt > Date.now()) {
+    return actorCache;
   }
 
   const profile = await getDoc(doc(firestore, "users", user.uid));
+  const role = profile.exists() ? profile.data().role : "";
   if (
     !profile.exists() ||
     profile.data().status !== "active" ||
-    profile.data().role !== "admin"
+    (role !== "admin" && role !== "trainer")
   ) {
-    throw new Error("Administrator access is required.");
+    throw new Error("Your Firebase account is not active.");
   }
 
-  adminCache = {
-    expiresAt: Date.now() + ADMIN_CACHE_MS,
+  actorCache = {
+    expiresAt: Date.now() + ACTOR_CACHE_MS,
     uid: user.uid,
     name: String(
-      profile.data().name || user.displayName || user.email || "Administrator"
+      profile.data().name || user.displayName || user.email || "System User"
     ).trim(),
     email: String(profile.data().email || user.email || "").trim().toLowerCase(),
-    role: "admin"
+    role
   };
-  return adminCache;
+  return actorCache;
+}
+
+async function requireFirebaseAdmin() {
+  const actor = await requireFirebaseActor();
+  if (actor.role !== "admin") {
+    throw new Error("Administrator access is required.");
+  }
+  return { ...actor, role: "admin" as const };
 }
 
 function normalizedIdentifier(value: string) {
@@ -1049,11 +1057,38 @@ export async function logFirebaseFlightAudit(
   record: FlightLogRecord,
   previousRecord: FlightLogRecord | null
 ) {
-  return postToGoogle<{ auditId?: string }>({
-    action: "recordFirebaseFlightAudit",
-    auditAction: action,
-    record,
-    previousRecord
+  const actor = await requireFirebaseActor();
+  const auditRecord = (value: FlightLogRecord | null) => {
+    if (!value) return null;
+    return {
+      id: value.id,
+      student: {
+        studentName: value.student.studentName,
+        company: value.student.company,
+        lastFourCharacters: value.student.lastFourCharacters
+      },
+      rows: value.rows.map((row) => ({ ...row })),
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt
+    };
+  };
+
+  return writeFirebaseAudit({
+    actorUserId: actor.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action,
+    entityType: "flightLog",
+    entityId: record.id,
+    entityName: record.student.studentName.trim() || "Flight Log",
+    previousValue:
+      action === "FLIGHT_CREATED" ? null : auditRecord(previousRecord || record),
+    updatedValue: action === "FLIGHT_DELETED" ? null : auditRecord(record),
+    details: {
+      company: record.student.company,
+      flightCount: record.rows.length
+    }
   });
 }
 
