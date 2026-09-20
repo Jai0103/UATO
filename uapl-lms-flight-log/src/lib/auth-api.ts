@@ -1,20 +1,21 @@
-import { sessionKey } from "@/lib/demo-auth";
+"use client";
+
 import { FirebaseError } from "firebase/app";
 import {
   browserLocalPersistence,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   setPersistence,
   signInWithEmailAndPassword,
-  signOut
+  signOut,
+  updatePassword
 } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase-client";
-import {
-  googleAppsScriptUrl,
-  invalidateGoogleApiCache
-} from "@/lib/google-api";
+import { doc, getDoc } from "firebase/firestore";
+import { sessionKey } from "@/lib/demo-auth";
+import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { googleAppsScriptUrl } from "@/lib/google-config";
 
-export type SecureUserRole =
-  | "admin"
-  | "trainer";
+export type SecureUserRole = "admin" | "trainer";
 
 export type SecureUser = {
   id: string;
@@ -40,275 +41,205 @@ type BaseAuthResponse = {
   message?: string;
 };
 
-type SecureLoginResponse =
-  BaseAuthResponse & {
-    user?: SecureUser;
-    sessionToken?: string;
-    expiresAt?: string;
-    remainingAttempts?: number;
-  };
+type SecureLoginResponse = BaseAuthResponse & {
+  user?: SecureUser;
+  sessionToken?: string;
+  expiresAt?: string;
+};
 
-function firebaseLoginMessage(error: unknown) {
-  if (!(error instanceof FirebaseError)) {
-    return "Unable to sign in with Firebase. Check your connection and try again.";
-  }
-
-  if (
-    error.code === "auth/invalid-credential" ||
-    error.code === "auth/user-not-found" ||
-    error.code === "auth/wrong-password"
-  ) {
-    return "Invalid email or password.";
-  }
-
-  if (error.code === "auth/too-many-requests") {
-    return "Too many sign-in attempts. Wait a moment before trying again.";
-  }
-
-  if (error.code === "auth/network-request-failed") {
-    return "Unable to reach Firebase Authentication. Check your connection and try again.";
-  }
-
-  if (error.code === "auth/user-disabled") {
-    return "This account is inactive. Contact your administrator.";
-  }
-
-  return "Firebase Authentication could not complete the sign-in.";
-}
-
-type VerifySessionResponse =
-  BaseAuthResponse & {
-    user?: {
-      id: string;
-      name: string;
-      email: string;
-      role: SecureUserRole;
-    };
-    expiresAt?: string;
-  };
-
-type ChangePasswordResponse =
-  BaseAuthResponse & {
-    user?: SecureUser;
-    sessionToken?: string;
-    expiresAt?: string;
-  };
+const FIREBASE_SESSION_HOURS = 8;
+let legacySessionRequest: Promise<string> | null = null;
 
 export class AuthApiError extends Error {
   code: string;
   remainingAttempts?: number;
 
-  constructor(
-    message: string,
-    code = "AUTH_ERROR",
-    remainingAttempts?: number
-  ) {
+  constructor(message: string, code = "AUTH_ERROR", remainingAttempts?: number) {
     super(message);
-
     this.name = "AuthApiError";
     this.code = code;
-    this.remainingAttempts =
-      remainingAttempts;
+    this.remainingAttempts = remainingAttempts;
   }
 }
 
-async function postAuthentication<T>(
-  payload: Record<string, unknown>
-): Promise<T> {
-  let response: Response;
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 45_000);
+function firebaseLoginMessage(error: unknown) {
+  if (!(error instanceof FirebaseError)) {
+    return "Unable to sign in with Firebase. Check your connection and try again.";
+  }
+  if (["auth/invalid-credential", "auth/user-not-found", "auth/wrong-password"].includes(error.code)) {
+    return "Invalid email or password.";
+  }
+  if (error.code === "auth/too-many-requests") {
+    return "Too many sign-in attempts. Wait a moment before trying again.";
+  }
+  if (error.code === "auth/network-request-failed") {
+    return "Unable to reach Firebase Authentication. Check your connection and try again.";
+  }
+  if (error.code === "auth/user-disabled") {
+    return "This account is inactive. Contact your administrator.";
+  }
+  return "Firebase Authentication could not complete the sign-in.";
+}
 
+function firebasePasswordMessage(error: unknown) {
+  if (!(error instanceof FirebaseError)) return "Unable to change your password.";
+  if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
+    return "Your current password is incorrect.";
+  }
+  if (error.code === "auth/requires-recent-login") {
+    return "Please sign out, sign in again, and retry the password change.";
+  }
+  if (error.code === "auth/weak-password") {
+    return "The new password does not meet Firebase security requirements.";
+  }
+  if (error.code === "auth/network-request-failed") {
+    return "Unable to reach Firebase Authentication. Check your connection.";
+  }
+  return "Unable to change your password.";
+}
+
+async function postAuthentication<T>(payload: Record<string, unknown>): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30_000);
   try {
-    response = await fetch(
-      googleAppsScriptUrl,
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-        cache: "no-store",
-        redirect: "follow",
-        signal: controller.signal
-      }
-    );
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new AuthApiError(
-        "The authentication service took too long to respond.",
-        "REQUEST_TIMEOUT"
-      );
+    const response = await fetch(googleAppsScriptUrl, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      cache: "no-store",
+      redirect: "follow",
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new AuthApiError("The compatibility service returned an error.", "HTTP_ERROR");
     }
-    throw new AuthApiError(
-      "Unable to connect to the authentication service.",
-      "NETWORK_ERROR"
-    );
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof AuthApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new AuthApiError("Google Sheets took too long to respond.", "REQUEST_TIMEOUT");
+    }
+    throw new AuthApiError("Unable to connect to the Google compatibility service.", "NETWORK_ERROR");
   } finally {
     window.clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    throw new AuthApiError(
-      "The authentication service returned an error.",
-      "HTTP_ERROR"
-    );
-  }
-
-  try {
-    return (await response.json()) as T;
-  } catch {
-    throw new AuthApiError(
-      "The authentication service returned an invalid response.",
-      "INVALID_RESPONSE"
-    );
-  }
 }
 
-function responseSucceeded(
-  response: BaseAuthResponse
-) {
+function responseSucceeded(response: BaseAuthResponse) {
   return response.success ?? response.ok;
 }
 
-export async function loginSecurely(
-  identifier: string,
-  password: string
-): Promise<SecureSession> {
-  const cleanIdentifier = identifier.trim().toLowerCase();
-
-  // Firebase Authentication uses email addresses. Username-only login remains
-  // on the legacy path until every account has completed Firebase setup.
-  if (cleanIdentifier.includes("@")) {
-    try {
-      await setPersistence(firebaseAuth, browserLocalPersistence);
-      const credential = await signInWithEmailAndPassword(
-        firebaseAuth,
-        cleanIdentifier,
-        password
-      );
-      const idToken = await credential.user.getIdToken();
-      const result = await postAuthentication<SecureLoginResponse>({
-        action: "exchangeFirebaseSession",
-        idToken
-      });
-
-      if (
-        !responseSucceeded(result) ||
-        !result.user ||
-        !result.sessionToken ||
-        !result.expiresAt
-      ) {
-        await signOut(firebaseAuth).catch(() => undefined);
-        throw new AuthApiError(
-          result.message || "Unable to start the application session.",
-          result.code || "SESSION_EXCHANGE_FAILED"
-        );
-      }
-
-      const session: SecureSession = {
-        name: result.user.name,
-        email: result.user.email,
-        role: result.user.role,
-        mustChangePassword: false,
-        sessionToken: result.sessionToken,
-        expiresAt: result.expiresAt
-      };
-
-      saveSecureSession(session);
-      return session;
-    } catch (error) {
-      if (error instanceof AuthApiError) throw error;
-
-      await signOut(firebaseAuth).catch(() => undefined);
-      throw new AuthApiError(firebaseLoginMessage(error), "FIREBASE_LOGIN_FAILED");
-    }
+async function firebaseProfile() {
+  await firebaseAuth.authStateReady();
+  const user = firebaseAuth.currentUser;
+  if (!user) {
+    throw new AuthApiError("Your session has expired. Please sign in again.", "AUTH_REQUIRED");
   }
-
-  const result =
-    await postAuthentication<SecureLoginResponse>({
-      action: "secureLogin",
-      identifier: cleanIdentifier,
-      password
-    });
-
-  if (
-    !responseSucceeded(result) ||
-    !result.user ||
-    !result.sessionToken ||
-    !result.expiresAt
-  ) {
-    throw new AuthApiError(
-      result.message ||
-        "Invalid email, username, or password.",
-      result.code || "LOGIN_FAILED",
-      result.remainingAttempts
-    );
+  const snapshot = await getDoc(doc(firestore, "users", user.uid));
+  if (!snapshot.exists()) {
+    throw new AuthApiError("Your application profile was not found.", "ACCOUNT_NOT_FOUND");
   }
-
-  const session: SecureSession = {
-    name: result.user.name,
-    email: result.user.email,
-    role: result.user.role,
-    mustChangePassword:
-      result.user.mustChangePassword,
-    sessionToken:
-      result.sessionToken,
-    expiresAt: result.expiresAt
+  const profile = snapshot.data();
+  if (profile.status !== "active") {
+    throw new AuthApiError("This account is inactive. Contact your administrator.", "ACCOUNT_INACTIVE");
+  }
+  return {
+    user,
+    name: String(profile.name || user.displayName || user.email || "User"),
+    email: String(profile.email || user.email || "").toLowerCase(),
+    role: profile.role === "admin" ? "admin" as const : "trainer" as const
   };
-
-  saveSecureSession(session);
-
-  return session;
 }
 
-export async function verifySecureSession(
-  session: SecureSession
-): Promise<SecureSession> {
-  if (
-    !session.sessionToken ||
-    isSessionExpired(session)
-  ) {
-    clearSecureSession();
-
-    throw new AuthApiError(
-      "Your session has expired. Please sign in again.",
-      "AUTH_REQUIRED"
-    );
+export async function loginSecurely(identifier: string, password: string): Promise<SecureSession> {
+  const loginEmail = identifier.trim().toLowerCase();
+  if (!loginEmail.includes("@")) {
+    throw new AuthApiError("Sign in using your registered email address.", "EMAIL_REQUIRED");
   }
+  try {
+    await setPersistence(firebaseAuth, browserLocalPersistence);
+    await signInWithEmailAndPassword(firebaseAuth, loginEmail, password);
+    const profile = await firebaseProfile();
+    const session: SecureSession = {
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      mustChangePassword: false,
+      sessionToken: "",
+      expiresAt: new Date(Date.now() + FIREBASE_SESSION_HOURS * 60 * 60 * 1000).toISOString()
+    };
+    saveSecureSession(session);
+    void ensureLegacySessionToken().catch(() => undefined);
+    return session;
+  } catch (error) {
+    if (error instanceof AuthApiError) {
+      await signOut(firebaseAuth).catch(() => undefined);
+      throw error;
+    }
+    await signOut(firebaseAuth).catch(() => undefined);
+    throw new AuthApiError(firebaseLoginMessage(error), "FIREBASE_LOGIN_FAILED");
+  }
+}
 
-  const result =
-    await postAuthentication<VerifySessionResponse>({
-      action: "verifySession",
-      sessionToken:
-        session.sessionToken
+export async function ensureLegacySessionToken() {
+  const session = getSecureSession();
+  if (!session) throw new AuthApiError("Sign in again to continue.", "AUTH_REQUIRED");
+  if (session.sessionToken) return session.sessionToken;
+  if (legacySessionRequest) return legacySessionRequest;
+
+  legacySessionRequest = (async () => {
+    await firebaseAuth.authStateReady();
+    const user = firebaseAuth.currentUser;
+    if (!user) throw new AuthApiError("Sign in again to continue.", "AUTH_REQUIRED");
+    const idToken = await user.getIdToken();
+    const result = await postAuthentication<SecureLoginResponse>({
+      action: "exchangeFirebaseSession",
+      idToken
     });
+    if (!responseSucceeded(result) || !result.sessionToken) {
+      throw new AuthApiError(
+        result.message || "Unable to open the Google compatibility session.",
+        result.code || "SESSION_EXCHANGE_FAILED"
+      );
+    }
+    const current = getSecureSession();
+    if (!current) throw new AuthApiError("Sign in again to continue.", "AUTH_REQUIRED");
+    saveSecureSession({
+      ...current,
+      sessionToken: result.sessionToken,
+      expiresAt: result.expiresAt || current.expiresAt
+    });
+    return result.sessionToken;
+  })().finally(() => {
+    legacySessionRequest = null;
+  });
 
-  if (
-    !responseSucceeded(result) ||
-    !result.user ||
-    !result.expiresAt
-  ) {
+  return legacySessionRequest;
+}
+
+export async function verifySecureSession(session: SecureSession): Promise<SecureSession> {
+  if (isSessionExpired(session)) {
     clearSecureSession();
-
-    throw new AuthApiError(
-      result.message ||
-        "Your session has expired. Please sign in again.",
-      result.code ||
-        "AUTH_REQUIRED"
-    );
+    throw new AuthApiError("Your session has expired. Please sign in again.", "AUTH_REQUIRED");
   }
-
-  const verifiedSession: SecureSession = {
-    ...session,
-    name: result.user.name,
-    email: result.user.email,
-    role: result.user.role,
-    expiresAt: result.expiresAt
-  };
-
-  saveSecureSession(
-    verifiedSession
-  );
-
-  return verifiedSession;
+  try {
+    const profile = await firebaseProfile();
+    const verified: SecureSession = {
+      ...session,
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      mustChangePassword: false
+    };
+    saveSecureSession(verified);
+    return verified;
+  } catch (error) {
+    if (error instanceof AuthApiError) {
+      clearSecureSession();
+      await signOut(firebaseAuth).catch(() => undefined);
+      throw error;
+    }
+    throw new AuthApiError("Unable to verify your Firebase session.", "NETWORK_ERROR");
+  }
 }
 
 export async function changePasswordSecurely(
@@ -316,170 +247,69 @@ export async function changePasswordSecurely(
   newPassword: string,
   confirmPassword: string
 ): Promise<SecureSession> {
-  const existingSession =
-    getSecureSession();
-
-  if (!existingSession) {
-    throw new AuthApiError(
-      "Your session has expired. Please sign in again.",
-      "AUTH_REQUIRED"
-    );
+  if (newPassword !== confirmPassword) {
+    throw new AuthApiError("The new passwords do not match.", "PASSWORD_MISMATCH");
   }
-
-  if (
-    isSessionExpired(
-      existingSession
-    )
-  ) {
-    clearSecureSession();
-
-    throw new AuthApiError(
-      "Your session has expired. Please sign in again.",
-      "AUTH_REQUIRED"
-    );
+  const session = getSecureSession();
+  await firebaseAuth.authStateReady();
+  const user = firebaseAuth.currentUser;
+  if (!session || !user || !user.email) {
+    throw new AuthApiError("Your session has expired. Please sign in again.", "AUTH_REQUIRED");
   }
-
-  const result =
-    await postAuthentication<ChangePasswordResponse>({
-      action:
-        "secureChangePassword",
-      sessionToken:
-        existingSession.sessionToken,
-      currentPassword,
-      newPassword,
-      confirmPassword
-    });
-
-  if (
-    !responseSucceeded(result) ||
-    !result.user ||
-    !result.sessionToken ||
-    !result.expiresAt
-  ) {
-    if (
-      result.code ===
-      "AUTH_REQUIRED"
-    ) {
-      clearSecureSession();
-    }
-
-    throw new AuthApiError(
-      result.message ||
-        "Unable to change your password.",
-      result.code ||
-        "PASSWORD_CHANGE_FAILED"
-    );
+  try {
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+    const updated = { ...session, mustChangePassword: false };
+    saveSecureSession(updated);
+    return updated;
+  } catch (error) {
+    throw new AuthApiError(firebasePasswordMessage(error), "PASSWORD_CHANGE_FAILED");
   }
-
-  const updatedSession: SecureSession = {
-    name: result.user.name,
-    email: result.user.email,
-    role: result.user.role,
-    mustChangePassword: false,
-    sessionToken:
-      result.sessionToken,
-    expiresAt: result.expiresAt
-  };
-
-  saveSecureSession(
-    updatedSession
-  );
-
-  return updatedSession;
 }
 
 export async function logoutSecurely() {
-  const session =
-    getSecureSession();
-
+  const session = getSecureSession();
   clearSecureSession();
-
-  const firebaseLogout = signOut(firebaseAuth).catch(() => undefined);
-
-  if (!session?.sessionToken) {
-    await firebaseLogout;
-    return;
-  }
-
-  await Promise.allSettled([
-    postAuthentication<BaseAuthResponse>({
-      action: "secureLogout",
-      sessionToken:
-        session.sessionToken
-    }),
-    firebaseLogout
-  ]);
-}
-
-export function saveSecureSession(
-  session: SecureSession
-) {
-  if (
-    typeof window === "undefined"
-  ) {
-    return;
-  }
-
-  localStorage.setItem(
-    sessionKey,
-    JSON.stringify(session)
-  );
-}
-
-export function getSecureSession():
-  | SecureSession
-  | null {
-  if (
-    typeof window === "undefined"
-  ) {
-    return null;
-  }
-
-  const storedSession =
-    localStorage.getItem(
-      sessionKey
+  const operations: Promise<unknown>[] = [signOut(firebaseAuth).catch(() => undefined)];
+  if (session?.sessionToken) {
+    operations.push(
+      postAuthentication<BaseAuthResponse>({
+        action: "secureLogout",
+        sessionToken: session.sessionToken
+      }).catch(() => undefined)
     );
-
-  if (!storedSession) {
-    return null;
   }
+  await Promise.allSettled(operations);
+}
 
+export function saveSecureSession(session: SecureSession) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(sessionKey, JSON.stringify(session));
+}
+
+export function getSecureSession(): SecureSession | null {
+  if (typeof window === "undefined") return null;
+  const stored = localStorage.getItem(sessionKey);
+  if (!stored) return null;
   try {
-    const parsedSession =
-      JSON.parse(
-        storedSession
-      ) as Partial<SecureSession>;
-
-    if (
-      !parsedSession.name ||
-      !parsedSession.email ||
-      !parsedSession.role ||
-      !parsedSession.sessionToken ||
-      !parsedSession.expiresAt
-    ) {
+    const parsed = JSON.parse(stored) as Partial<SecureSession>;
+    if (!parsed.name || !parsed.email || !parsed.role || !parsed.expiresAt) {
       clearSecureSession();
       return null;
     }
-
     const session: SecureSession = {
-      name: parsedSession.name,
-      email: parsedSession.email,
-      role: parsedSession.role,
-      mustChangePassword:
-        parsedSession.mustChangePassword,
-      sessionToken:
-        parsedSession.sessionToken,
-      expiresAt:
-        parsedSession.expiresAt
+      name: parsed.name,
+      email: parsed.email,
+      role: parsed.role,
+      mustChangePassword: false,
+      sessionToken: String(parsed.sessionToken || ""),
+      expiresAt: parsed.expiresAt
     };
-
-    if (
-      isSessionExpired(session)
-    ) {
+    if (isSessionExpired(session)) {
       clearSecureSession();
       return null;
     }
-
     return session;
   } catch {
     clearSecureSession();
@@ -488,58 +318,21 @@ export function getSecureSession():
 }
 
 export function clearSecureSession() {
-  if (
-    typeof window === "undefined"
-  ) {
-    return;
-  }
-
-  localStorage.removeItem(
-    sessionKey
-  );
-  invalidateGoogleApiCache();
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(sessionKey);
 }
 
-export function isSessionExpired(
-  session: Pick<
-    SecureSession,
-    "expiresAt"
-  >
-) {
-  const expiration =
-    new Date(
-      session.expiresAt
-    ).getTime();
-
-  if (
-    !Number.isFinite(expiration)
-  ) {
-    return true;
-  }
-
-  return expiration <= Date.now();
+export function isSessionExpired(session: Pick<SecureSession, "expiresAt">) {
+  const expiration = new Date(session.expiresAt).getTime();
+  return !Number.isFinite(expiration) || expiration <= Date.now();
 }
 
 export function getSessionToken() {
-  return (
-    getSecureSession()
-      ?.sessionToken || ""
-  );
+  return getSecureSession()?.sessionToken || "";
 }
 
 export function getSessionRemainingTime() {
-  const session =
-    getSecureSession();
-
+  const session = getSecureSession();
   if (!session) return 0;
-
-  const expiration =
-    new Date(
-      session.expiresAt
-    ).getTime();
-
-  return Math.max(
-    0,
-    expiration - Date.now()
-  );
+  return Math.max(0, new Date(session.expiresAt).getTime() - Date.now());
 }
