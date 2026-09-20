@@ -1,4 +1,13 @@
 import { postToGoogle } from "@/lib/google-api";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  Timestamp,
+  type DocumentData
+} from "firebase/firestore";
+import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import type {
   ApprovalDashboardSummary,
   ApprovalDocument,
@@ -7,6 +16,7 @@ import type {
   ApprovalRecordSummary,
   ApprovalType
 } from "@/lib/approvals";
+import { buildApprovalDashboardSummary } from "@/lib/approvals";
 
 export type ApprovalsPage = {
   records: ApprovalRecordSummary[];
@@ -56,6 +66,56 @@ function fileToDataUrl(file: File) {
 
     reader.readAsDataURL(file);
   });
+}
+
+function asText(value: unknown) {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  return String(value ?? "");
+}
+
+async function requireFirebaseAdmin() {
+  await firebaseAuth.authStateReady();
+  const user = firebaseAuth.currentUser;
+  if (!user) throw new Error("Your Firebase session has expired. Please sign in again.");
+  const profile = await getDoc(doc(firestore, "users", user.uid));
+  if (
+    !profile.exists() ||
+    profile.data().status !== "active" ||
+    profile.data().role !== "admin"
+  ) {
+    throw new Error("Administrator access is required.");
+  }
+}
+
+function locationFromDocument(data: DocumentData) {
+  return {
+    id: asText(data.id),
+    name: asText(data.name),
+    code: asText(data.code),
+    address: asText(data.address),
+    coordinates: asText(data.coordinates),
+    effectiveDate: asText(data.effectiveDate).slice(0, 10),
+    expiryDate: asText(data.expiryDate).slice(0, 10),
+    operationalLimitations: asText(data.operationalLimitations),
+    remarks: asText(data.remarks),
+    active: data.active === true
+  };
+}
+
+function documentFromDocument(data: DocumentData) {
+  return {
+    id: asText(data.id),
+    approvalId: asText(data.approvalId),
+    locationId: asText(data.locationId),
+    fileName: asText(data.fileName),
+    mimeType: asText(data.mimeType),
+    driveFileId: asText(data.driveFileId),
+    driveUrl: asText(data.driveUrl),
+    status: data.status === "superseded" ? "superseded" as const : "current" as const,
+    uploadedAt: asText(data.uploadedAt),
+    uploadedByName: asText(data.uploadedByName),
+    uploadedByEmail: asText(data.uploadedByEmail)
+  };
 }
 
 export async function setupApprovals() {
@@ -108,6 +168,60 @@ export async function fetchApprovalRecord(approvalId: string) {
   });
 
   return data.record;
+}
+
+export async function fetchFirebaseApprovalDashboardSummary() {
+  await requireFirebaseAdmin();
+  const [recordSnapshot, locationSnapshot, documentSnapshot] = await Promise.all([
+    getDocs(collection(firestore, "approvalRecords")),
+    getDocs(collection(firestore, "approvalLocations")),
+    getDocs(collection(firestore, "approvalDocuments"))
+  ]);
+  const locationsByApproval = new Map<string, ReturnType<typeof locationFromDocument>[]>();
+  const documentsByApproval = new Map<string, ReturnType<typeof documentFromDocument>[]>();
+
+  locationSnapshot.docs.forEach((item) => {
+    const approvalId = asText(item.data().approvalId);
+    const values = locationsByApproval.get(approvalId) || [];
+    values.push(locationFromDocument(item.data()));
+    locationsByApproval.set(approvalId, values);
+  });
+  documentSnapshot.docs.forEach((item) => {
+    const approvalId = asText(item.data().approvalId);
+    const values = documentsByApproval.get(approvalId) || [];
+    values.push(documentFromDocument(item.data()));
+    documentsByApproval.set(approvalId, values);
+  });
+
+  const records: ApprovalRecord[] = recordSnapshot.docs.map((item) => {
+    const data = item.data();
+    const id = asText(data.id || item.id);
+    return {
+      id,
+      approvalType: asText(data.approvalType) as ApprovalType,
+      approvalNumber: asText(data.approvalNumber),
+      issuingAuthority: asText(data.issuingAuthority),
+      effectiveDate: asText(data.effectiveDate).slice(0, 10),
+      expiryDate: asText(data.expiryDate).slice(0, 10),
+      responsiblePerson: asText(data.responsiblePerson),
+      responsibleEmail: asText(data.responsibleEmail),
+      renewalLeadDays: Number(data.renewalLeadDays) || 90,
+      renewalStatus: asText(data.renewalStatus) as ApprovalRecord["renewalStatus"],
+      renewalSubmittedAt: asText(data.renewalSubmittedAt),
+      renewalReference: asText(data.renewalReference),
+      generalConditions: asText(data.generalConditions),
+      remarks: asText(data.remarks),
+      locations: locationsByApproval.get(id) || [],
+      documents: documentsByApproval.get(id) || [],
+      archived: data.archived === true,
+      version: Number(data.version) || 1,
+      supersedesRecordId: asText(data.supersedesRecordId),
+      createdAt: asText(data.createdAt),
+      updatedAt: asText(data.updatedAt)
+    };
+  });
+
+  return buildApprovalDashboardSummary(records);
 }
 
 export async function fetchApprovalDashboardSummary() {
