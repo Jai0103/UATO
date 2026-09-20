@@ -209,6 +209,43 @@ export async function createAttendancePdf(session: AttendanceSession, submission
   return doc;
 }
 
+export type CombinedAttendanceRecord = {
+  session: AttendanceSession;
+  submissions: AttendanceSubmission[];
+};
+
+export async function createCombinedAttendancePdf(
+  records: CombinedAttendanceRecord[]
+) {
+  if (!records.length) {
+    throw new Error("Select at least one attendance session.");
+  }
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
+  const logo = await loadImage(LOGO_PATH);
+  let hasPage = false;
+
+  for (const record of records) {
+    const learners = mergeSubmissions(record.submissions);
+    const pageCount = Math.max(1, Math.ceil(learners.length / ROWS_PER_PAGE));
+
+    for (let page = 0; page < pageCount; page += 1) {
+      if (hasPage) doc.addPage("letter", "portrait");
+      hasPage = true;
+      await drawPage(
+        doc,
+        record.session,
+        learners.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE),
+        page + 1,
+        pageCount,
+        logo
+      );
+    }
+  }
+
+  return doc;
+}
+
 export function attendancePdfFileName(session: AttendanceSession) {
   return `${safeFileName(session.courseName || "Course")} - Attendance - ${session.courseDate}.pdf`;
 }
