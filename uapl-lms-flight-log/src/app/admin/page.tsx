@@ -8,7 +8,7 @@ import {
   CAAS_ESOMS_URL,
   type ApprovalDashboardSummary
 } from "@/lib/approvals";
-import { postToGoogle } from "@/lib/google-api";
+import { fetchFirebaseApprovalDashboardSummary } from "@/lib/approvals-api";
 import { fetchFirebaseFlightDashboard } from "@/lib/flight-log-firebase";
 import { fetchAttendanceDashboardAnalytics } from "@/lib/attendance-api";
 import type {
@@ -66,18 +66,6 @@ type DashboardData = {
   totalMinutes: number;
   recentRecords: RecentRecord[];
   monthlyActivity: MonthlyActivity[];
-};
-
-type DashboardBundleSection<T> = {
-  available: boolean;
-  data: T | null;
-  error: string;
-};
-
-type AdminDashboardBundle = {
-  dashboard: DashboardData;
-  approvals: DashboardBundleSection<ApprovalDashboardSummary>;
-  generatedAt: string;
 };
 
 const emptyDashboard: DashboardData = {
@@ -182,9 +170,10 @@ export default function AdminPage() {
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
-      const [flightResult, attendanceResult] = await Promise.allSettled([
+      const [flightResult, attendanceResult, approvalResult] = await Promise.allSettled([
         fetchFirebaseFlightDashboard(),
-        fetchAttendanceDashboardAnalytics()
+        fetchAttendanceDashboardAnalytics(),
+        fetchFirebaseApprovalDashboardSummary()
       ]);
 
       if (flightResult.status === "fulfilled") {
@@ -214,41 +203,19 @@ export default function AdminPage() {
       }
       setLoading(false);
 
-      try {
-        const response = await postToGoogle<{
-          bundle: AdminDashboardBundle;
-        }>({
-          action: "getAdminDashboardBundle"
-        });
-        const bundle = response.bundle;
-
-        if (bundle?.approvals?.available) {
-          setApprovalDashboard(
-            bundle.approvals.data || emptyApprovalDashboard
-          );
-          setApprovalMonitoringAvailable(true);
-        } else {
-          setApprovalDashboard(emptyApprovalDashboard);
-          setApprovalMonitoringAvailable(false);
-          notify({
-            type: "warning",
-            title: "Approval monitoring unavailable",
-            message:
-              bundle?.approvals?.error ||
-              "Approval expiry information could not be loaded."
-          });
-        }
-
-      } catch (error) {
+      if (approvalResult.status === "fulfilled") {
+        setApprovalDashboard(approvalResult.value);
+        setApprovalMonitoringAvailable(true);
+      } else {
         setApprovalDashboard(emptyApprovalDashboard);
         setApprovalMonitoringAvailable(false);
         notify({
           type: "warning",
           title: "Approval monitoring unavailable",
           message:
-            error instanceof Error
-              ? error.message
-              : "Approval expiry information could not be loaded."
+            approvalResult.reason instanceof Error
+              ? approvalResult.reason.message
+              : "Firebase approval information could not be loaded."
         });
       }
     }
