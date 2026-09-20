@@ -1,16 +1,7 @@
 "use client";
 
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  Timestamp
-} from "firebase/firestore";
-import {
-  firebaseAuth,
-  firestore
-} from "@/lib/firebase-client";
+import { collection, doc, getDoc, getDocs, Timestamp } from "firebase/firestore";
+import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import { postToGoogle } from "@/lib/google-api";
 
 export type AuditValue =
@@ -64,54 +55,31 @@ const FIREBASE_LIVE_ENTITY_TYPES = [
   "approval",
   "attendance",
   "fatigueRisk",
+  "flightLog",
   "flightMasterData",
   "staffTraining",
   "uaMaintenance",
   "user"
 ];
 
-const firebaseLiveEntityTypeSet = new Set(
-  FIREBASE_LIVE_ENTITY_TYPES
-);
+const firebaseLiveEntityTypeSet = new Set(FIREBASE_LIVE_ENTITY_TYPES);
 
 function asIso(value: unknown) {
-  if (value instanceof Timestamp) {
-    return value.toDate().toISOString();
-  }
-
+  if (value instanceof Timestamp) return value.toDate().toISOString();
   return typeof value === "string" ? value : "";
 }
 
 async function requireAdmin() {
   await firebaseAuth.authStateReady();
-
   const user = firebaseAuth.currentUser;
-
-  if (!user) {
-    throw new Error(
-      "Your Firebase session has expired. Please sign in again."
-    );
-  }
-
-  const profile = await getDoc(
-    doc(firestore, "users", user.uid)
-  );
-
-  if (
-    !profile.exists() ||
-    profile.data().status !== "active" ||
-    profile.data().role !== "admin"
-  ) {
-    throw new Error(
-      "Administrator access is required."
-    );
+  if (!user) throw new Error("Your Firebase session has expired. Please sign in again.");
+  const profile = await getDoc(doc(firestore, "users", user.uid));
+  if (!profile.exists() || profile.data().status !== "active" || profile.data().role !== "admin") {
+    throw new Error("Administrator access is required.");
   }
 }
 
-function eventFromDocument(
-  id: string,
-  data: Record<string, unknown>
-): AuditRecord {
+function eventFromDocument(id: string, data: Record<string, unknown>): AuditRecord {
   return {
     id,
     timestamp: asIso(data.timestamp),
@@ -130,86 +98,32 @@ function eventFromDocument(
   };
 }
 
-async function fetchFirebaseLiveRecords(
-  request: AuditHistoryRequest
-) {
+async function fetchFirebaseLiveRecords(request: AuditHistoryRequest) {
   await requireAdmin();
-
-  const snapshot = await getDocs(
-    collection(firestore, "auditEvents")
-  );
-
-  const queryText = String(
-    request.query || ""
-  )
-    .trim()
-    .toLowerCase();
-
-  const dateFrom = String(
-    request.dateFrom || ""
-  );
-
-  const dateTo = String(
-    request.dateTo || ""
-  );
-
+  const snapshot = await getDocs(collection(firestore, "auditEvents"));
+  const queryText = String(request.query || "").trim().toLowerCase();
+  const dateFrom = String(request.dateFrom || "");
+  const dateTo = String(request.dateTo || "");
   return snapshot.docs
-    .map((item) =>
-      eventFromDocument(
-        item.id,
-        item.data()
-      )
-    )
+    .map((item) => eventFromDocument(item.id, item.data()))
     .filter((record) =>
-      firebaseLiveEntityTypeSet.has(
+      ["approval", "attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"].includes(
         record.entityType
       )
     )
+    .filter((record) => firebaseLiveEntityTypeSet.has(record.entityType))
     .filter((record) => {
-      const day =
-        record.timestamp.slice(0, 10);
-
-      if (
-        request.auditAction &&
-        record.action !== request.auditAction
-      ) {
-        return false;
-      }
-
-      if (
-        request.entityType &&
-        record.entityType !== request.entityType
-      ) {
-        return false;
-      }
-
-      if (dateFrom && day < dateFrom) {
-        return false;
-      }
-
-      if (dateTo && day > dateTo) {
-        return false;
-      }
-
-      if (!queryText) {
-        return true;
-      }
-
-      return [
-        record.actorName,
-        record.actorEmail,
-        record.action,
-        record.entityName
-      ]
-        .join(" ")
+      const day = record.timestamp.slice(0, 10);
+      if (request.auditAction && record.action !== request.auditAction) return false;
+      if (request.entityType && record.entityType !== request.entityType) return false;
+      if (dateFrom && day < dateFrom) return false;
+      if (dateTo && day > dateTo) return false;
+      if (!queryText) return true;
+      return `${record.actorName} ${record.actorEmail} ${record.action} ${record.entityName}`
         .toLowerCase()
         .includes(queryText);
     })
-    .sort((first, second) =>
-      second.timestamp.localeCompare(
-        first.timestamp
-      )
-    );
+    .sort((first, second) => second.timestamp.localeCompare(first.timestamp));
 }
 
 function paginateFirebaseRecords(
@@ -218,32 +132,11 @@ function paginateFirebaseRecords(
   actionOptions: string[],
   entityTypeOptions: string[]
 ): AuditHistoryResponse {
-  const pageSize = Math.max(
-    1,
-    Math.min(
-      Number(request.pageSize) || 10,
-      100
-    )
-  );
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(records.length / pageSize)
-  );
-
-  const page = Math.max(
-    1,
-    Math.min(
-      Number(request.page) || 1,
-      totalPages
-    )
-  );
-
+  const pageSize = Math.max(1, Math.min(Number(request.pageSize) || 10, 100));
+  const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
+  const page = Math.max(1, Math.min(Number(request.page) || 1, totalPages));
   return {
-    records: records.slice(
-      (page - 1) * pageSize,
-      page * pageSize
-    ),
+    records: records.slice((page - 1) * pageSize, page * pageSize),
     page,
     pageSize,
     totalRecords: records.length,
@@ -258,124 +151,72 @@ function paginateFirebaseRecords(
 export async function fetchAuditHistoryPage(
   request: AuditHistoryRequest
 ) {
-  const firebaseRecords =
-    await fetchFirebaseLiveRecords(request);
-
+  const firebaseRecords = await fetchFirebaseLiveRecords(request);
   const firebaseActions = Array.from(
-    new Set(
-      firebaseRecords.map(
-        (record) => record.action
-      )
-    )
+    new Set(firebaseRecords.map((record) => record.action))
   );
 
-  const firebaseOnlyRequest =
+  if (
     request.entityType === "approval" ||
     request.entityType === "attendance" ||
-    request.entityType === "fatigueRisk" ||
+    request.entityType === "flightLog" ||
     request.entityType === "flightMasterData" ||
+    request.entityType === "user" ||
+    request.entityType === "fatigueRisk" ||
     request.entityType === "staffTraining" ||
     request.entityType === "uaMaintenance" ||
-    request.entityType === "user" ||
-    Boolean(
-      request.auditAction &&
-        firebaseActions.includes(
-          request.auditAction
-        )
-    );
-
-  if (firebaseOnlyRequest) {
+    Boolean(request.auditAction && firebaseActions.includes(request.auditAction))
+  ) {
     return paginateFirebaseRecords(
       firebaseRecords,
       request,
       firebaseActions.sort(),
+      ["approval", "attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"]
       FIREBASE_LIVE_ENTITY_TYPES
     );
   }
 
-  const googleResult =
-    await postToGoogle<AuditHistoryResponse>({
-      action: "getAuditHistoryPage",
-      ...request
-    });
-
+  const googleResult = await postToGoogle<AuditHistoryResponse>({
+    action: "getAuditHistoryPage",
+    ...request
+  });
   const actionOptions = Array.from(
-    new Set([
-      ...(googleResult.actionOptions || []),
-      ...firebaseActions
-    ])
+    new Set([...(googleResult.actionOptions || []), ...firebaseActions])
   ).sort();
-
   const entityTypeOptions = Array.from(
     new Set([
       ...(googleResult.entityTypeOptions || []),
+      "approval",
+      "attendance",
+      "fatigueRisk",
+      "staffTraining",
+      "uaMaintenance",
+      "user"
       ...FIREBASE_LIVE_ENTITY_TYPES
     ])
   ).sort();
 
-  if (
-    request.entityType ||
-    request.page !== 1 ||
-    !firebaseRecords.length
-  ) {
-    return {
-      ...googleResult,
-      actionOptions,
-      entityTypeOptions
-    };
+  if (request.entityType || request.page !== 1 || !firebaseRecords.length) {
+    return { ...googleResult, actionOptions, entityTypeOptions };
   }
 
-  const pageSize =
-    googleResult.pageSize ||
-    request.pageSize ||
-    10;
-
+  const pageSize = googleResult.pageSize || request.pageSize || 10;
   const firebaseKeys = new Set(
     firebaseRecords.map((record) =>
-      [
-        record.action,
-        record.entityType,
-        record.entityName
-      ]
-        .join("|")
-        .toLowerCase()
+      `${record.action}|${record.entityType}|${record.entityName}`.toLowerCase()
     )
   );
-
-  const googleRecords = (
-    googleResult.records || []
-  ).filter((record) => {
-    const key = [
-      record.action,
-      record.entityType,
-      record.entityName
-    ]
-      .join("|")
-      .toLowerCase();
-
-    return !firebaseKeys.has(key);
-  });
-
-  const records = [
-    ...firebaseRecords,
-    ...googleRecords
-  ]
-    .sort((first, second) =>
-      second.timestamp.localeCompare(
-        first.timestamp
+  const googleRecords = (googleResult.records || []).filter(
+    (record) =>
+      !firebaseKeys.has(
+        `${record.action}|${record.entityType}|${record.entityName}`.toLowerCase()
       )
-    )
-    .slice(0, pageSize);
-
-  const totalRecords =
-    googleResult.totalRecords +
-    firebaseRecords.length;
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalRecords / pageSize)
   );
-
+  const records = [...firebaseRecords, ...googleRecords]
+    .sort((first, second) => second.timestamp.localeCompare(first.timestamp))
+    .slice(0, pageSize);
+  const totalRecords = googleResult.totalRecords + firebaseRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   return {
     ...googleResult,
     records,
@@ -387,69 +228,27 @@ export async function fetchAuditHistoryPage(
   };
 }
 
-export async function fetchAuditHistoryDetail(
-  auditId: string
-) {
+export async function fetchAuditHistoryDetail(auditId: string) {
   await requireAdmin();
-
-  const [
-    eventSnapshot,
-    detailSnapshot
-  ] = await Promise.all([
-    getDoc(
-      doc(
-        firestore,
-        "auditEvents",
-        auditId
-      )
-    ),
-    getDoc(
-      doc(
-        firestore,
-        "auditEventDetails",
-        auditId
-      )
-    )
+  const [eventSnapshot, detailSnapshot] = await Promise.all([
+    getDoc(doc(firestore, "auditEvents", auditId)),
+    getDoc(doc(firestore, "auditEventDetails", auditId))
   ]);
-
   if (!eventSnapshot.exists()) {
-    const data =
-      await postToGoogle<{
-        record: AuditRecord;
-      }>({
-        action: "getAuditHistoryDetail",
-        auditId
-      });
-
-    if (!data.record) {
-      throw new Error(
-        "The Audit History event was not found."
-      );
-    }
-
+    const data = await postToGoogle<{ record: AuditRecord }>({
+      action: "getAuditHistoryDetail",
+      auditId
+    });
+    if (!data.record) throw new Error("The Audit History event was not found.");
     return data.record;
   }
-
-  const record = eventFromDocument(
-    eventSnapshot.id,
-    eventSnapshot.data()
-  );
-
-  const detail = detailSnapshot.exists()
-    ? detailSnapshot.data()
-    : {};
-
+  const record = eventFromDocument(eventSnapshot.id, eventSnapshot.data());
+  const detail = detailSnapshot.exists() ? detailSnapshot.data() : {};
   return {
     ...record,
-    previousValue:
-      (detail.previousValue ??
-        null) as AuditValue,
-    updatedValue:
-      (detail.updatedValue ??
-        null) as AuditValue,
-    details:
-      (detail.details ??
-        null) as AuditValue,
+    previousValue: (detail.previousValue ?? null) as AuditValue,
+    updatedValue: (detail.updatedValue ?? null) as AuditValue,
+    details: (detail.details ?? null) as AuditValue,
     detailsLoaded: true
   };
 }
