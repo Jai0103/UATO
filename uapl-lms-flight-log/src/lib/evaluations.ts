@@ -3,6 +3,9 @@ import {
   invalidateGoogleApiCache,
   postToGoogle,
 } from "@/lib/google-api";
+import { FirebaseError } from "firebase/app";
+import { httpsCallable } from "firebase/functions";
+import { firebaseFunctions } from "@/lib/firebase-client";
 
 export const evaluationRatingFields = [
   "objectivesClear",
@@ -30,6 +33,27 @@ export type PublicEvaluationSession = {
   available: boolean;
   unavailableReason: string;
   alreadySubmitted: boolean;
+  questions: PublicEvaluationQuestion[];
+};
+
+export type PublicEvaluationQuestion = {
+  id: string;
+  section: string;
+  text: string;
+  sortOrder: number;
+  responseType: "rating" | "yesNo" | "multipleChoice" | "text";
+  required: boolean;
+  scaleMin: number;
+  scaleMax: number;
+  scaleMinLabel: string;
+  scaleMaxLabel: string;
+  options: string[];
+};
+
+export type PublicEvaluationAnswer = {
+  questionId: string;
+  rating?: number;
+  value?: string;
 };
 
 export type PublicEvaluationSubmission = {
@@ -39,6 +63,7 @@ export type PublicEvaluationSubmission = {
   studentName: string;
   company: string;
   ratings: EvaluationRatings;
+  answers: PublicEvaluationAnswer[];
   recommendTraining: "yes" | "no";
   mostUseful: string;
   improvements: string;
@@ -146,67 +171,48 @@ export class EvaluationApiError extends Error {
   }
 }
 
-async function postPublicEvaluation<T>(
-  payload: Record<string, unknown>
-): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await fetch(googleAppsScriptUrl, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw new EvaluationApiError(
-      "Unable to connect. Check your internet connection and try again."
+function publicFunctionError(error: unknown) {
+  if (!(error instanceof FirebaseError)) {
+    return new EvaluationApiError(
+      error instanceof Error ? error.message : "The evaluation request failed."
     );
   }
-
-  let data: ApiEnvelope<T>;
-
-  try {
-    data = (await response.json()) as ApiEnvelope<T>;
-  } catch {
-    throw new EvaluationApiError(
-      "The evaluation service returned an invalid response."
-    );
-  }
-
-  if (!response.ok || data.ok === false || data.success === false) {
-    throw new EvaluationApiError(
-      data.error || data.message || "The evaluation request failed."
-    );
-  }
-
-  return data as T;
+  const message = String(error.message || "")
+    .replace(/^Firebase:\s*/i, "")
+    .replace(/\s*\(functions\/[^)]+\)\.?$/i, "")
+    .trim();
+  return new EvaluationApiError(message || "The evaluation request failed.");
 }
 
 export async function fetchPublicEvaluationSession(
   token: string,
   submissionKey: string
 ) {
-  const data = await postPublicEvaluation<{
-    session: PublicEvaluationSession;
-  }>({
-    action: "getPublicEvaluationSession",
-    token,
-    submissionKey,
-  });
-
-  return data.session;
+  try {
+    const callable = httpsCallable<
+      { token: string; submissionKey: string },
+      { session: PublicEvaluationSession }
+    >(firebaseFunctions, "getPublicEvaluation");
+    const result = await callable({ token, submissionKey });
+    return result.data.session;
+  } catch (error) {
+    throw publicFunctionError(error);
+  }
 }
 
 export async function submitPublicEvaluation(
   submission: PublicEvaluationSubmission
 ) {
-  const data = await postPublicEvaluation<{
-    submission: PublicEvaluationReceipt;
-  }>({
-    action: "submitPublicEvaluation",
-    ...submission,
-  });
-
-  return data.submission;
+  try {
+    const callable = httpsCallable<
+      PublicEvaluationSubmission,
+      { submission: PublicEvaluationReceipt }
+    >(firebaseFunctions, "submitPublicEvaluation");
+    const result = await callable(submission);
+    return result.data.submission;
+  } catch (error) {
+    throw publicFunctionError(error);
+  }
 }
 
 export async function fetchEvaluationDashboard() {
