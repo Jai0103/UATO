@@ -1,34 +1,3 @@
-        && request.resource.data.previousValue == null
-        && request.resource.data.source == "firebase-live"
-        && request.resource.data.schemaVersion == 2
-        && request.resource.data.updatedValue.keys().hasOnly([
-          "sessionId",
-          "period",
-          "learnerName",
-          "lastFour"
-        ])
-        && request.resource.data.details.keys().hasOnly([
-          "courseName",
-          "courseDate",
-          "instructorName",
-          "period"
-        ])
-        && request.resource.data.updatedValue.sessionId is string
-        && request.resource.data.updatedValue.period in ["am", "pm"]
-        && request.resource.data.updatedValue.learnerName is string
-        && request.resource.data.updatedValue.lastFour.matches("^[A-Z0-9]{4}$")
-        && existsAfter(/databases/$(database)/documents/auditEvents/$(auditId))
-        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.action == "ATTENDANCE_CHECKED_IN"
-        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.entityType == "attendance"
-        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.entityId == request.resource.data.entityId
-        && getAfter(/databases/$(database)/documents/attendanceSubmissions/$(request.resource.data.entityId)).data.sessionId == request.resource.data.updatedValue.sessionId
-        && getAfter(/databases/$(database)/documents/attendanceSubmissions/$(request.resource.data.entityId)).data.period == request.resource.data.updatedValue.period
-        && getAfter(/databases/$(database)/documents/attendanceSubmissions/$(request.resource.data.entityId)).data.learnerName == request.resource.data.updatedValue.learnerName
-        && getAfter(/databases/$(database)/documents/attendanceSubmissions/$(request.resource.data.entityId)).data.lastFour == request.resource.data.updatedValue.lastFour
-      );
-    }
-    match /staffTrainingDescriptions/{itemId} {
-      allow read, create, update, delete: if isAdmin();
     }
     match /staffTrainingRecords/{recordId} {
       allow read, create, update, delete: if isAdmin();
@@ -90,6 +59,24 @@
           (request.resource.data.period == "pm"
             && publicAttendanceSession(request.resource.data.publicToken).data.pmOpen == true)
         );
+    }
+    match /evaluationTemplates/{templateId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationQuestions/{questionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationSessions/{sessionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationSessionQuestions/{questionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationResponses/{responseId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationAnswers/{answerId} {
+      allow read, create, update, delete: if isAdmin();
     }
     match /migrationRuns/{runId} {
       allow read, create, update, delete: if isAdmin();
