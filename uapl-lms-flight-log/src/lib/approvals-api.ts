@@ -58,6 +58,23 @@ export type ApprovalDocumentUpload = {
   file: File;
 };
 
+const APPROVAL_CACHE_MS = 60_000;
+const ADMIN_CACHE_MS = 2 * 60_000;
+
+let approvalCache: {
+  expiresAt: number;
+  records: ApprovalRecord[];
+} | null = null;
+let approvalLoadPromise: Promise<ApprovalRecord[]> | null = null;
+let adminCache: {
+  expiresAt: number;
+  uid: string;
+  user: NonNullable<typeof firebaseAuth.currentUser>;
+  name: string;
+  email: string;
+  role: "admin";
+} | null = null;
+
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -87,18 +104,24 @@ async function requireFirebaseAdmin() {
   await firebaseAuth.authStateReady();
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error("Your Firebase session has expired. Please sign in again.");
+  if (adminCache && adminCache.uid === user.uid && adminCache.expiresAt > Date.now()) {
+    return adminCache;
+  }
   const profile = await getDoc(doc(firestore, "users", user.uid));
   if (!profile.exists()) throw new Error("Administrator access is required.");
   const data = profile.data();
   if (data.status !== "active" || data.role !== "admin") {
     throw new Error("Administrator access is required.");
   }
-  return {
+  adminCache = {
+    expiresAt: Date.now() + ADMIN_CACHE_MS,
+    uid: user.uid,
     user,
     name: asText(data.name || user.displayName || user.email || "Administrator"),
     email: asText(data.email || user.email || ""),
     role: "admin"
   };
+  return adminCache;
 }
 
 function safeId(value: unknown) {
@@ -243,38 +266,66 @@ function approvalAuditValue(record: ApprovalRecord) {
   };
 }
 
-async function loadFirebaseApprovalRecords() {
+function invalidateApprovalCache() {
+  approvalCache = null;
+  approvalLoadPromise = null;
+}
+
+async function loadFirebaseApprovalRecords(force = false) {
   await requireFirebaseAdmin();
-  const [recordSnapshot, locationSnapshot, documentSnapshot] = await Promise.all([
+  if (!force && approvalCache && approvalCache.expiresAt > Date.now()) {
+    return approvalCache.records;
+  }
+  if (!force && approvalLoadPromise) return approvalLoadPromise;
+
+  approvalLoadPromise = Promise.all([
     getDocs(collection(firestore, "approvalRecords")),
     getDocs(collection(firestore, "approvalLocations")),
     getDocs(collection(firestore, "approvalDocuments"))
-  ]);
-  const locationsByApproval = new Map<string, ReturnType<typeof locationFromDocument>[]>();
-  const documentsByApproval = new Map<string, ReturnType<typeof documentFromDocument>[]>();
+  ])
+    .then(([recordSnapshot, locationSnapshot, documentSnapshot]) => {
+      const locationsByApproval = new Map<
+        string,
+        ReturnType<typeof locationFromDocument>[]
+      >();
+      const documentsByApproval = new Map<
+        string,
+        ReturnType<typeof documentFromDocument>[]
+      >();
 
-  locationSnapshot.docs.forEach((item) => {
-    const approvalId = asText(item.data().approvalId);
-    const values = locationsByApproval.get(approvalId) || [];
-    values.push(locationFromDocument(item.data()));
-    locationsByApproval.set(approvalId, values);
-  });
-  documentSnapshot.docs.forEach((item) => {
-    const approvalId = asText(item.data().approvalId);
-    const values = documentsByApproval.get(approvalId) || [];
-    values.push(documentFromDocument(item.data()));
-    documentsByApproval.set(approvalId, values);
-  });
+      locationSnapshot.docs.forEach((item) => {
+        const approvalId = asText(item.data().approvalId);
+        const values = locationsByApproval.get(approvalId) || [];
+        values.push(locationFromDocument(item.data()));
+        locationsByApproval.set(approvalId, values);
+      });
+      documentSnapshot.docs.forEach((item) => {
+        const approvalId = asText(item.data().approvalId);
+        const values = documentsByApproval.get(approvalId) || [];
+        values.push(documentFromDocument(item.data()));
+        documentsByApproval.set(approvalId, values);
+      });
 
-  return recordSnapshot.docs.map((item) => {
-    const id = asText(item.data().id || item.id);
-    return recordFromDocument(
-      item.id,
-      item.data(),
-      locationsByApproval.get(id) || [],
-      documentsByApproval.get(id) || []
-    );
-  });
+      const records = recordSnapshot.docs.map((item) => {
+        const id = asText(item.data().id || item.id);
+        return recordFromDocument(
+          item.id,
+          item.data(),
+          locationsByApproval.get(id) || [],
+          documentsByApproval.get(id) || []
+        );
+      });
+      approvalCache = {
+        expiresAt: Date.now() + APPROVAL_CACHE_MS,
+        records
+      };
+      return records;
+    })
+    .finally(() => {
+      approvalLoadPromise = null;
+    });
+
+  return approvalLoadPromise;
 }
 
 export async function setupApprovals() {
@@ -397,19 +448,7 @@ export async function saveApprovalRecord(approval: ApprovalRecord) {
     details: { approvalType: saved.approvalType, source: "firebase-primary" }
   });
   await batch.commit();
-  const backupSync = postToGoogle<{ record: ApprovalRecord }>({
-    action: "saveApprovalRecord",
-    approval: saved
-  }).catch((error) => {
-    console.error("Approval Google backup sync failed", error);
-    return { record: saved };
-  });
-  if (!existing) {
-    // A new Drive upload may still use the legacy register to resolve its folder.
-    await backupSync;
-  } else {
-    void backupSync;
-  }
+  invalidateApprovalCache();
   return saved;
 }
 
@@ -438,13 +477,7 @@ export async function archiveApprovalRecord(approvalId: string) {
     details: { approvalType: archived.approvalType, source: "firebase-primary" }
   });
   await batch.commit();
-  void postToGoogle<{ record: ApprovalRecord }>({
-    action: "archiveApprovalRecord",
-    approvalId
-  }).catch((error) => {
-    console.error("Approval archive Google backup sync failed", error);
-    return { record: archived };
-  });
+  invalidateApprovalCache();
   return archived;
 }
 
@@ -461,7 +494,16 @@ export async function uploadApprovalDocument({
     throw new Error("The PDF must be 10 MB or smaller.");
   }
 
+  const actor = await requireFirebaseAdmin();
+  const existingRecord = await fetchApprovalRecord(approvalId);
   const dataUrl = await fileToDataUrl(file);
+
+  // Apps Script remains the Google Drive gateway. Register the latest Firebase
+  // metadata only when a Drive upload is actually requested.
+  await postToGoogle<{ record: ApprovalRecord }>({
+    action: "saveApprovalRecord",
+    approval: existingRecord
+  });
   const data = await postToGoogle<{ document: ApprovalDocument }>({
     action: "saveApprovalDocument",
     approvalId,
@@ -482,8 +524,6 @@ export async function uploadApprovalDocument({
     uploadedByName: data.document.uploadedByName || "",
     uploadedByEmail: data.document.uploadedByEmail || ""
   };
-  const actor = await requireFirebaseAdmin();
-  const existingRecord = await fetchApprovalRecord(approvalId);
   const existingDocuments = await getDocs(
     query(collection(firestore, "approvalDocuments"), where("approvalId", "==", approvalId))
   );
@@ -542,6 +582,7 @@ export async function uploadApprovalDocument({
     details: { approvalType: existingRecord.approvalType, source: "google-drive" }
   });
   await batch.commit();
+  invalidateApprovalCache();
   return savedDocument;
 }
 
@@ -597,5 +638,6 @@ export async function deleteApprovalDocument(documentId: string) {
     details: { approvalType: existingRecord.approvalType, source: "google-drive" }
   });
   await batch.commit();
+  invalidateApprovalCache();
   return result;
 }
