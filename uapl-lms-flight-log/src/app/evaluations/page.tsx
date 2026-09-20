@@ -35,12 +35,15 @@ import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import {
-  closeEvaluationSession,
+  closeFirebaseEvaluationSession,
+  ensureFirebaseEvaluationPublicSession,
+  fetchFirebaseEvaluationDashboard,
+  fetchFirebaseEvaluationResponsesPage,
+  fetchFirebaseEvaluationSessionsPage,
+  saveFirebaseEvaluationSession,
+} from "@/lib/evaluation-firebase-api";
+import {
   evaluationRatingFields,
-  fetchEvaluationDashboard,
-  fetchEvaluationResponsesPage,
-  fetchEvaluationSessionsPage,
-  saveEvaluationSession,
   type EvaluationDashboard,
   type EvaluationResponse,
   type EvaluationResponsesPage,
@@ -189,7 +192,7 @@ export default function EvaluationsPage() {
     async (page = 1, quiet = false) => {
       if (!quiet) setTableLoading(true);
       try {
-        const result = await fetchEvaluationSessionsPage({
+        const result = await fetchFirebaseEvaluationSessionsPage({
           page,
           pageSize: 10,
           query: debouncedSearch,
@@ -205,7 +208,7 @@ export default function EvaluationsPage() {
   );
 
   const loadDashboard = useCallback(async () => {
-    setDashboard(await fetchEvaluationDashboard());
+    setDashboard(await fetchFirebaseEvaluationDashboard());
   }, []);
 
   useEffect(() => {
@@ -223,8 +226,8 @@ export default function EvaluationsPage() {
       setLoading(true);
       try {
         const [nextDashboard, nextPage] = await Promise.all([
-          fetchEvaluationDashboard(),
-          fetchEvaluationSessionsPage({
+          fetchFirebaseEvaluationDashboard(),
+          fetchFirebaseEvaluationSessionsPage({
             page: 1,
             pageSize: 10,
             query: debouncedSearch,
@@ -296,7 +299,7 @@ export default function EvaluationsPage() {
     });
 
     try {
-      const saved = await saveEvaluationSession({
+      const saved = await saveFirebaseEvaluationSession({
         ...form,
         courseName: form.courseName.trim(),
         trainerName: form.trainerName.trim(),
@@ -343,7 +346,7 @@ export default function EvaluationsPage() {
     });
 
     try {
-      await closeEvaluationSession(session.id);
+      await closeFirebaseEvaluationSession(session.id);
       await refreshAfterChange();
       message.success(
         "Evaluation closed",
@@ -364,6 +367,7 @@ export default function EvaluationsPage() {
     setQrDataUrl("");
 
     try {
+      await ensureFirebaseEvaluationPublicSession(session);
       const dataUrl = await QRCode.toDataURL(evaluationUrl(session.token), {
         width: 960,
         margin: 3,
@@ -413,7 +417,7 @@ export default function EvaluationsPage() {
   ) {
     setResponsesLoading(true);
     try {
-      const result = await fetchEvaluationResponsesPage({
+      const result = await fetchFirebaseEvaluationResponsesPage({
         sessionId: session.id,
         page,
         pageSize: 10,
