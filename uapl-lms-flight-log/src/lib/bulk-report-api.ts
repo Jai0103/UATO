@@ -7,8 +7,14 @@ import type {
 } from "@/lib/staff-training";
 
 import type {
-  UaMaintenanceRecord
+  UaMaintenanceRecord,
+  UaMaintenanceRecordSummary
 } from "@/lib/ua-maintenance";
+
+import {
+  fetchUaMaintenanceRecord,
+  fetchUaMaintenanceRecordsPage
+} from "@/lib/ua-maintenance-api";
 
 import type {
   FatigueRiskRecord
@@ -64,15 +70,40 @@ export async function fetchBulkUaMaintenanceReportRecords(
     dateTo: string;
   }
 ) {
-  const data = await postToGoogle<{
-    records: UaMaintenanceRecord[];
-  }>({
-    action:
-      "getBulkUaMaintenanceReportRecords",
-    ...request
-  });
+  const summaries: UaMaintenanceRecordSummary[] = [];
+  let page = 1;
+  let totalPages = 1;
 
-  return data.records || [];
+  do {
+    const result = await fetchUaMaintenanceRecordsPage({
+      page,
+      pageSize: 25,
+      query: "",
+      year: "",
+      month: ""
+    });
+    summaries.push(
+      ...result.records.filter(
+        (record) =>
+          (!request.dateFrom || record.inspectionDate >= request.dateFrom) &&
+          (!request.dateTo || record.inspectionDate <= request.dateTo)
+      )
+    );
+    totalPages = result.totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  const records: UaMaintenanceRecord[] = [];
+  for (let index = 0; index < summaries.length; index += 5) {
+    records.push(
+      ...(await Promise.all(
+        summaries
+          .slice(index, index + 5)
+          .map((record) => fetchUaMaintenanceRecord(record.id))
+      ))
+    );
+  }
+  return records;
 }
 
 export async function fetchBulkFatigueRiskReportRecords(
