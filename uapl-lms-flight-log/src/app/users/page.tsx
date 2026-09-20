@@ -4,15 +4,23 @@ import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import {
-  fetchGoogleUsers,
   postToGoogle,
   saveGoogleUsers,
 } from "@/lib/google-api";
-import type { ManagedUser } from "@/lib/user-storage";
+import {
+  createFirebaseUser,
+  deleteFirebaseUser,
+  fetchFirebaseUsers,
+  requestFirebasePasswordReset,
+  setFirebaseUserStatus,
+  updateFirebaseUser,
+  type FirebaseManagedUser,
+} from "@/lib/firebase-users-api";
 import {
   CheckCircle2,
   KeyRound,
   Mail,
+  Pencil,
   Plus,
   Power,
   Search,
@@ -33,11 +41,6 @@ import {
 } from "react";
 
 type UserRole = "admin" | "trainer";
-
-type ManagedUserWithStatus = ManagedUser & {
-  accountStatus?: "active" | "inactive";
-  passwordUpdatedAt?: string;
-};
 
 type CreateUserForm = {
   name: string;
@@ -62,35 +65,18 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function createBootstrapPassword() {
-  const alphabet =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = new Uint32Array(12);
-
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 1_000_000);
-    }
-  }
-
-  return `UAPL-${Array.from(bytes)
-    .map((value) => alphabet[value % alphabet.length])
-    .join("")}`;
-}
-
-function accountStatus(user: ManagedUserWithStatus) {
-  return user.accountStatus === "inactive" ? "inactive" : "active";
+function accountStatus(user: FirebaseManagedUser) {
+  return user.status;
 }
 
 export default function UsersPage() {
   const message = useAppMessage();
-  const [users, setUsers] = useState<ManagedUserWithStatus[]>([]);
+  const [users, setUsers] = useState<FirebaseManagedUser[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [form, setForm] = useState<CreateUserForm>(emptyForm);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<FirebaseManagedUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
   const [operationLabel, setOperationLabel] = useState("");
@@ -101,9 +87,9 @@ export default function UsersPage() {
     if (showLoader) setLoading(true);
 
     try {
-      const latestUsers = await fetchGoogleUsers();
+      const latestUsers = await fetchFirebaseUsers();
       if (requestId !== userRequestSequence.current) return;
-      setUsers((latestUsers || []) as ManagedUserWithStatus[]);
+      setUsers(latestUsers);
     } catch (error) {
       if (requestId !== userRequestSequence.current) return;
       message.notify({
@@ -112,7 +98,7 @@ export default function UsersPage() {
         message:
           error instanceof Error
             ? error.message
-            : "Check the Apps Script deployment and try again.",
+            : "Check Firebase and try again.",
       });
     } finally {
       if (requestId === userRequestSequence.current) {
@@ -161,6 +147,47 @@ export default function UsersPage() {
   const trainerCount = users.filter((user) => user.role === "trainer").length;
   const adminCount = users.filter((user) => user.role === "admin").length;
 
+  function legacyBridgePassword() {
+    const bytes = new Uint32Array(32);
+    crypto.getRandomValues(bytes);
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+    return Array.from(bytes, (value) => alphabet[value % alphabet.length]).join("");
+  }
+
+  function googleBackupUsers(
+    source: FirebaseManagedUser[],
+    bootstrap?: { userId: string; password: string }
+  ) {
+    return source.map((user) => ({
+      id: user.sourceUserId || user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+      passwordChangedAt: user.passwordChangedAt,
+      accountStatus: user.status,
+      temporaryPassword:
+        bootstrap?.userId === user.id ? bootstrap.password : undefined,
+    }));
+  }
+
+  async function syncGoogleBackup(
+    source: FirebaseManagedUser[],
+    bootstrap?: { userId: string; password: string }
+  ) {
+    try {
+      await saveGoogleUsers(googleBackupUsers(source, bootstrap));
+      return true;
+    } catch {
+      message.notify({
+        type: "warning",
+        title: "Firebase saved; backup pending",
+        message: "The account change is live in Firebase. Google Sheets could not be updated and can be retried later.",
+      });
+      return false;
+    }
+  }
+
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (operationLabel) return;
@@ -195,28 +222,14 @@ export default function UsersPage() {
     setOperationLabel("Creating user and sending email...");
 
     try {
-      const newUser: ManagedUserWithStatus = {
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : String(Date.now()),
-        name,
-        email,
-        role: form.role,
-        temporaryPassword: createBootstrapPassword(),
-        createdAt: new Date().toISOString(),
-        passwordChangedAt: "",
-        accountStatus: "active",
-      };
-
-      const savedUsers = await saveGoogleUsers([...users, newUser]);
-      setUsers((savedUsers || []) as ManagedUserWithStatus[]);
-
-      await postToGoogle<{ message?: string }>({
-        action: "forgotPassword",
-        identifier: email,
-        purpose: "new-account",
+      const newUser = await createFirebaseUser({ name, email, role: form.role });
+      const nextUsers = [...users, newUser].sort((first, second) => first.name.localeCompare(second.name));
+      setUsers(nextUsers);
+      await syncGoogleBackup(nextUsers, {
+        userId: newUser.id,
+        password: legacyBridgePassword(),
       });
+      await requestFirebasePasswordReset(newUser);
 
       setForm(emptyForm);
       setCreateOpen(false);
@@ -224,7 +237,7 @@ export default function UsersPage() {
       message.notify({
         type: "success",
         title: "User created",
-        message: `A temporary password was emailed to ${email}.`,
+        message: `A secure Firebase password setup email was sent to ${email}.`,
       });
     } catch (error) {
       await loadUsers(false);
@@ -241,7 +254,7 @@ export default function UsersPage() {
     }
   }
 
-  async function changeStatus(user: ManagedUserWithStatus) {
+  async function changeStatus(user: FirebaseManagedUser) {
     if (operationLabel) return;
     const currentStatus = accountStatus(user);
     const nextStatus = currentStatus === "active" ? "inactive" : "active";
@@ -265,16 +278,25 @@ export default function UsersPage() {
     );
 
     try {
-      await postToGoogle<{ userId: string; status: string; message?: string }>({
-        action: "setUserAccountStatusWithAudit",
-        userId: user.id,
-        status: nextStatus,
-      });
+      const updatedUser = await setFirebaseUserStatus(user.id, nextStatus);
+      const nextUsers = users.map((item) =>
+        item.id === user.id ? updatedUser : item
+      );
+      setUsers(nextUsers);
+      try {
+        await postToGoogle<{ userId: string; status: string; message?: string }>({
+          action: "setUserAccountStatusWithAudit",
+          userId: user.sourceUserId || user.id,
+          status: nextStatus,
+        });
+      } catch {
+        await syncGoogleBackup(nextUsers);
+      }
 
       setUsers((current) =>
         current.map((item) =>
           item.id === user.id
-            ? { ...item, accountStatus: nextStatus }
+            ? updatedUser
             : item
         )
       );
@@ -296,7 +318,7 @@ export default function UsersPage() {
     }
   }
 
-  async function resetPassword(user: ManagedUserWithStatus) {
+  async function resetPassword(user: FirebaseManagedUser) {
     if (operationLabel) return;
     const confirmed = await message.confirm({
       title: "Reset password?",
@@ -308,11 +330,7 @@ export default function UsersPage() {
     setOperationLabel("Resetting password and sending email...");
 
     try {
-      await postToGoogle<{ message?: string }>({
-        action: "forgotPassword",
-        identifier: user.email,
-        purpose: "password-reset",
-      });
+      await requestFirebasePasswordReset(user);
 
       message.notify({
         type: "success",
@@ -330,7 +348,7 @@ export default function UsersPage() {
     }
   }
 
-  async function deleteUser(user: ManagedUserWithStatus) {
+  async function deleteUser(user: FirebaseManagedUser) {
     if (operationLabel) return;
     const confirmed = await message.confirm({
       title: "Delete user?",
@@ -343,10 +361,10 @@ export default function UsersPage() {
     setOperationLabel("Deleting user...");
 
     try {
-      const savedUsers = await saveGoogleUsers(
-        users.filter((item) => item.id !== user.id)
-      );
-      setUsers((savedUsers || []) as ManagedUserWithStatus[]);
+      await deleteFirebaseUser(user.id);
+      const nextUsers = users.filter((item) => item.id !== user.id);
+      setUsers(nextUsers);
+      await syncGoogleBackup(nextUsers);
 
       message.notify({
         type: "success",
@@ -358,6 +376,40 @@ export default function UsersPage() {
       message.notify({
         type: "error",
         title: "User deletion failed",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setOperationLabel("");
+    }
+  }
+
+  async function editUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingUser || operationLabel) return;
+    const name = editingUser.name.trim();
+    if (!name) return;
+    setOperationLabel("Updating user...");
+    try {
+      const updatedUser = await updateFirebaseUser({
+        uid: editingUser.id,
+        name,
+        role: editingUser.role,
+      });
+      const nextUsers = users
+        .map((item) => (item.id === updatedUser.id ? updatedUser : item))
+        .sort((first, second) => first.name.localeCompare(second.name));
+      setUsers(nextUsers);
+      setEditingUser(null);
+      await syncGoogleBackup(nextUsers);
+      message.notify({
+        type: "success",
+        title: "User updated",
+        message: `${updatedUser.name}'s profile and role were updated.`,
+      });
+    } catch (error) {
+      message.notify({
+        type: "error",
+        title: "User update failed",
         message: error instanceof Error ? error.message : "Please try again.",
       });
     } finally {
@@ -430,6 +482,7 @@ export default function UsersPage() {
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                   <span className="text-xs font-medium text-slate-500">Account actions</span>
                   <div className="flex gap-2">
+                  <IconButton label="Edit user" onClick={() => setEditingUser(user)}><Pencil size={17} /></IconButton>
                   <IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={17} /></IconButton>
                   <IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={17} /></IconButton>
                   <IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={17} /></IconButton>
@@ -451,7 +504,7 @@ export default function UsersPage() {
                     <td className="px-5 py-4 capitalize text-slate-700">{user.role}</td>
                     <td className="px-5 py-4"><StatusBadge status={accountStatus(user)} /></td>
                     <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(user.createdAt)}</td>
-                    <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={16} /></IconButton><IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={16} /></IconButton><IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={16} /></IconButton></div></td>
+                    <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="Edit user" onClick={() => setEditingUser(user)}><Pencil size={16} /></IconButton><IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={16} /></IconButton><IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={16} /></IconButton><IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={16} /></IconButton></div></td>
                   </tr>
                 ))}
                 {!filteredUsers.length && !loading ? <tr><td colSpan={5} className="p-10 text-center text-slate-500">No users found.</td></tr> : null}
@@ -471,6 +524,26 @@ export default function UsersPage() {
               <FormInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="name@example.com" type="email" />
               <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
               <div className="grid grid-cols-2 gap-3 pt-2"><button type="button" onClick={() => setCreateOpen(false)} className="app-button-secondary justify-center">Cancel</button><button type="submit" className="app-button-primary justify-center"><Plus size={16} /> Create</button></div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {editingUser ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-w-lg sm:rounded-lg">
+            <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><Pencil size={19} /></div>
+                <div><h2 className="text-lg font-semibold text-slate-950">Edit User</h2><p className="mt-0.5 text-sm text-slate-500">Update the account name or access role.</p></div>
+              </div>
+              <button type="button" onClick={() => setEditingUser(null)} className="app-icon-button" aria-label="Close"><X size={18} /></button>
+            </div>
+            <form onSubmit={editUser} className="space-y-4 p-5">
+              <FormInput label="Full name" value={editingUser.name} onChange={(value) => setEditingUser((current) => current ? { ...current, name: value } : current)} placeholder="Trainer name" />
+              <label className="block"><span className="text-sm font-medium text-slate-700">Email</span><input value={editingUser.email} className="app-input mt-2 bg-slate-100 text-slate-500" disabled /></label>
+              <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={editingUser.role} onChange={(event) => setEditingUser((current) => current ? { ...current, role: event.target.value as UserRole } : current)} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
+              <div className="grid grid-cols-2 gap-3 pt-2"><button type="button" onClick={() => setEditingUser(null)} className="app-button-secondary justify-center">Cancel</button><button type="submit" className="app-button-primary justify-center"><CheckCircle2 size={16} /> Save changes</button></div>
             </form>
           </div>
         </div>
