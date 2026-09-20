@@ -1,3 +1,5 @@
+        && request.resource.data.previousValue == null
+        && request.resource.data.source == "firebase-live"
         && request.resource.data.schemaVersion == 2
         && request.resource.data.updatedValue.keys().hasOnly([
           "sessionId",
