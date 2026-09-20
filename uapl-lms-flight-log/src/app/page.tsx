@@ -22,7 +22,6 @@ import {
   getSecureSession,
   loginSecurely,
 } from "@/lib/auth-api";
-import { googleAppsScriptUrl } from "@/lib/google-api";
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
@@ -60,27 +59,6 @@ export default function LoginPage() {
     );
   }, [router]);
 
-  useEffect(() => {
-    if (getSecureSession()) return;
-
-    const controller = new AbortController();
-    const warmup = window.setTimeout(() => {
-      void fetch(googleAppsScriptUrl, {
-        method: "GET",
-        cache: "no-store",
-        redirect: "follow",
-        signal: controller.signal,
-      }).catch(() => {
-        // Warm-up is optional; the real login request still reports errors.
-      });
-    }, 500);
-
-    return () => {
-      window.clearTimeout(warmup);
-      controller.abort();
-    };
-  }, []);
-
   function clearError() {
     if (loginError) setLoginError("");
     if (remainingAttempts !== null) setRemainingAttempts(null);
@@ -97,7 +75,7 @@ export default function LoginPage() {
     const cleanIdentifier = identifier.trim();
 
     if (!cleanIdentifier || !password) {
-      setLoginError("Enter your email or username and password.");
+      setLoginError("Enter your registered email and password.");
       return;
     }
 
@@ -182,7 +160,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5" noValidate>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-[#405168]">
-                Email or username
+                Email address
               </span>
               <div className="relative">
                 <AtSign className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e8fa3]" />
@@ -193,8 +171,9 @@ export default function LoginPage() {
                     clearError();
                   }}
                   className="app-input mt-0 pl-10"
-                  placeholder="Enter your account"
-                  autoComplete="username"
+                  placeholder="name@example.com"
+                  type="email"
+                  autoComplete="email"
                   autoCapitalize="none"
                   spellCheck={false}
                   disabled={loggingIn}
@@ -297,7 +276,7 @@ export default function LoginPage() {
 
         <footer className="flex items-center justify-center gap-2 border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
           <ShieldCheck className="h-3.5 w-3.5 text-[#075f8f]" />
-          Powered by: Jairus Github
+          Powered by: JO
         </footer>
       </section>
     </main>
