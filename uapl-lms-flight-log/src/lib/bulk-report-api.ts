@@ -6,6 +6,10 @@ import type {
   StaffTrainingRecord
 } from "@/lib/staff-training";
 
+import {
+  fetchStaffTrainingReportRecords
+} from "@/lib/staff-training-api";
+
 import type {
   UaMaintenanceRecord,
   UaMaintenanceRecordSummary
@@ -53,15 +57,7 @@ export async function fetchBulkStaffTrainingReportRecords(
     monthTo: string;
   }
 ) {
-  const data = await postToGoogle<{
-    records: StaffTrainingRecord[];
-  }>({
-    action:
-      "getBulkStaffTrainingReportRecords",
-    ...request
-  });
-
-  return data.records || [];
+  return fetchStaffTrainingReportRecords(request) satisfies Promise<StaffTrainingRecord[]>;
 }
 
 export async function fetchBulkUaMaintenanceReportRecords(
