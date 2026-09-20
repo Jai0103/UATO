@@ -94,7 +94,9 @@ async function fetchFirebaseLiveRecords(request: AuditHistoryRequest) {
   return snapshot.docs
     .map((item) => eventFromDocument(item.id, item.data()))
     .filter((record) =>
-      ["attendance", "fatigueRisk", "uaMaintenance", "user"].includes(record.entityType)
+      ["attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"].includes(
+        record.entityType
+      )
     )
     .filter((record) => {
       const day = record.timestamp.slice(0, 10);
@@ -144,6 +146,7 @@ export async function fetchAuditHistoryPage(
     request.entityType === "attendance" ||
     request.entityType === "user" ||
     request.entityType === "fatigueRisk" ||
+    request.entityType === "staffTraining" ||
     request.entityType === "uaMaintenance" ||
     Boolean(request.auditAction && firebaseActions.includes(request.auditAction))
   ) {
@@ -151,7 +154,7 @@ export async function fetchAuditHistoryPage(
       firebaseRecords,
       request,
       firebaseActions.sort(),
-      ["attendance", "fatigueRisk", "uaMaintenance", "user"]
+      ["attendance", "fatigueRisk", "staffTraining", "uaMaintenance", "user"]
     );
   }
 
@@ -167,6 +170,7 @@ export async function fetchAuditHistoryPage(
       ...(googleResult.entityTypeOptions || []),
       "attendance",
       "fatigueRisk",
+      "staffTraining",
       "uaMaintenance",
       "user"
     ])
