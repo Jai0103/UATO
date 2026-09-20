@@ -167,7 +167,7 @@ export default function UsersPage() {
       passwordChangedAt: user.passwordChangedAt,
       accountStatus: user.status,
       temporaryPassword:
-        bootstrap?.userId === user.id ? bootstrap.password : undefined,
+        bootstrap?.userId === user.id ? bootstrap.password : "",
     }));
   }
 
