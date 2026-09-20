@@ -71,6 +71,12 @@ export type AttendanceDashboard = {
   thisMonthSessions: number;
 };
 
+export type AttendanceDashboardAnalytics = {
+  sessions: AttendanceSession[];
+  totalCheckIns: number;
+  monthlyCheckIns: Array<{ key: string; count: number }>;
+};
+
 export type AttendanceRecordSummary = AttendanceSession & {
   amCount: number;
   pmCount: number;
