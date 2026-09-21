@@ -34,14 +34,14 @@ import {
 } from "@/lib/bulk-report-api";
 import { fetchFirebaseFlightLogsByDateRange } from "@/lib/flight-log-firebase";
 import {
-  fetchAllEvaluationResponses,
-  fetchEvaluationSessionsPage,
-  type EvaluationSession
-} from "@/lib/evaluations";
+  fetchAllFirebaseEvaluationResponses,
+  fetchFirebaseEvaluationSessionsPage
+} from "@/lib/evaluation-firebase-api";
+import type { EvaluationSession } from "@/lib/evaluations";
 import {
-  downloadEvaluationCsv,
-  downloadEvaluationPdf
-} from "@/lib/evaluation-report";
+  downloadDynamicEvaluationCsv,
+  downloadDynamicEvaluationPdf
+} from "@/lib/evaluation-dynamic-report";
 import { fetchStaffTrainingReportRecords } from "@/lib/staff-training-api";
 import {
   fetchUaMaintenanceRecord,
@@ -315,7 +315,7 @@ export default function ReportsPage() {
       setEvaluationLoadError("");
 
       try {
-        const result = await fetchEvaluationSessionsPage({
+        const result = await fetchFirebaseEvaluationSessionsPage({
           page: 1,
           pageSize: 25,
           query: evaluationSearch.trim(),
@@ -815,7 +815,7 @@ export default function ReportsPage() {
     setWorkingLabel("Loading all evaluation responses...");
 
     try {
-      const complete = await fetchAllEvaluationResponses(selectedSession.id);
+      const complete = await fetchAllFirebaseEvaluationResponses(selectedSession.id);
 
       if (!complete.responses.length) {
         message.warning(
@@ -833,13 +833,9 @@ export default function ReportsPage() {
       await allowBrowserPaint();
 
       if (format === "pdf") {
-        await downloadEvaluationPdf(
-          selectedSession,
-          complete.responses,
-          complete.summary
-        );
+        await downloadDynamicEvaluationPdf(selectedSession, complete);
       } else {
-        downloadEvaluationCsv(selectedSession, complete.responses);
+        downloadDynamicEvaluationCsv(selectedSession, complete);
       }
 
       message.success(
