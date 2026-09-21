@@ -17,11 +17,13 @@ import { useAppMessage } from "@/components/message-provider";
 import {
   deleteFirebaseEvaluationQuestion,
   fetchFirebaseEvaluationQuestions,
+  installStandardEvaluationQuestions,
   saveFirebaseEvaluationQuestion,
   type EvaluationQuestion,
   type EvaluationQuestionInput,
   type EvaluationQuestionType
 } from "@/lib/evaluation-firebase-api";
+import { STANDARD_EVALUATION_TEMPLATE } from "@/lib/evaluation-standard-questions";
 
 const TEMPLATE_ID = "standard-course-evaluation-v1";
 
@@ -158,6 +160,25 @@ export default function EvaluationMasterDataPage() {
     }
   }
 
+  async function installStandard() {
+    const confirmed = await message.confirm({
+      title: "Install the new course evaluation?",
+      message: "The existing question bank will become inactive. Historical sessions and responses will not change. New sessions will use the new questionnaire.",
+      confirmLabel: "Install questionnaire"
+    });
+    if (!confirmed) return;
+    setWorking("Installing standard questionnaire...");
+    try {
+      await installStandardEvaluationQuestions();
+      await loadQuestions();
+      message.success("Questionnaire installed", "Create a new evaluation session to use it.");
+    } catch (error) {
+      message.error("Installation failed", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setWorking("");
+    }
+  }
+
   return (
     <AppShell>
       {loading ? <LoadingOverlay label="Loading evaluation questions..." /> : null}
@@ -174,13 +195,20 @@ export default function EvaluationMasterDataPage() {
                 Maintain the approved question bank used by future course evaluations.
               </p>
             </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+            {!questions.some((question) => question.templateId === STANDARD_EVALUATION_TEMPLATE) ? (
+              <button type="button" className="app-button-secondary w-full sm:w-auto" onClick={() => void installStandard()}>
+                <ListChecks className="h-4 w-4" /> Install standard questionnaire
+              </button>
+            ) : null}
             <button
               type="button"
               className="app-button-primary w-full sm:w-auto"
-              onClick={() => setEditing(emptyQuestion(questions.length))}
+              onClick={() => setEditing({ ...emptyQuestion(questions.length), templateId: questions.some((question) => question.templateId === STANDARD_EVALUATION_TEMPLATE) ? STANDARD_EVALUATION_TEMPLATE : TEMPLATE_ID })}
             >
               <Plus className="h-4 w-4" /> Add question
             </button>
+            </div>
           </div>
         </section>
 
