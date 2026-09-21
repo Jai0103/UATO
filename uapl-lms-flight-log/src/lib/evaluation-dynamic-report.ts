@@ -3,6 +3,7 @@
 import jsPDF from "jspdf";
 import type { EvaluationAnswer, EvaluationQuestion } from "@/lib/evaluation-firebase-api";
 import type { EvaluationResponse, EvaluationSession } from "@/lib/evaluations";
+import { isQuestionApplicable, isStandardEvaluation } from "@/lib/evaluation-standard-questions";
 
 export type EvaluationReportData = {
   responses: EvaluationResponse[];
@@ -97,7 +98,36 @@ export async function downloadDynamicEvaluationPdf(session: EvaluationSession, d
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
   doc.text(`${data.responses.length} learner responses`, MARGIN, y);
-  y += 10;
+  y += 7;
+  const standard = isStandardEvaluation(data.questions);
+  const recommendations = data.responses.filter((response) => response.recommendTraining);
+  const recommendYes = recommendations.filter((response) => response.recommendTraining === "yes").length;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`Would recommend: ${recommendations.length ? `${Math.round(100 * recommendYes / recommendations.length)}% (${recommendYes}/${recommendations.length})` : "No responses"}`, MARGIN, y);
+  y += 8;
+  if (standard) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Section averages", MARGIN, y);
+    y += 6;
+    const sections = Array.from(new Set(data.questions.map((question) => question.section)));
+    sections.forEach((section) => {
+      const ids = new Set(data.questions.filter((question) => question.section === section && question.responseType === "rating").map((question) => question.id));
+      const ratings = data.answers.filter((answer) => ids.has(answer.questionId) && answer.rating > 0);
+      y = nextPageIfNeeded(doc, session, y, 7);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(51, 65, 85);
+      doc.text(section, MARGIN + 2, y);
+      doc.setFont("helvetica", "bold");
+      doc.text(ratings.length ? `${(ratings.reduce((sum, answer) => sum + answer.rating, 0) / ratings.length).toFixed(2)} / 5  (${ratings.length} ratings)` : "No ratings", 193, y, { align: "right" });
+      y += 6;
+    });
+    y += 4;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
   doc.text("Question summary", MARGIN, y);
   y += 7;
 
@@ -132,7 +162,8 @@ export async function downloadDynamicEvaluationPdf(session: EvaluationSession, d
       doc.setFontSize(8);
       data.questions.forEach((question) => {
         const answer = answerMap.get(`${response.id}__${question.id}`);
-        const value = responseText(answer, question);
+        const value = !answer && standard && !isQuestionApplicable(question, response.trainingComponent || "", response.theoryDeliveryMode || "")
+          ? "Not applicable" : responseText(answer, question);
         const lines = doc.splitTextToSize(`${question.text}: ${value}`, WIDTH - 4) as string[];
         y = nextPageIfNeeded(doc, session, y, lines.length * 4.5 + 3);
         doc.setFont("helvetica", "normal");
@@ -140,6 +171,9 @@ export async function downloadDynamicEvaluationPdf(session: EvaluationSession, d
         y = addWrapped(doc, `${question.text}: ${value}`, MARGIN + 2, y, WIDTH - 4, 4.5) + 2;
       });
       const comments = [
+        ["Training component", response.trainingComponent || "Not recorded"],
+        ["Theory delivery", response.theoryDeliveryMode || "Not applicable"],
+        ["Would recommend", response.recommendTraining === "yes" ? "Yes" : response.recommendTraining === "no" ? "No" : "Not recorded"],
         ["Most useful", response.mostUseful],
         ["Improvements", response.improvements],
         ["Additional comments", response.additionalComments]
@@ -171,11 +205,15 @@ function csvCell(value: unknown) {
 
 export function downloadDynamicEvaluationCsv(session: EvaluationSession, data: EvaluationReportData) {
   const answerMap = new Map(data.answers.map((answer) => [`${answer.responseId}__${answer.questionId}`, answer]));
-  const headers = ["Response ID", "Course", "Training Date", "Trainer", "Student Name", "Organisation", ...data.questions.map((question) => question.text), "Would Recommend", "Most Useful", "Improvements", "Additional Comments", "Submitted At"];
+  const headers = ["Response ID", "Course", "Training Date", "Trainer", "Student Name", "Organisation", "Training Component", "Theory Delivery", ...data.questions.map((question) => question.text), "Would Recommend", "Most Useful", "Improvements", "Additional Comments", "Submitted At"];
   const rows = data.responses.map((response) => [
     response.id, session.courseName, session.trainingDate, session.trainerName,
-    response.studentName || "Anonymous", response.company,
-    ...data.questions.map((question) => responseText(answerMap.get(`${response.id}__${question.id}`), question)),
+    response.studentName || "Anonymous", response.company, response.trainingComponent || "", response.theoryDeliveryMode || "",
+    ...data.questions.map((question) => {
+      const answer = answerMap.get(`${response.id}__${question.id}`);
+      return !answer && isStandardEvaluation(data.questions) && !isQuestionApplicable(question, response.trainingComponent || "", response.theoryDeliveryMode || "")
+        ? "Not applicable" : responseText(answer, question);
+    }),
     response.recommendTraining, response.mostUseful, response.improvements,
     response.additionalComments, response.submittedAt
   ]);
