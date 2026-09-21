@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
+import { isStandardEvaluation, STANDARD_EVALUATION_TEMPLATE, standardEvaluationQuestions } from "@/lib/evaluation-standard-questions";
 import {
   evaluationRatingFields,
   type EvaluationRatingField,
@@ -139,6 +140,8 @@ function responseFromData(id: string, data: DocumentData): EvaluationResponse {
     sessionId: stringValue(data.sessionId),
     studentName: stringValue(data.studentName),
     company: stringValue(data.company),
+    trainingComponent: stringValue(data.trainingComponent),
+    theoryDeliveryMode: stringValue(data.theoryDeliveryMode),
     recommendTraining:
       recommendation === "yes" || recommendation === "no"
         ? recommendation
@@ -202,6 +205,39 @@ export async function fetchFirebaseEvaluationQuestions() {
     .sort((first, second) =>
       first.sortOrder - second.sortOrder || first.text.localeCompare(second.text)
     );
+}
+
+export async function installStandardEvaluationQuestions() {
+  const actor = await requireAdmin();
+  const existing = await getDocs(collection(firestore, "evaluationQuestions"));
+  if (existing.docs.some((item) => item.id === standardEvaluationQuestions[0].id)) {
+    throw new Error("The standard questionnaire is already installed.");
+  }
+  const batch = writeBatch(firestore);
+  const now = new Date().toISOString();
+  existing.docs.forEach((item) => {
+    if (item.data().status !== "inactive") {
+      batch.update(item.ref, { status: "inactive", updatedAt: now });
+    }
+  });
+  standardEvaluationQuestions.forEach((question) => {
+    batch.set(doc(firestore, "evaluationQuestions", question.id), {
+      ...question, version: 1, createdAt: now, updatedAt: now, schemaVersion: 2
+    });
+  });
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "EVALUATION_QUESTIONNAIRE_INSTALLED",
+    entityType: "evaluationMasterData",
+    entityId: "aga-course-evaluation-v2",
+    entityName: "AGA standard course evaluation",
+    previousValue: { activeQuestions: existing.docs.filter((item) => item.data().status !== "inactive").length },
+    updatedValue: { questions: standardEvaluationQuestions.length }
+  });
+  await batch.commit();
 }
 
 async function questionsForSession(sessionId: string) {
@@ -296,7 +332,7 @@ export async function saveFirebaseEvaluationSession(input: EvaluationSessionInpu
     ...session,
     courseNameLower: session.courseName.toLowerCase(),
     trainerNameLower: session.trainerName.toLowerCase(),
-    templateId: "standard-course-evaluation-v1",
+    templateId: isStandardEvaluation(questions) ? STANDARD_EVALUATION_TEMPLATE : "standard-course-evaluation-v1",
     source: previous ? existingSnapshot.data()?.source || "firebase-live" : "firebase-live",
     schemaVersion: 2
   });
