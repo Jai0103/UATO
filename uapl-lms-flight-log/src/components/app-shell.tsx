@@ -15,7 +15,6 @@ import {
   Loader2,
   LogOut,
   Menu,
-  MessageSquareText,
   Moon,
   Shield,
   Sun,
@@ -129,6 +128,7 @@ const adminLinks: NavigationItem[] = [
         exact: true
       },
       { href: "/attendance", label: "QR Attendance", exact: true },
+      { href: "/evaluations", label: "Student Evaluations", exact: true },
       { href: "/inventory", label: "Inventory", exact: true }
     ]
   },
@@ -151,6 +151,16 @@ const adminLinks: NavigationItem[] = [
       {
         href: "/fatigue-risk/records",
         label: "Fatigue Risk Records",
+        exact: true
+      },
+      {
+        href: "/attendance/records",
+        label: "Attendance Records",
+        exact: true
+      },
+      {
+        href: "/evaluations/records",
+        label: "Evaluation Records",
         exact: true
       },
       {
@@ -180,6 +190,11 @@ const adminLinks: NavigationItem[] = [
         href: "/inventory/master-data",
         label: "Inventory Data",
         exact: true
+      },
+      {
+        href: "/evaluations/master-data",
+        label: "Evaluation Data",
+        exact: true
       }
     ]
   },
@@ -187,11 +202,6 @@ const adminLinks: NavigationItem[] = [
     href: "/reports",
     label: "Reports",
     icon: FileText
-  },
-  {
-    href: "/evaluations",
-    label: "Student Evaluations",
-    icon: MessageSquareText
   },
   {
     href: "/users",
@@ -215,6 +225,11 @@ const trainerLinks: NavigationItem[] = [
     href: "/records",
     label: "Records",
     icon: Archive
+  },
+  {
+    href: "/evaluations/trainer",
+    label: "Student Evaluations",
+    icon: ClipboardList
   },
   {
     href: "/reports",
@@ -389,7 +404,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const adminOnly = adminOnlyPages.some((page) =>
+    const adminOnly = pathname !== "/evaluations/trainer" && adminOnlyPages.some((page) =>
       pathname.startsWith(page)
     );
     if (session.role !== "admin" && adminOnly) {
