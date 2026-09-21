@@ -5,6 +5,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
   writeBatch,
   type DocumentData
 } from "firebase/firestore";
@@ -52,6 +54,13 @@ export type EvaluationQuestionInput = Omit<
   EvaluationQuestion,
   "version" | "createdAt" | "updatedAt"
 >;
+
+export type EvaluationAnswer = {
+  responseId: string;
+  questionId: string;
+  rating: number;
+  value: string;
+};
 
 type AdminActor = {
   uid: string;
@@ -504,5 +513,15 @@ export async function fetchFirebaseEvaluationResponsesPage(request: {
 
 export async function fetchAllFirebaseEvaluationResponses(sessionId: string) {
   const responses = await allResponses(sessionId);
-  return { responses, summary: summaryForResponses(responses) };
+  const [questions, answerSnapshot] = await Promise.all([
+    questionsForSession(sessionId),
+    getDocs(query(collection(firestore, "evaluationAnswers"), where("sessionId", "==", sessionId)))
+  ]);
+  const answers: EvaluationAnswer[] = answerSnapshot.docs.map((item) => ({
+    responseId: stringValue(item.data().responseId),
+    questionId: stringValue(item.data().questionId),
+    rating: numberValue(item.data().rating),
+    value: stringValue(item.data().value)
+  }));
+  return { responses, summary: summaryForResponses(responses), questions, answers };
 }
