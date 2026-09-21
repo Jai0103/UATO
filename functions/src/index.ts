@@ -522,11 +522,28 @@ export const submitPublicEvaluation = callable(async (request) => {
   const questions = (Array.isArray(publicData.questions) ? publicData.questions : [])
     .map(evaluationQuestion)
     .filter((item) => item.id && item.text);
+  const standard = questions.some((question) => question.id.startsWith("aga-v2-q"));
+  const trainingComponent = text(request.data?.trainingComponent);
+  const theoryDelivery = text(request.data?.theoryDeliveryMode);
+  if (standard && (!["Theory", "Practical", "Both"].includes(trainingComponent) ||
+    (trainingComponent !== "Practical" && !["In person", "Online synchronous"].includes(theoryDelivery)))) {
+    throw new HttpsError("invalid-argument", "Select the training component and theory delivery.");
+  }
+  const applicable = (question: PublicEvaluationQuestion) => {
+    if (!standard) return true;
+    if (question.section === "Theory Training" && trainingComponent === "Practical") return false;
+    if (question.section === "Practical Flight Training" && trainingComponent === "Theory") return false;
+    if (question.id.endsWith("-online")) return trainingComponent !== "Practical" && theoryDelivery === "Online synchronous";
+    if (["aga-v2-q31", "aga-v2-q32"].includes(question.id)) {
+      return trainingComponent === "Practical" || theoryDelivery !== "Online synchronous";
+    }
+    return true;
+  };
   const submittedAnswers = Array.isArray(request.data?.answers)
     ? request.data.answers as Array<Record<string, unknown>>
     : [];
   const answerMap = new Map(submittedAnswers.map((answer) => [text(answer.questionId), answer]));
-  const normalizedAnswers = questions.map((question) => {
+  const normalizedAnswers = questions.filter(applicable).map((question) => {
     const supplied = answerMap.get(question.id) || {};
     const rating = Number(supplied.rating) || 0;
     const value = text(supplied.value).slice(0, 2000);
@@ -548,8 +565,11 @@ export const submitPublicEvaluation = callable(async (request) => {
   });
   const studentName = text(request.data?.studentName).slice(0, 120);
   const company = text(request.data?.company).slice(0, 160);
+  if (standard && (!studentName || !company)) {
+    throw new HttpsError("invalid-argument", "Enter your name and company or organisation.");
+  }
   const recommendTraining = text(request.data?.recommendTraining);
-  if (recommendTraining && !["yes", "no"].includes(recommendTraining)) {
+  if ((standard && !recommendTraining) || (recommendTraining && !["yes", "no"].includes(recommendTraining))) {
     throw new HttpsError("invalid-argument", "Select a valid recommendation.");
   }
   const responseId = db.collection("evaluationResponses").doc().id;
@@ -579,6 +599,8 @@ export const submitPublicEvaluation = callable(async (request) => {
       studentName,
       studentNameLower: studentName.toLowerCase(),
       company,
+      trainingComponent: standard ? trainingComponent : "",
+      theoryDeliveryMode: standard && trainingComponent !== "Practical" ? theoryDelivery : "",
       recommendTraining,
       mostUseful: text(request.data?.mostUseful).slice(0, 1200),
       improvements: text(request.data?.improvements).slice(0, 1200),
