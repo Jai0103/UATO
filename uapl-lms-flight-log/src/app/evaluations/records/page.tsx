@@ -23,9 +23,9 @@ import {
   fetchFirebaseEvaluationSessionsPage
 } from "@/lib/evaluation-firebase-api";
 import {
-  downloadEvaluationCsv,
-  downloadEvaluationPdf
-} from "@/lib/evaluation-report";
+  downloadDynamicEvaluationCsv,
+  downloadDynamicEvaluationPdf
+} from "@/lib/evaluation-dynamic-report";
 import {
   evaluationRatingFields,
   type EvaluationResponse,
@@ -122,8 +122,8 @@ export default function EvaluationRecordsPage() {
     if (!complete) return;
     setWorking(format === "pdf" ? "Preparing evaluation PDF..." : "Preparing evaluation CSV...");
     try {
-      if (format === "pdf") await downloadEvaluationPdf(session, complete.responses, complete.summary);
-      else downloadEvaluationCsv(session, complete.responses);
+      if (format === "pdf") await downloadDynamicEvaluationPdf(session, complete);
+      else downloadDynamicEvaluationCsv(session, complete);
       message.success("Report downloaded", `${session.courseName} was downloaded as ${format.toUpperCase()}.`);
     } catch (error) {
       message.error("Report could not be generated", error instanceof Error ? error.message : "Please try again.");
