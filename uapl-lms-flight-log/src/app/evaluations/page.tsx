@@ -145,6 +145,11 @@ function toIsoDateTime(value: string) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
+function evaluationExpired(session: EvaluationSession) {
+  const closeTime = Date.parse(session.closesAt);
+  return Boolean(session.closesAt && Number.isFinite(closeTime) && closeTime < Date.now());
+}
+
 function statusStyle(status: EvaluationSessionStatus) {
   if (status === "open") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -885,6 +890,11 @@ export default function EvaluationsPage() {
           maxWidth="max-w-lg"
         >
           <div className="text-center">
+            {evaluationExpired(qrSession) ? (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-900">
+                This evaluation closed on {formatDateTime(qrSession.closesAt)}. Edit the session and set a future closing time before sharing this QR code.
+              </div>
+            ) : null}
             <div className="mx-auto flex aspect-square w-full max-w-[320px] items-center justify-center rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               {qrDataUrl ? (
                 <img
