@@ -404,8 +404,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const adminOnly = pathname !== "/evaluations/trainer" && adminOnlyPages.some((page) =>
-      pathname.startsWith(page)
+    const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+    const adminOnly = normalizedPath !== "/evaluations/trainer" && adminOnlyPages.some((page) =>
+      normalizedPath === page || normalizedPath.startsWith(`${page}/`)
     );
     if (session.role !== "admin" && adminOnly) {
       router.replace("/flight-logs");
