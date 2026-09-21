@@ -33,6 +33,11 @@ import {
   type PublicEvaluationReceipt,
   type PublicEvaluationSession,
 } from "@/lib/evaluations";
+import {
+  isQuestionApplicable,
+  isStandardEvaluation,
+  STANDARD_EVALUATION_SECTIONS
+} from "@/lib/evaluation-standard-questions";
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 const DEVICE_KEY_STORAGE = "uapl-evaluation-device-key-v1";
@@ -94,6 +99,9 @@ export default function EvaluationPage() {
   const [receipt, setReceipt] = useState<PublicEvaluationReceipt | null>(null);
   const [studentName, setStudentName] = useState("");
   const [company, setCompany] = useState("");
+  const [trainingComponent, setTrainingComponent] = useState<"" | "Theory" | "Practical" | "Both">("");
+  const [theoryDelivery, setTheoryDelivery] = useState<"" | "In person" | "Online synchronous">("");
+  const [step, setStep] = useState(0);
   const [ratings, setRatings] = useState<EvaluationRatings>(emptyRatings);
   const [answers, setAnswers] = useState<Record<string, PublicEvaluationAnswer>>({});
   const [recommendTraining, setRecommendTraining] = useState<
@@ -104,7 +112,15 @@ export default function EvaluationPage() {
   const [additionalComments, setAdditionalComments] = useState("");
   const [website, setWebsite] = useState("");
 
-  const requiredQuestions = session?.questions.filter((question) => question.required) || [];
+  const modern = isStandardEvaluation(session?.questions || []);
+  const visibleQuestions = (session?.questions || []).filter((question) =>
+    !modern || isQuestionApplicable(question, trainingComponent, theoryDelivery)
+  );
+  const visibleSections = modern
+    ? STANDARD_EVALUATION_SECTIONS.filter((section) => visibleQuestions.some((question) => question.section === section))
+    : [];
+  const finalStep = modern ? visibleSections.length + 1 : 0;
+  const requiredQuestions = visibleQuestions.filter((question) => question.required);
   const completedRequired = requiredQuestions.filter((question) => {
     const answer = answers[question.id];
     return question.responseType === "rating"
@@ -125,6 +141,7 @@ export default function EvaluationPage() {
         nextKey
       );
       setSession(loadedSession);
+      setStep(0);
       setAnswers(
         Object.fromEntries(
           loadedSession.questions.map((question) => [
@@ -182,6 +199,12 @@ export default function EvaluationPage() {
     event.preventDefault();
     if (!session || submitting) return;
 
+    if (modern && (!studentName.trim() || !company.trim() || !trainingComponent ||
+      (trainingComponent !== "Practical" && !theoryDelivery))) {
+      message.warning("Learner details required", "Enter your name and organisation, then select the training component and theory delivery where applicable.");
+      setStep(0);
+      return;
+    }
     if (completedRequired !== requiredQuestions.length) {
       message.warning(
         "Complete required questions",
@@ -212,8 +235,10 @@ export default function EvaluationPage() {
         formStartedAt,
         studentName: studentName.trim(),
         company: company.trim(),
+        trainingComponent: trainingComponent || undefined,
+        theoryDeliveryMode: trainingComponent === "Practical" ? undefined : theoryDelivery || undefined,
         ratings,
-        answers: session.questions.map((question) =>
+        answers: visibleQuestions.map((question) =>
           answers[question.id] || { questionId: question.id }
         ),
         recommendTraining,
@@ -379,14 +404,14 @@ export default function EvaluationPage() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+            {(!modern || step === 0) ? <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <SectionHeading
                 number="01"
-                title="About you"
-                description="These fields are optional. You may submit anonymously."
+                title="Learner & course information"
+                description={modern ? "Your course, date and trainer are linked to this QR code." : "These fields are optional. You may submit anonymously."}
               />
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <Field label="Name (optional)">
+                <Field label={modern ? "Name of learner *" : "Name (optional)"}>
                   <input
                     value={studentName}
                     onChange={(event) => setStudentName(event.target.value)}
@@ -396,7 +421,7 @@ export default function EvaluationPage() {
                     autoComplete="name"
                   />
                 </Field>
-                <Field label="Company / organisation (optional)">
+                <Field label={modern ? "Company / organisation *" : "Company / organisation (optional)"}>
                   <input
                     value={company}
                     onChange={(event) => setCompany(event.target.value)}
@@ -407,6 +432,18 @@ export default function EvaluationPage() {
                   />
                 </Field>
               </div>
+              {modern ? <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field label="Training component completed *">
+                  <select value={trainingComponent} onChange={(event) => { setTrainingComponent(event.target.value as typeof trainingComponent); setStep(0); }} className="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 sm:text-sm">
+                    <option value="">Select component</option><option>Theory</option><option>Practical</option><option>Both</option>
+                  </select>
+                </Field>
+                {trainingComponent !== "Practical" ? <Field label="Theory delivery *">
+                  <select value={theoryDelivery} onChange={(event) => setTheoryDelivery(event.target.value as typeof theoryDelivery)} className="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-800 sm:text-sm">
+                    <option value="">Select format</option><option>In person</option><option>Online synchronous</option>
+                  </select>
+                </Field> : null}
+              </div> : null}
 
               <label className="absolute left-[-9999px]" aria-hidden="true">
                 Website
@@ -417,14 +454,14 @@ export default function EvaluationPage() {
                   autoComplete="off"
                 />
               </label>
-            </section>
+            </section> : null}
 
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+            {(!modern || (step > 0 && step <= visibleSections.length)) ? <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <SectionHeading
                   number="02"
-                  title="Training experience"
-                  description="Complete the questions below based on your training experience."
+                  title={modern ? visibleSections[step - 1] : "Training experience"}
+                  description="Select how strongly you agree with each statement."
                 />
                 <div className="min-w-28 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-right">
                   <p className="text-xs font-bold text-sky-700">PROGRESS</p>
@@ -435,7 +472,7 @@ export default function EvaluationPage() {
               </div>
 
               <div className="mt-6 space-y-4">
-                {session.questions.map((question, questionIndex) => (
+                {visibleQuestions.filter((question) => !modern || question.section === visibleSections[step - 1]).map((question, questionIndex) => (
                   <DynamicQuestion
                     key={question.id}
                     question={question}
@@ -446,7 +483,7 @@ export default function EvaluationPage() {
                 ))}
               </div>
 
-              <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              {!modern ? <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-bold text-slate-900">
                   Would you recommend this training to others?
                 </p>
@@ -471,15 +508,19 @@ export default function EvaluationPage() {
                     );
                   })}
                 </div>
-              </div>
-            </section>
+              </div> : null}
+            </section> : null}
 
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+            {(!modern || step === finalStep) ? <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <SectionHeading
                 number="03"
-                title="Your comments"
+                title="Overall feedback & comments"
                 description="Optional comments help us understand your ratings."
               />
+              {modern ? <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-bold text-slate-900">Would you recommend this course?</p>
+                <div className="mt-3 grid grid-cols-2 gap-3">{(["yes", "no"] as const).map((option) => <button key={option} type="button" onClick={() => setRecommendTraining(option)} aria-pressed={recommendTraining === option} className={`min-h-12 rounded-lg border text-sm font-bold ${recommendTraining === option ? "border-sky-700 bg-sky-700 text-white" : "border-slate-300 bg-white text-slate-700"}`}>{option === "yes" ? "Yes" : "No"}</button>)}</div>
+              </div> : null}
               <div className="mt-5 space-y-5">
                 <Field label="What was the most useful part of the training?">
                   <textarea
@@ -511,7 +552,7 @@ export default function EvaluationPage() {
                   />
                 </Field>
               </div>
-            </section>
+            </section> : null}
 
             <div className="sticky bottom-0 z-20 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-12px_30px_rgba(15,23,42,0.09)] backdrop-blur sm:static sm:mx-0 sm:rounded-lg sm:border sm:p-4 sm:shadow-sm">
               <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
@@ -519,8 +560,22 @@ export default function EvaluationPage() {
                   Review your ratings before submitting. Responses cannot be
                   edited afterward.
                 </p>
+                {modern && step > 0 ? <button type="button" onClick={() => { setStep((current) => current - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="min-h-12 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700">Back</button> : null}
                 <button
-                  type="submit"
+                  type={modern && step < finalStep ? "button" : "submit"}
+                  onClick={modern && step < finalStep ? () => {
+                    if (step === 0 && (!studentName.trim() || !company.trim() || !trainingComponent || (trainingComponent !== "Practical" && !theoryDelivery))) {
+                      message.warning("Learner details required", "Complete your details and training component before continuing.");
+                      return;
+                    }
+                    const sectionQuestions = visibleQuestions.filter((question) => question.section === visibleSections[step - 1] && question.required);
+                    if (sectionQuestions.some((question) => !(answers[question.id]?.rating && answers[question.id].rating! >= question.scaleMin))) {
+                      message.warning("Complete this section", "Answer all statements before continuing.");
+                      return;
+                    }
+                    setStep((current) => current + 1);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  } : undefined}
                   disabled={submitting}
                   className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#102a43] px-5 text-sm font-bold text-white shadow-lg shadow-slate-300 transition hover:bg-[#173b5e] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-48"
                 >
@@ -529,7 +584,7 @@ export default function EvaluationPage() {
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
-                  {submitting ? "Submitting..." : "Submit evaluation"}
+                  {submitting ? "Submitting..." : modern && step < finalStep ? "Continue" : "Submit evaluation"}
                 </button>
               </div>
             </div>
