@@ -319,6 +319,62 @@ export const adminDeleteUser = callable(async (request) => {
   return { uid };
 });
 
+export const listTrainerEvaluationSessions = callable(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in again to continue.");
+  const profileSnapshot = await db.collection("users").doc(uid).get();
+  const profile = profileSnapshot.data();
+  if (!profileSnapshot.exists || profile?.status !== "active") {
+    throw new HttpsError("permission-denied", "An active account is required.");
+  }
+  const trainerEmail = email(profile.email);
+  if (!trainerEmail) throw new HttpsError("failed-precondition", "Your account has no email address.");
+  const snapshot = await db.collection("evaluationSessions")
+    .where("trainerEmail", "==", trainerEmail)
+    .get();
+  const sessions = snapshot.docs
+    .map((item) => ({ id: item.id, data: item.data() }))
+    .filter((item) => item.data.status === "open")
+    .map((item) => ({
+      id: item.id,
+      token: text(item.data.token),
+      courseName: text(item.data.courseName),
+      trainingDate: text(item.data.trainingDate),
+      location: text(item.data.location),
+      trainerName: text(item.data.trainerName),
+      opensAt: text(item.data.opensAt),
+      closesAt: text(item.data.closesAt)
+    }))
+    .filter((item) => item.token)
+    .sort((first, second) => second.trainingDate.localeCompare(first.trainingDate));
+  await Promise.all(sessions.map(async (session) => {
+    const publicReference = db.collection("evaluationPublicSessions").doc(session.token);
+    if ((await publicReference.get()).exists) return;
+    const questionSnapshot = await db.collection("evaluationSessionQuestions")
+      .where("sessionId", "==", session.id)
+      .get();
+    const questions = questionSnapshot.docs
+      .map((item) => evaluationQuestion(item.data()))
+      .filter((question) => question.id && question.text)
+      .sort((first, second) => first.sortOrder - second.sortOrder);
+    if (!questions.length) return;
+    await publicReference.set({
+      sessionId: session.id,
+      courseName: session.courseName,
+      trainerName: session.trainerName,
+      trainingDate: session.trainingDate,
+      location: session.location,
+      status: "open",
+      opensAt: session.opensAt,
+      closesAt: session.closesAt,
+      questions,
+      updatedAt: new Date().toISOString(),
+      schemaVersion: 2
+    });
+  }));
+  return { sessions };
+});
+
 type PublicEvaluationQuestion = {
   id: string;
   section: string;
