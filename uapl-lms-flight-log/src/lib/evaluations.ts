@@ -62,6 +62,8 @@ export type PublicEvaluationSubmission = {
   formStartedAt: number;
   studentName: string;
   company: string;
+  trainingComponent?: "Theory" | "Practical" | "Both";
+  theoryDeliveryMode?: "In person" | "Online synchronous";
   ratings: EvaluationRatings;
   answers: PublicEvaluationAnswer[];
   recommendTraining: "yes" | "no";
@@ -133,6 +135,8 @@ export type EvaluationResponse = {
   sessionId: string;
   studentName: string;
   company: string;
+  trainingComponent?: string;
+  theoryDeliveryMode?: string;
   recommendTraining: "" | "yes" | "no";
   mostUseful: string;
   improvements: string;
