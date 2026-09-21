@@ -11,6 +11,7 @@ import {
 import { fetchFirebaseApprovalDashboardSummary } from "@/lib/approvals-api";
 import { fetchFirebaseFlightDashboard } from "@/lib/flight-log-firebase";
 import { fetchAttendanceDashboardAnalytics } from "@/lib/attendance-api";
+import { logoutSecurely } from "@/lib/auth-api";
 import type {
   AttendanceDashboardAnalytics,
   AttendanceSession
@@ -18,21 +19,19 @@ import type {
 import {
   AlertTriangle,
   BellRing,
-  CalendarCheck,
   ChevronRight,
-  ClipboardCheck,
   ClipboardList,
   Clock,
-  Database,
   ExternalLink,
   GraduationCap,
+  Loader2,
+  LogOut,
   ShieldCheck,
   Timer,
-  UserCheck,
-  Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 type RecentRecord = {
   id: string;
@@ -153,6 +152,8 @@ function attendanceMonthlyActivity(
 
 export default function AdminPage() {
   const { notify } = useAppMessage();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
   const [approvalDashboard, setApprovalDashboard] =
     useState<ApprovalDashboardSummary>(emptyApprovalDashboard);
@@ -229,7 +230,6 @@ export default function AdminPage() {
   );
 
   const attendanceInsights = useMemo(() => {
-    const month = new Date().toISOString().slice(0, 7);
     const attendanceRecords = attendanceAnalytics.sessions;
     return {
       totalSessions: attendanceRecords.length,
@@ -237,18 +237,24 @@ export default function AdminPage() {
       open: attendanceRecords.filter((record) => record.status === "open").length,
       closed: attendanceRecords.filter((record) => record.status === "closed").length,
       draft: attendanceRecords.filter((record) => record.status === "draft").length,
-      thisMonth: attendanceRecords.filter((record) =>
-        record.courseDate.startsWith(month)
-      ).length,
       monthly: attendanceMonthlyActivity(
         attendanceRecords,
         attendanceAnalytics.monthlyCheckIns
-      ),
-      recent: [...attendanceRecords]
-        .sort((first, second) => second.courseDate.localeCompare(first.courseDate))
-        .slice(0, 4)
+      )
     };
   }, [attendanceAnalytics]);
+
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await logoutSecurely();
+      router.replace("/");
+    } catch (error) {
+      setSigningOut(false);
+      notify({ type: "error", title: "Sign out failed", message: error instanceof Error ? error.message : "Please try again." });
+    }
+  }
 
   const dashboardStats = [
     {
@@ -256,42 +262,28 @@ export default function AdminPage() {
       value: String(dashboard.totalStudents),
       icon: GraduationCap,
       description: "Unique student records",
-      tone: "border-t-sky-500 bg-sky-50 text-sky-700"
+      tone: "bg-sky-50 text-sky-700"
     },
     {
       label: "Pending",
       value: String(dashboard.pendingRecords),
       icon: Clock,
       description: "Missing signature or entries",
-      tone: "border-t-amber-500 bg-amber-50 text-amber-700"
-    },
-    {
-      label: "Trainers",
-      value: String(dashboard.activeTrainers),
-      icon: Users,
-      description: "Active trainer accounts",
-      tone: "border-t-indigo-500 bg-indigo-50 text-indigo-700"
-    },
-    {
-      label: "Completed",
-      value: String(dashboard.completedRecords),
-      icon: ClipboardCheck,
-      description: "Ready flight log reports",
-      tone: "border-t-emerald-500 bg-emerald-50 text-emerald-700"
+      tone: "bg-amber-50 text-amber-700"
     },
     {
       label: "Flights",
       value: String(dashboard.totalFlights),
       icon: ClipboardList,
       description: "Total flight entries",
-      tone: "border-t-rose-500 bg-rose-50 text-rose-700"
+      tone: "bg-rose-50 text-rose-700"
     },
     {
       label: "Flight Time",
       value: formatMinutes(dashboard.totalMinutes),
       icon: Timer,
       description: "Combined recorded duration",
-      tone: "border-t-teal-500 bg-teal-50 text-teal-700"
+      tone: "bg-teal-50 text-teal-700"
     }
   ];
 
@@ -301,24 +293,21 @@ export default function AdminPage() {
 
       <div className="app-page">
         <section className="app-page-header dashboard-header">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-md bg-[#edf5f8] px-2.5 py-1 text-xs font-bold text-[#075f8f] ring-1 ring-[#d5e9f1]">
-                <Database className="h-3.5 w-3.5" />
-                Admin Overview
-              </div>
-              <h1 className="mt-3 text-2xl font-bold text-[#16263c] sm:text-3xl">
+              <p className="text-xs font-bold uppercase tracking-wider text-[#075f8f]">Overview</p>
+              <h1 className="mt-1 text-2xl font-bold text-[#16263c] sm:text-3xl">
                 Dashboard
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6b7d92]">
-                Monitor training records, operational activity, and system administration.
-              </p>
             </div>
-
-            <Link href="/flight-logs" className="app-button-primary w-full sm:w-auto">
-              <ClipboardList className="h-4 w-4" />
-              New Flight Log
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/flight-logs" className="app-button-primary min-h-11 flex-1 sm:flex-none">
+                <ClipboardList className="h-4 w-4" /> New Flight Log
+              </Link>
+              <button type="button" title="Sign out" aria-label="Sign out" onClick={() => void signOut()} disabled={signingOut} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#52667d] transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075f8f] disabled:opacity-50">
+                {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
         </section>
 
@@ -327,15 +316,15 @@ export default function AdminPage() {
           available={approvalMonitoringAvailable}
         />
 
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {dashboardStats.map((stat) => {
             const Icon = stat.icon;
-            const [accent, iconBackground, iconColor] = stat.tone.split(" ");
+            const [iconBackground, iconColor] = stat.tone.split(" ");
 
             return (
               <article
                 key={stat.label}
-                className={`dashboard-stat-card group min-w-0 rounded-lg border border-[#d7e0ea] border-t-[3px] bg-white p-4 transition hover:-translate-y-0.5 sm:p-5 ${accent}`}
+                className="dashboard-stat-card group min-w-0 rounded-lg border border-[#d7e0ea] bg-white p-4 transition sm:p-5"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -346,7 +335,7 @@ export default function AdminPage() {
                       {stat.value}
                     </p>
                   </div>
-                  <div className={`hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 transition group-hover:scale-105 sm:flex ${iconBackground} ${iconColor}`}>
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconBackground} ${iconColor}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                 </div>
@@ -358,15 +347,12 @@ export default function AdminPage() {
           })}
         </section>
 
-        <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)]">
           <article className="app-card dashboard-panel min-w-0 overflow-hidden">
             <div className="flex flex-col gap-3 border-b border-[#e5ebf2] pb-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="app-section-label">Activity trend</p>
-                <h2 className="app-section-title">Monthly Activity</h2>
-                <p className="mt-1 text-sm text-[#6b7d92]">
-                  Records updated during the latest 12 months.
-                </p>
+                <p className="text-xs font-bold uppercase text-[#075f8f]">Flight logs</p>
+                <h2 className="app-section-title mt-1">Monthly activity</h2>
               </div>
               <div className="w-fit rounded-lg border border-[#d4e7ef] bg-[#f0f7fa] px-4 py-2.5">
                 <p className="text-xl font-bold text-[#075f8f]">{annualActivityTotal}</p>
@@ -382,11 +368,8 @@ export default function AdminPage() {
           <article className="app-card dashboard-panel min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="app-section-label">Latest updates</p>
-                <h2 className="app-section-title">Recent Records</h2>
-                <p className="mt-1 text-sm text-[#6b7d92]">
-                  Five most recently updated records.
-                </p>
+                <p className="text-xs font-bold uppercase text-[#075f8f]">Latest updates</p>
+                <h2 className="app-section-title mt-1">Recent records</h2>
               </div>
               <Link
                 href="/records"
@@ -396,10 +379,10 @@ export default function AdminPage() {
               </Link>
             </div>
 
-            <div className="mt-5 divide-y divide-[#e7edf3] overflow-hidden rounded-lg border border-[#dbe3ec]">
+            <div className="mt-5 divide-y divide-[#e7edf3] border-t border-[#e7edf3]">
               {dashboard.recentRecords.length ? (
                 dashboard.recentRecords.map((record) => (
-                  <div key={record.id} className="bg-white p-4 transition hover:bg-[#f6f9fb]">
+                  <div key={record.id} className="px-1 py-4 transition hover:bg-[#f6f9fb]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-[#16263c]">
@@ -409,11 +392,11 @@ export default function AdminPage() {
                           {record.company || "No company"}
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">
+                      <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
                         {record.flightCount} {record.flightCount === 1 ? "flight" : "flights"}
                       </span>
                     </div>
-                    <p className="mt-3 text-xs text-[#8a99aa]">
+                    <p className="mt-2 text-xs text-[#8a99aa]">
                       {formatDate(record.updatedAt || record.createdAt)}
                     </p>
                   </div>
@@ -427,15 +410,12 @@ export default function AdminPage() {
           </article>
         </section>
 
-        <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
+        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)]">
           <article className="app-card dashboard-panel min-w-0 overflow-hidden">
             <div className="flex flex-col gap-4 border-b border-[#e5ebf2] pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="app-section-label">Training attendance</p>
-                <h2 className="app-section-title">Attendance Activity</h2>
-                <p className="mt-1 text-sm text-[#6b7d92]">
-                  Monthly course sessions and learner sign-ins during the latest 12 months.
-                </p>
+                <p className="text-xs font-bold uppercase text-[#075f8f]">Training attendance</p>
+                <h2 className="app-section-title mt-1">Attendance activity</h2>
               </div>
               <Link
                 href="/attendance/records"
@@ -445,31 +425,10 @@ export default function AdminPage() {
               </Link>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <AttendanceMetric
-                label="Sessions"
-                value={attendanceInsights.totalSessions}
-                icon={<CalendarCheck className="h-4 w-4" />}
-                tone="bg-sky-50 text-sky-700 ring-sky-100"
-              />
-              <AttendanceMetric
-                label="AM / PM sign-ins"
-                value={attendanceInsights.checkIns}
-                icon={<UserCheck className="h-4 w-4" />}
-                tone="bg-indigo-50 text-indigo-700 ring-indigo-100"
-              />
-              <AttendanceMetric
-                label="Open sessions"
-                value={attendanceInsights.open}
-                icon={<Users className="h-4 w-4" />}
-                tone="bg-emerald-50 text-emerald-700 ring-emerald-100"
-              />
-              <AttendanceMetric
-                label="This month"
-                value={attendanceInsights.thisMonth}
-                icon={<ClipboardCheck className="h-4 w-4" />}
-                tone="bg-amber-50 text-amber-700 ring-amber-100"
-              />
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#60748a]">
+              <span><strong className="text-[#16263c]">{attendanceInsights.totalSessions}</strong> sessions</span>
+              <span><strong className="text-[#16263c]">{attendanceInsights.checkIns}</strong> sign-ins</span>
+              <span><strong className="text-[#16263c]">{attendanceInsights.open}</strong> open</span>
             </div>
 
             {attendanceAvailable ? (
@@ -489,11 +448,8 @@ export default function AdminPage() {
           <article className="app-card dashboard-panel min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="app-section-label">Session control</p>
-                <h2 className="app-section-title">Attendance Status</h2>
-                <p className="mt-1 text-sm text-[#6b7d92]">
-                  Current readiness of all attendance sessions.
-                </p>
+                <p className="text-xs font-bold uppercase text-[#075f8f]">Session control</p>
+                <h2 className="app-section-title mt-1">Attendance status</h2>
               </div>
               <Link
                 href="/attendance"
@@ -510,39 +466,6 @@ export default function AdminPage() {
               closed={attendanceInsights.closed}
             />
 
-            <div className="mt-6 border-t border-[#e5ebf2] pt-5">
-              <p className="text-xs font-bold uppercase text-[#718096]">
-                Recent sessions
-              </p>
-              <div className="mt-3 space-y-2">
-                {attendanceInsights.recent.length ? (
-                  attendanceInsights.recent.map((record) => (
-                    <div
-                      key={record.id}
-                      className="rounded-lg border border-[#e1e8ef] bg-[#fbfdfe] px-3 py-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-[#16263c]">
-                            {record.courseName}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-[#718096]">
-                            {record.courseDate} · {record.instructorName}
-                          </p>
-                        </div>
-                        <span className="shrink-0 rounded-md bg-sky-50 px-2 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-100">
-                          {record.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="rounded-lg bg-[#f7f9fb] px-3 py-6 text-center text-sm text-[#718096]">
-                    No attendance sessions yet.
-                  </p>
-                )}
-              </div>
-            </div>
           </article>
         </section>
 
@@ -590,7 +513,7 @@ function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
   const pointColors = ["#0284c7", "#059669", "#d97706", "#e11d48", "#4f46e5", "#0d9488"];
 
   return (
-    <div className="relative mt-5 min-w-0 rounded-lg border border-[#e1e8ef] bg-[#fbfdfe] p-2 sm:p-4">
+    <div className="relative mt-5 min-w-0">
       {activePoint ? (
         <div
           className={`pointer-events-none absolute z-20 min-w-[132px] -translate-y-full rounded-lg bg-[#16263c] px-3 py-2 text-center shadow-xl transition-all duration-150 ${
@@ -714,33 +637,6 @@ function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
         })}
       </svg>
 
-      <p className="px-2 pb-1 text-center text-xs text-[#7b8ca0] sm:text-left">
-        Point to a month to view its updated record count.
-      </p>
-    </div>
-  );
-}
-
-function AttendanceMetric({
-  label,
-  value,
-  icon,
-  tone
-}: {
-  label: string;
-  value: number;
-  icon: ReactNode;
-  tone: string;
-}) {
-  return (
-    <div className="rounded-lg border border-[#e1e8ef] bg-white p-3.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-[#6b7d92]">{label}</p>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ring-1 ${tone}`}>
-          {icon}
-        </span>
-      </div>
-      <p className="mt-2 text-2xl font-bold text-[#16263c]">{value}</p>
     </div>
   );
 }
@@ -761,7 +657,7 @@ function AttendanceTrendChart({ data }: { data: AttendanceMonthlyActivity[] }) {
   const active = activeIndex === null ? null : data[activeIndex];
 
   return (
-    <div className="relative mt-5 min-w-0 rounded-lg border border-[#e1e8ef] bg-[#fbfdfe] p-2 sm:p-4">
+    <div className="relative mt-5 min-w-0">
       <div className="flex flex-wrap items-center justify-end gap-4 px-2 pt-1 text-xs font-semibold text-[#60748a]">
         <span className="inline-flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-sm bg-sky-600" /> Sessions
@@ -889,9 +785,6 @@ function AttendanceTrendChart({ data }: { data: AttendanceMonthlyActivity[] }) {
         })}
       </svg>
 
-      <p className="px-2 pb-1 text-center text-xs text-[#7b8ca0] sm:text-left">
-        Point to a month to compare sessions with AM and PM attendance submissions.
-      </p>
     </div>
   );
 }
@@ -906,6 +799,8 @@ function AttendanceStatusChart({
   closed: number;
 }) {
   const total = draft + open + closed;
+  const openPercent = total ? (open / total) * 100 : 0;
+  const draftPercent = total ? (draft / total) * 100 : 0;
   const values = [
     { label: "Open", value: open, color: "bg-emerald-500", text: "text-emerald-700" },
     { label: "Draft", value: draft, color: "bg-amber-500", text: "text-amber-700" },
@@ -913,31 +808,14 @@ function AttendanceStatusChart({
   ];
 
   return (
-    <div className="mt-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-4xl font-bold text-[#16263c]">{total}</p>
-          <p className="mt-1 text-xs font-semibold uppercase text-[#718096]">
-            Total sessions
-          </p>
-        </div>
-        <div className="rounded-lg bg-[#f0f7fa] px-3 py-2 text-right ring-1 ring-[#d4e7ef]">
-          <p className="text-lg font-bold text-[#075f8f]">{open}</p>
-          <p className="text-[10px] font-bold uppercase text-[#53748a]">Open now</p>
+    <div className="mt-7 flex flex-col items-center gap-7 sm:flex-row xl:flex-col 2xl:flex-row">
+      <div className="flex h-36 w-36 shrink-0 items-center justify-center rounded-full" role="img" aria-label={`${open} open, ${draft} draft, ${closed} closed sessions`} style={{ background: total ? `conic-gradient(#10b981 0 ${openPercent}%, #f59e0b ${openPercent}% ${openPercent + draftPercent}%, #0284c7 ${openPercent + draftPercent}% 100%)` : "#e5ebf2" }}>
+        <div className="flex h-[112px] w-[112px] flex-col items-center justify-center rounded-full bg-white dark:bg-[#242526]">
+          <strong className="text-3xl text-[#16263c] dark:text-white">{total}</strong>
+          <span className="text-xs font-semibold text-[#718096]">sessions</span>
         </div>
       </div>
-
-      <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100" aria-label="Attendance session status distribution">
-        {values.map((item) => (
-          <span
-            key={item.label}
-            className={`${item.color} transition-all`}
-            style={{ width: `${total ? (item.value / total) * 100 : 0}%` }}
-          />
-        ))}
-      </div>
-
-      <div className="mt-4 space-y-3">
+      <div className="w-full space-y-3">
         {values.map((item) => (
           <div key={item.label} className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
