@@ -334,7 +334,11 @@ export const listTrainerEvaluationSessions = callable(async (request) => {
     .get();
   const sessions = snapshot.docs
     .map((item) => ({ id: item.id, data: item.data() }))
-    .filter((item) => item.data.status === "open")
+    .filter((item) => {
+      if (item.data.status !== "open") return false;
+      const closesAt = Date.parse(text(item.data.closesAt));
+      return !Number.isFinite(closesAt) || closesAt >= Date.now();
+    })
     .map((item) => ({
       id: item.id,
       token: text(item.data.token),
@@ -425,13 +429,49 @@ function evaluationAvailability(session: Record<string, unknown>) {
   return "";
 }
 
+async function publicEvaluationSnapshot(token: string) {
+  const reference = db.collection("evaluationPublicSessions").doc(token);
+  const existing = await reference.get();
+  if (existing.exists) return existing;
+
+  const matches = await db.collection("evaluationSessions")
+    .where("token", "==", token)
+    .limit(1)
+    .get();
+  if (matches.empty) return existing;
+  const session = matches.docs[0];
+  const data = session.data();
+  const questionSnapshot = await db.collection("evaluationSessionQuestions")
+    .where("sessionId", "==", session.id)
+    .get();
+  const questions = questionSnapshot.docs
+    .map((item) => evaluationQuestion(item.data()))
+    .filter((question) => question.id && question.text)
+    .sort((first, second) => first.sortOrder - second.sortOrder);
+  if (!questions.length) return existing;
+  await reference.set({
+    sessionId: session.id,
+    courseName: text(data.courseName),
+    trainerName: text(data.trainerName),
+    trainingDate: text(data.trainingDate),
+    location: text(data.location),
+    status: text(data.status),
+    opensAt: text(data.opensAt),
+    closesAt: text(data.closesAt),
+    questions,
+    updatedAt: new Date().toISOString(),
+    schemaVersion: 2
+  });
+  return reference.get();
+}
+
 export const getPublicEvaluation = callable(async (request) => {
   const token = text(request.data?.token);
   const submissionKey = text(request.data?.submissionKey);
   if (token.length < 16 || submissionKey.length < 16) {
     throw new HttpsError("invalid-argument", "This evaluation link is incomplete.");
   }
-  const snapshot = await db.collection("evaluationPublicSessions").doc(token).get();
+  const snapshot = await publicEvaluationSnapshot(token);
   if (!snapshot.exists) throw new HttpsError("not-found", "This evaluation session was not found.");
   const data = snapshot.data() || {};
   const sessionId = text(data.sessionId);
@@ -473,8 +513,7 @@ export const submitPublicEvaluation = callable(async (request) => {
   if (!formStartedAt || Date.now() - formStartedAt < 1500) {
     throw new HttpsError("failed-precondition", "Please review the form before submitting.");
   }
-  const publicReference = db.collection("evaluationPublicSessions").doc(token);
-  const publicSnapshot = await publicReference.get();
+  const publicSnapshot = await publicEvaluationSnapshot(token);
   if (!publicSnapshot.exists) throw new HttpsError("not-found", "This evaluation session was not found.");
   const publicData = publicSnapshot.data() || {};
   const unavailableReason = evaluationAvailability(publicData);
