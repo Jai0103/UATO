@@ -319,6 +319,38 @@ export const adminDeleteUser = callable(async (request) => {
   return { uid };
 });
 
+export const listTrainerAttendanceSessions = callable(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in again to continue.");
+  const profileSnapshot = await db.collection("users").doc(uid).get();
+  const profile = profileSnapshot.data();
+  if (!profileSnapshot.exists || profile?.status !== "active" ||
+    !["admin", "trainer"].includes(text(profile.role))) {
+    throw new HttpsError("permission-denied", "An active trainer account is required.");
+  }
+  const instructorEmail = email(profile.email);
+  if (!instructorEmail) throw new HttpsError("failed-precondition", "Your account has no email address.");
+  const snapshot = await db.collection("attendanceSessions")
+    .where("instructorEmail", "==", instructorEmail)
+    .get();
+  const sessions = snapshot.docs
+    .map((item) => ({ id: item.id, data: item.data() }))
+    .filter((item) => item.data.status === "open" && (item.data.amOpen === true || item.data.pmOpen === true))
+    .map((item) => ({
+      id: item.id,
+      token: text(item.data.token),
+      courseName: text(item.data.courseName),
+      courseCode: text(item.data.courseCode),
+      courseDate: text(item.data.courseDate),
+      instructorName: text(item.data.instructorName),
+      amOpen: item.data.amOpen === true,
+      pmOpen: item.data.pmOpen === true
+    }))
+    .filter((item) => item.token)
+    .sort((first, second) => second.courseDate.localeCompare(first.courseDate));
+  return { sessions };
+});
+
 export const listTrainerEvaluationSessions = callable(async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in again to continue.");
