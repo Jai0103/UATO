@@ -22,6 +22,7 @@ import {
   getSecureSession,
   loginSecurely,
 } from "@/lib/auth-api";
+import { LoadingScreen } from "@/components/loading-overlay";
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
@@ -109,29 +110,7 @@ export default function LoginPage() {
   }
 
   if (checkingSession) {
-    return (
-      <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef3f8] px-4">
-        <div className="app-panel-enter w-full max-w-sm overflow-hidden rounded-lg border border-[#d7e0ea] bg-white shadow-[0_18px_44px_rgba(16,42,67,0.13)]">
-          <div className="grid h-1 grid-cols-[1fr_48px]">
-            <span className="bg-[#075f8f]" />
-            <span className="bg-[#c7353d]" />
-          </div>
-          <div className="flex items-center gap-4 p-5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#102a43] text-[#70c8e8]">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[#16263c]">
-                Checking session
-              </p>
-              <p className="mt-0.5 text-xs text-[#6b7d92]">
-                Verifying your secure access...
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <LoadingScreen label="Checking session" description="Preparing your workspace" />;
   }
 
   return (
@@ -276,7 +255,7 @@ export default function LoginPage() {
 
         <footer className="flex items-center justify-center gap-2 border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
           <ShieldCheck className="h-3.5 w-3.5 text-[#075f8f]" />
-          Powered by: JO
+          Powered by: Jairus Github
         </footer>
       </section>
     </main>
