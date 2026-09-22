@@ -23,6 +23,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { LoadingScreen } from "@/components/loading-overlay";
 import {
   AuthApiError,
   clearSecureSession,
@@ -562,21 +563,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (checkingSession || !session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#eef3f8] px-4">
-        <div className="app-panel-enter flex items-center gap-3 rounded-lg border border-[#d7e0ea] bg-white px-5 py-4 shadow-[0_16px_40px_rgba(16,42,67,0.12)]">
-          <Loader2 className="h-5 w-5 animate-spin text-[#075f8f]" />
-          <div>
-            <p className="text-sm font-semibold text-[#16263c]">
-              Verifying session
-            </p>
-            <p className="text-xs text-[#6b7d92]">
-              Checking your secure access...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingScreen label="Opening workspace" description="Checking your access" />;
   }
 
   const activeSession = session;
