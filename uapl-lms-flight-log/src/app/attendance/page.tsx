@@ -41,6 +41,7 @@ import {
   updateAttendanceSubmission
 } from "@/lib/attendance-api";
 import { downloadAttendancePdf } from "@/lib/attendance-pdf";
+import { fetchFirebaseUsers, type FirebaseManagedUser } from "@/lib/firebase-users-api";
 
 const PAGE_SIZE = 10;
 const inputClass = "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-cyan-700 focus:ring-4 focus:ring-cyan-100 sm:h-11 sm:text-sm";
@@ -111,6 +112,7 @@ function Modal({ title, subtitle, onClose, children, width = "max-w-3xl" }: {
 export default function AttendancePage() {
   const message = useAppMessage();
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
+  const [instructors, setInstructors] = useState<FirebaseManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
   const [search, setSearch] = useState("");
@@ -137,6 +139,12 @@ export default function AttendancePage() {
   }, [message]);
 
   useEffect(() => { void loadSessions(); }, [loadSessions]);
+
+  useEffect(() => {
+    void fetchFirebaseUsers()
+      .then((users) => setInstructors(users.filter((user) => user.status === "active" && user.email)))
+      .catch((error) => message.error("Instructor list unavailable", error instanceof Error ? error.message : "Refresh the page to try again."));
+  }, [message]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -178,8 +186,8 @@ export default function AttendancePage() {
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || working) return;
-    if (!form.courseName.trim() || !form.courseDate || !form.instructorName.trim()) {
-      message.warning("Complete required fields", "Course name, date, and instructor are required.");
+    if (!form.courseName.trim() || !form.courseDate || !form.instructorName.trim() || !form.instructorEmail.trim()) {
+      message.warning("Complete required fields", "Course name, date, and an assigned instructor account are required.");
       return;
     }
     setWorking("save");
@@ -317,7 +325,7 @@ export default function AttendancePage() {
 
       {form ? <Modal title={form.id ? "Edit attendance session" : "New attendance session"} subtitle="Configure the course and control which signing periods are open." onClose={() => setForm(null)}>
         <form onSubmit={handleSave} className="space-y-5 p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-slate-700">Course name *<input className={inputClass} value={form.courseName} onChange={(event) => setForm({ ...form, courseName: event.target.value })} placeholder="e.g. UAPL Theory" /></label><label className="text-sm font-semibold text-slate-700">Course code<input className={inputClass} value={form.courseCode} onChange={(event) => setForm({ ...form, courseCode: event.target.value })} placeholder="e.g. UAPL-TM" /></label><label className="text-sm font-semibold text-slate-700">Course date *<input type="date" className={inputClass} value={form.courseDate} onChange={(event) => setForm({ ...form, courseDate: event.target.value })} /></label><label className="text-sm font-semibold text-slate-700">Instructor *<input className={inputClass} value={form.instructorName} onChange={(event) => setForm({ ...form, instructorName: event.target.value })} /></label></div>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-slate-700">Course name *<input className={inputClass} value={form.courseName} onChange={(event) => setForm({ ...form, courseName: event.target.value })} placeholder="e.g. UAPL Theory" /></label><label className="text-sm font-semibold text-slate-700">Course code<input className={inputClass} value={form.courseCode} onChange={(event) => setForm({ ...form, courseCode: event.target.value })} placeholder="e.g. UAPL-TM" /></label><label className="text-sm font-semibold text-slate-700">Course date *<input type="date" className={inputClass} value={form.courseDate} onChange={(event) => setForm({ ...form, courseDate: event.target.value })} /></label><label className="text-sm font-semibold text-slate-700">Assigned instructor *<select className={inputClass} value={form.instructorEmail} onChange={(event) => { const selected = instructors.find((user) => user.email === event.target.value); setForm({ ...form, instructorEmail: selected?.email || "", instructorName: selected?.name || "" }); }}><option value="">Select an account</option>{form.instructorEmail && !instructors.some((user) => user.email === form.instructorEmail) ? <option value={form.instructorEmail}>{form.instructorName || form.instructorEmail} (previous assignment)</option> : null}{instructors.map((user) => <option key={user.id} value={user.email}>{user.name} ({user.email})</option>)}</select></label></div>
           <div><span className="text-sm font-semibold text-slate-700">Schedule</span><div className="mt-2 grid grid-cols-3 gap-2">{(["am", "pm", "full_day"] as AttendanceSchedule[]).map((item) => <button type="button" key={item} onClick={() => setForm({ ...form, schedule: item, amOpen: item !== "pm" && form.amOpen, pmOpen: item !== "am" && form.pmOpen })} className={`h-11 rounded-lg border text-sm font-bold capitalize ${form.schedule === item ? "border-cyan-700 bg-cyan-50 text-cyan-800" : "border-slate-300 text-slate-600"}`}>{item.replace("_", " ")}</button>)}</div></div>
           <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-semibold text-slate-700">Session status<select className={inputClass} value={form.status} onChange={(event) => { const next = event.target.value as AttendanceSessionStatus; setForm({ ...form, status: next, amOpen: next === "open" && form.amOpen, pmOpen: next === "open" && form.pmOpen }); }}><option value="draft">Draft</option><option value="open">Open</option><option value="closed">Closed</option></select></label><label className={`mt-7 flex h-12 items-center gap-3 rounded-lg border px-3 text-sm font-semibold ${form.schedule === "pm" ? "opacity-40" : ""}`}><input type="checkbox" disabled={form.status !== "open" || form.schedule === "pm"} checked={form.amOpen} onChange={(event) => setForm({ ...form, amOpen: event.target.checked })} className="h-5 w-5" /> AM signing open</label><label className={`mt-7 flex h-12 items-center gap-3 rounded-lg border px-3 text-sm font-semibold ${form.schedule === "am" ? "opacity-40" : ""}`}><input type="checkbox" disabled={form.status !== "open" || form.schedule === "am"} checked={form.pmOpen} onChange={(event) => setForm({ ...form, pmOpen: event.target.checked })} className="h-5 w-5" /> PM signing open</label></div>
           <label className="block text-sm font-semibold text-slate-700">Trainer comments / observations<textarea rows={4} className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm outline-none focus:border-cyan-700" value={form.trainerComments} onChange={(event) => setForm({ ...form, trainerComments: event.target.value })} /></label>
