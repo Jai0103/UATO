@@ -51,6 +51,7 @@ import {
   type EvaluationSessionInput,
   type EvaluationSessionStatus,
 } from "@/lib/evaluations";
+import { fetchFirebaseUsers, type FirebaseManagedUser } from "@/lib/firebase-users-api";
 
 const inputClass =
   "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100 sm:h-11 sm:text-sm";
@@ -179,6 +180,9 @@ export default function EvaluationsPage() {
   const [status, setStatus] = useState<EvaluationSessionStatus | "">("");
   const [year, setYear] = useState("");
   const [form, setForm] = useState<EvaluationSessionInput | null>(null);
+  const [instructors, setInstructors] = useState<FirebaseManagedUser[]>([]);
+  const [instructorsLoading, setInstructorsLoading] = useState(true);
+  const [instructorError, setInstructorError] = useState("");
   const [qrSession, setQrSession] = useState<EvaluationSession | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [responsesSession, setResponsesSession] =
@@ -215,6 +219,21 @@ export default function EvaluationsPage() {
   const loadDashboard = useCallback(async () => {
     setDashboard(await fetchFirebaseEvaluationDashboard());
   }, []);
+
+  const loadInstructors = useCallback(async () => {
+    setInstructorsLoading(true);
+    setInstructorError("");
+    try {
+      const users = await fetchFirebaseUsers();
+      setInstructors(users.filter((user) => user.status === "active" && user.email));
+    } catch (error) {
+      setInstructorError(error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setInstructorsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadInstructors(); }, [loadInstructors]);
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -286,12 +305,13 @@ export default function EvaluationsPage() {
     if (
       !form.courseName.trim() ||
       !form.trainerName.trim() ||
+      !form.trainerEmail.trim() ||
       !form.trainingDate ||
       !form.location.trim()
     ) {
       message.warning(
         "Complete required fields",
-        "Course, trainer, training date, and location are required."
+        "Course, an assigned trainer account, training date, and location are required."
       );
       return;
     }
@@ -776,28 +796,37 @@ export default function EvaluationsPage() {
                   autoFocus
                 />
               </Field>
-              <Field label="Trainer name" required>
-                <input
-                  value={form.trainerName}
-                  onChange={(event) =>
-                    setForm({ ...form, trainerName: event.target.value })
-                  }
-                  className={inputClass}
-                  maxLength={120}
-                  placeholder="Enter trainer name"
-                />
-              </Field>
-              <Field label="Trainer email">
-                <input
+              <Field label="Assigned trainer" required>
+                <select
                   value={form.trainerEmail}
-                  onChange={(event) =>
-                    setForm({ ...form, trainerEmail: event.target.value })
-                  }
+                  onChange={(event) => {
+                    const selected = instructors.find((user) => user.email === event.target.value);
+                    setForm({
+                      ...form,
+                      trainerName: selected?.name || "",
+                      trainerEmail: selected?.email || "",
+                    });
+                  }}
                   className={inputClass}
-                  maxLength={160}
-                  type="email"
-                  placeholder="trainer@example.com"
-                />
+                  disabled={instructorsLoading}
+                >
+                  <option value="">{instructorsLoading ? "Loading accounts..." : "Select an account"}</option>
+                  {form.trainerEmail && !instructors.some((user) => user.email === form.trainerEmail) ? (
+                    <option value={form.trainerEmail}>
+                      {form.trainerName || form.trainerEmail} (previous assignment)
+                    </option>
+                  ) : null}
+                  {instructors.map((user) => (
+                    <option key={user.id} value={user.email}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+                {instructorError ? (
+                  <button type="button" onClick={() => void loadInstructors()} className="mt-2 text-sm font-semibold text-rose-700 underline">
+                    Accounts unavailable. Retry
+                  </button>
+                ) : null}
               </Field>
               <Field label="Training date" required>
                 <input
