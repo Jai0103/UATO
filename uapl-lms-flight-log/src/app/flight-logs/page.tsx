@@ -1259,15 +1259,20 @@ export default function FlightLogsPage() {
               <span className="text-sm font-semibold text-slate-600">
                 Last 4 Characters
               </span>
-              <input
-                value={student.lastFourCharacters}
-                onChange={(event) =>
-                  updateStudent("lastFourCharacters", event.target.value.slice(0, 4))
-                }
-                maxLength={4}
-                className="app-input uppercase"
-                placeholder="XXXXX123A"
-              />
+              <span className="mt-2 flex h-12 w-full items-center rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-blue-600 focus-within:ring-[3px] focus-within:ring-blue-100 md:h-11">
+                <span aria-hidden="true" className="shrink-0 text-base font-medium text-slate-400 md:text-sm">XXXXX</span>
+                <input
+                  value={student.lastFourCharacters}
+                  onChange={(event) =>
+                    updateStudent("lastFourCharacters", event.target.value.slice(0, 4))
+                  }
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  maxLength={4}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-base font-semibold uppercase text-slate-900 outline-none focus:ring-0 md:text-sm"
+                  placeholder="123A"
+                />
+              </span>
             </label>
           </div>
         </section>
