@@ -232,6 +232,11 @@ const trainerLinks: NavigationItem[] = [
     icon: ClipboardList
   },
   {
+    href: "/attendance/trainer",
+    label: "QR Attendance",
+    icon: ClipboardList
+  },
+  {
     href: "/reports",
     label: "Reports",
     icon: FileText
@@ -405,7 +410,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     const normalizedPath = pathname.replace(/\/+$/, "") || "/";
-    const adminOnly = normalizedPath !== "/evaluations/trainer" && adminOnlyPages.some((page) =>
+    const adminOnly = !["/evaluations/trainer", "/attendance/trainer"].includes(normalizedPath) && adminOnlyPages.some((page) =>
       normalizedPath === page || normalizedPath.startsWith(`${page}/`)
     );
     if (session.role !== "admin" && adminOnly) {
