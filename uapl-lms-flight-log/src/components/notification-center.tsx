@@ -18,7 +18,7 @@ import {
   type AppNotificationState
 } from "@/lib/notifications-api";
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 function formatNotificationDate(value: string) {
   const date = new Date(value);
