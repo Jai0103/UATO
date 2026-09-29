@@ -772,3 +772,179 @@ export const submitPublicEvaluation = callable(async (request) => {
     }
   };
 });
+
+type NotificationState = "unread" | "read" | "follow_up";
+type NotificationPriority = "info" | "warning" | "critical";
+
+type UserNotification = {
+  id: string;
+  title: string;
+  message: string;
+  category: "approval" | "attendance" | "evaluation" | "system";
+  priority: NotificationPriority;
+  actionUrl: string;
+  actionLabel: string;
+  eventDate: string;
+  state: NotificationState;
+};
+
+function notificationStateId(uid: string, notificationId: string) {
+  return createHash("sha256").update(`${uid}:${notificationId}`).digest("hex");
+}
+
+function dateMillis(value: unknown) {
+  const source = text(value);
+  if (!source) return 0;
+  const parsed = Date.parse(source.length === 10 ? `${source}T12:00:00+08:00` : source);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function dayDifference(value: unknown) {
+  const target = dateMillis(value);
+  if (!target) return null;
+  const singaporeToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+  const today = dateMillis(singaporeToday);
+  return Math.ceil((target - today) / 86_400_000);
+}
+
+function approvalMessage(name: string, days: number) {
+  if (days < 0) return `${name} expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago.`;
+  if (days === 0) return `${name} expires today.`;
+  return `${name} expires in ${days} day${days === 1 ? "" : "s"}.`;
+}
+
+export const listUserNotifications = callable(async (request) => {
+  const actor = await requireActiveUser(request.auth?.uid);
+  const attendancePromise = db.collection("attendanceSessions")
+    .where("instructorEmail", "==", actor.email)
+    .get();
+  const evaluationPromise = db.collection("evaluationSessions")
+    .where("trainerEmail", "==", actor.email)
+    .get();
+  const statePromise = db.collection("notificationStates")
+    .where("uid", "==", actor.uid)
+    .get();
+  const approvalPromise = actor.role === "admin"
+    ? db.collection("approvalRecords").get()
+    : Promise.resolve(null);
+
+  const [attendanceSnapshot, evaluationSnapshot, stateSnapshot, approvalSnapshot] =
+    await Promise.all([
+      attendancePromise,
+      evaluationPromise,
+      statePromise,
+      approvalPromise
+    ]);
+
+  const states = new Map<string, NotificationState>();
+  stateSnapshot.docs.forEach((item) => {
+    const data = item.data();
+    const state = text(data.state);
+    if (["read", "follow_up"].includes(state)) {
+      states.set(text(data.notificationId), state as NotificationState);
+    }
+  });
+
+  const notifications: UserNotification[] = [];
+
+  attendanceSnapshot.docs.forEach((item) => {
+    const data = item.data();
+    if (data.status !== "open" || (data.amOpen !== true && data.pmOpen !== true)) return;
+    const id = `attendance:${item.id}`;
+    const courseName = text(data.courseName) || "Assigned course";
+    const periods = [data.amOpen === true ? "AM" : "", data.pmOpen === true ? "PM" : ""]
+      .filter(Boolean)
+      .join(" and ");
+    notifications.push({
+      id,
+      title: "Attendance QR is ready",
+      message: `${courseName} has an open ${periods || "attendance"} check-in session.`,
+      category: "attendance",
+      priority: "info",
+      actionUrl: "/attendance/trainer",
+      actionLabel: "Open attendance",
+      eventDate: text(data.courseDate) || new Date().toISOString(),
+      state: states.get(id) || "unread"
+    });
+  });
+
+  evaluationSnapshot.docs.forEach((item) => {
+    const data = item.data();
+    const closesAt = dateMillis(data.closesAt);
+    if (data.status !== "open" || (closesAt && closesAt < Date.now())) return;
+    const id = `evaluation:${item.id}`;
+    notifications.push({
+      id,
+      title: "Student evaluation is open",
+      message: `${text(data.courseName) || "Assigned course"} is ready for learner feedback.`,
+      category: "evaluation",
+      priority: "info",
+      actionUrl: "/evaluations/trainer",
+      actionLabel: "Open evaluation",
+      eventDate: text(data.trainingDate) || text(data.opensAt) || new Date().toISOString(),
+      state: states.get(id) || "unread"
+    });
+  });
+
+  approvalSnapshot?.docs.forEach((item) => {
+    const data = item.data();
+    if (data.archived === true) return;
+    const days = dayDifference(data.expiryDate);
+    if (days === null || days > 90) return;
+    const id = `approval:${item.id}`;
+    const name = text(data.approvalNumber) || text(data.approvalType) || "Regulatory approval";
+    notifications.push({
+      id,
+      title: days < 0 ? "Approval has expired" : "Approval renewal approaching",
+      message: approvalMessage(name, days),
+      category: "approval",
+      priority: days <= 0 ? "critical" : days <= 30 ? "warning" : "info",
+      actionUrl: "/approvals",
+      actionLabel: "View register",
+      eventDate: text(data.expiryDate) || new Date().toISOString(),
+      state: states.get(id) || "unread"
+    });
+  });
+
+  const priorityOrder: Record<NotificationPriority, number> = {
+    critical: 0,
+    warning: 1,
+    info: 2
+  };
+  notifications.sort((first, second) =>
+    (first.state === "unread" ? 0 : 1) - (second.state === "unread" ? 0 : 1) ||
+    priorityOrder[first.priority] - priorityOrder[second.priority] ||
+    dateMillis(second.eventDate) - dateMillis(first.eventDate)
+  );
+  const limited = notifications.slice(0, 24);
+  return {
+    notifications: limited,
+    unreadCount: limited.filter((item) => item.state === "unread").length
+  };
+});
+
+export const setUserNotificationState = callable(async (request) => {
+  const actor = await requireActiveUser(request.auth?.uid);
+  const notificationId = text(request.data?.notificationId);
+  const nextState = text(request.data?.state);
+  if (!notificationId || notificationId.length > 180 || !/^[a-z]+:[A-Za-z0-9_-]+$/.test(notificationId)) {
+    throw new HttpsError("invalid-argument", "The notification reference is invalid.");
+  }
+  if (!["unread", "read", "follow_up"].includes(nextState)) {
+    throw new HttpsError("invalid-argument", "Select a valid notification state.");
+  }
+  await db.collection("notificationStates")
+    .doc(notificationStateId(actor.uid, notificationId))
+    .set({
+      uid: actor.uid,
+      notificationId,
+      state: nextState,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  return { notificationId, state: nextState };
+});
