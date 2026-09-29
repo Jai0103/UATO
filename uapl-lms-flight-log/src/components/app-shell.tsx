@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LoadingScreen } from "@/components/loading-overlay";
+import { NotificationCenter } from "@/components/notification-center";
 import {
   AuthApiError,
   clearSecureSession,
@@ -630,8 +631,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const displayName = profile?.name || activeSession.name;
     return (
       <div data-profile-menu className="relative" onMouseEnter={openProfileMenu} onMouseLeave={scheduleProfileClose} onFocusCapture={openProfileMenu}>
-        <button type="button" onClick={() => setProfileMenuOpen((current) => !current)} className={`group flex h-11 items-center rounded-lg border border-[#d7e0ea] bg-white outline-none transition hover:border-[#9ec3d7] hover:bg-[#f7fafc] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${compact ? "w-11 justify-center" : "gap-3 pl-1.5 pr-3"}`} aria-expanded={profileMenuOpen} aria-label="Open account menu">
-          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e6f2f8] text-xs font-bold text-[#075f8f] ring-1 ring-[#cbd9e4]">
+        <button type="button" onClick={() => setProfileMenuOpen((current) => !current)} className={`group flex h-11 items-center rounded-lg border border-transparent bg-transparent outline-none transition hover:bg-[#eef3f7] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${compact ? "w-11 justify-center" : "gap-3 pl-1.5 pr-2"}`} aria-expanded={profileMenuOpen} aria-label="Open account menu">
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e6f2f8] text-xs font-bold text-[#075f8f] shadow-sm">
             {profile?.photoURL ? <img src={profile.photoURL} alt="" className="h-full w-full object-cover" /> : userInitials(displayName)}
             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
           </span>
@@ -640,10 +641,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
         <div className={`absolute right-0 top-full z-[80] mt-2 w-[280px] origin-top-right rounded-lg border border-[#d7e0ea] bg-white p-2 shadow-[0_18px_45px_rgba(16,42,67,0.18)] transition ${profileMenuOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0"}`}>
           <div className="border-b border-[#e6ecf2] px-3 py-3"><p className="truncate text-sm font-bold text-[#16263c]">{displayName}</p><p className="mt-1 truncate text-xs text-[#718096]">{activeSession.email}</p></div>
-          <Link href="/profile" className="mt-1 flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition hover:bg-[#edf4f8] hover:text-[#075f8f]"><UserRound size={17} /> My Profile</Link>
-          <Link href="/settings" className="flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition hover:bg-[#edf4f8] hover:text-[#075f8f]"><Settings size={17} /> Settings</Link>
+          <Link href="/profile" className="app-account-menu-item group mt-1 flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition"><UserRound size={17} className="transition-transform group-hover:scale-110" /> My Profile</Link>
+          <Link href="/settings" className="app-account-menu-item group flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition"><Settings size={17} className="transition-transform group-hover:rotate-12" /> Settings</Link>
           <div className="my-1 border-t border-[#e6ecf2]" />
-          <button type="button" onClick={() => void logout()} disabled={signingOut} className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60">{signingOut ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} />} {signingOut ? "Signing out..." : "Log out"}</button>
+          <button type="button" onClick={() => void logout()} disabled={signingOut} className="app-account-logout group flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-rose-700 transition disabled:opacity-60">{signingOut ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} className="transition-transform group-hover:translate-x-0.5" />} {signingOut ? "Signing out..." : "Log out"}</button>
         </div>
       </div>
     );
@@ -809,12 +810,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`app-shell min-h-screen w-full overflow-x-hidden bg-[#eef3f8] transition-[padding-left] duration-300 ease-out ${
+      className={`app-shell min-h-screen w-full overflow-x-clip bg-[#eef3f8] transition-[padding-left] duration-300 ease-out ${
         desktopCollapsed ? "lg:pl-[84px]" : "lg:pl-[288px]"
       }`}
     >
-      <header className={`app-mobile-header sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 backdrop-blur lg:hidden ${headerElevated ? "app-top-header-elevated" : ""}`}>
-        <div className="grid h-[64px] grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 px-4">
+      <header className={`app-mobile-header fixed inset-x-0 top-0 z-40 border-b border-[#d7e0ea] bg-white/95 backdrop-blur lg:hidden ${headerElevated ? "app-top-header-elevated" : ""}`}>
+        <div className="grid h-[64px] grid-cols-[44px_minmax(0,1fr)_92px] items-center gap-3 px-4">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
@@ -828,7 +829,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="truncate text-[10px] font-bold uppercase text-[#718096]">Flight Management</p>
             <p className="truncate text-sm font-bold text-[#16263c]">{pageTitle(pathname)}</p>
           </div>
-          {renderProfileMenu(true)}
+          <div className="flex items-center justify-end gap-1">
+            <NotificationCenter />
+            {renderProfileMenu(true)}
+          </div>
         </div>
       </header>
 
@@ -891,7 +895,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={toggleDesktopSidebar}
-            className={`app-sidebar-toggle flex shrink-0 items-center justify-center rounded-lg border border-[#cbd7e2] bg-white text-[#60748a] outline-none transition hover:border-[#80b6ce] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${desktopCollapsed ? "h-8 w-8" : "h-9 w-9"}`}
+            className={`app-sidebar-toggle flex shrink-0 items-center justify-center rounded-md border border-transparent bg-[#f1f4f7] text-[#60748a] outline-none transition hover:bg-[#e5edf3] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${desktopCollapsed ? "h-8 w-8" : "h-9 w-9"}`}
             aria-label={
               desktopCollapsed
                 ? "Expand navigation panel"
@@ -921,10 +925,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       </aside>
 
-      <header className={`app-top-header sticky top-0 z-30 hidden h-[68px] items-center justify-between border-b border-[#d7e0ea] bg-white/95 px-8 backdrop-blur transition-shadow duration-200 lg:flex xl:px-10 ${headerElevated ? "app-top-header-elevated" : ""}`}>
+      <header className={`app-top-header fixed right-0 top-0 z-30 hidden h-[68px] items-center justify-between border-b border-[#d7e0ea] bg-white/95 px-8 backdrop-blur transition-[left,box-shadow] duration-300 lg:flex xl:px-10 ${desktopCollapsed ? "lg:left-[84px]" : "lg:left-[288px]"} ${headerElevated ? "app-top-header-elevated" : ""}`}>
         <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-[#718096]">Flight Management System</p><p className="mt-0.5 truncate text-base font-bold text-[#16263c]">{pageTitle(pathname)}</p></div>
-        {renderProfileMenu(false)}
+        <div className="flex items-center gap-1.5">
+          <NotificationCenter />
+          {renderProfileMenu(false)}
+        </div>
       </header>
+
+      <div className="h-[64px] lg:h-[68px]" aria-hidden="true" />
 
       <main className="app-main min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8 xl:px-10 xl:py-8">
         <div className="mx-auto w-full min-w-0 max-w-[1600px]">
