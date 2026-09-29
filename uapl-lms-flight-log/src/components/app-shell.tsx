@@ -6,8 +6,6 @@ import {
   Archive,
   BarChart3,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
   Database,
   FileText,
@@ -15,6 +13,8 @@ import {
   Loader2,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Shield,
   UserRound,
@@ -331,6 +331,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [headerElevated, setHeaderElevated] = useState(false);
   const prefetchedRoutes = useRef(new Set<string>());
   const profileCloseTimer = useRef<number | null>(null);
 
@@ -340,6 +341,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch {
       setDesktopCollapsed(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const updateHeaderElevation = () => setHeaderElevated(window.scrollY > 8);
+    updateHeaderElevation();
+    window.addEventListener("scroll", updateHeaderElevation, { passive: true });
+    return () => window.removeEventListener("scroll", updateHeaderElevation);
   }, []);
 
   useEffect(() => {
@@ -805,21 +813,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         desktopCollapsed ? "lg:pl-[84px]" : "lg:pl-[288px]"
       }`}
     >
-      <header className="app-mobile-header app-brand-zone sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 shadow-[0_4px_18px_rgba(16,42,67,0.08)] backdrop-blur lg:hidden">
-        <div className="flex h-[68px] items-center justify-between gap-3 px-4">
-          <BrandLogo mobile />
-          <div className="flex items-center gap-2">
-            {renderProfileMenu(true)}
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] shadow-sm outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
-              aria-label="Open navigation menu"
-              aria-expanded={mobileMenuOpen}
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+      <header className={`app-mobile-header sticky top-0 z-30 border-b border-[#d7e0ea] bg-white/95 backdrop-blur lg:hidden ${headerElevated ? "app-top-header-elevated" : ""}`}>
+        <div className="grid h-[64px] grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 px-4">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#405168] outline-none transition hover:border-[#9ec3d7] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
+            aria-label="Open navigation menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 text-center">
+            <p className="truncate text-[10px] font-bold uppercase text-[#718096]">Flight Management</p>
+            <p className="truncate text-sm font-bold text-[#16263c]">{pageTitle(pathname)}</p>
           </div>
+          {renderProfileMenu(true)}
         </div>
       </header>
 
@@ -868,11 +877,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           desktopCollapsed ? "w-[84px]" : "w-[288px]"
         }`}
       >
-        <div
-          className={`app-brand-zone relative shrink-0 border-b border-[#dce4ed] ${
-            desktopCollapsed ? "px-3 py-4" : "px-5 py-5"
-          }`}
-        >
+        <div className={`app-brand-zone relative flex shrink-0 items-center border-b border-[#dce4ed] ${desktopCollapsed ? "h-[104px] flex-col justify-center gap-2 px-3" : "h-[82px] justify-between gap-3 px-5"}`}>
           <div
             className={`flex ${
               desktopCollapsed
@@ -886,7 +891,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={toggleDesktopSidebar}
-            className="absolute -right-[17px] top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg border border-[#cbd7e2] bg-white text-[#60748a] shadow-[0_5px_16px_rgba(16,42,67,0.16)] outline-none transition hover:border-[#80b6ce] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7]"
+            className={`app-sidebar-toggle flex shrink-0 items-center justify-center rounded-lg border border-[#cbd7e2] bg-white text-[#60748a] outline-none transition hover:border-[#80b6ce] hover:bg-[#f3f8fb] hover:text-[#075f8f] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${desktopCollapsed ? "h-8 w-8" : "h-9 w-9"}`}
             aria-label={
               desktopCollapsed
                 ? "Expand navigation panel"
@@ -899,9 +904,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
           >
             {desktopCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
+              <PanelLeftOpen className="h-4 w-4" />
             ) : (
-              <ChevronLeft className="h-4 w-4" />
+              <PanelLeftClose className="h-4 w-4" />
             )}
           </button>
         </div>
@@ -916,7 +921,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       </aside>
 
-      <header className="app-top-header sticky top-0 z-30 hidden h-[68px] items-center justify-between border-b border-[#d7e0ea] bg-white/95 px-8 backdrop-blur lg:flex xl:px-10">
+      <header className={`app-top-header sticky top-0 z-30 hidden h-[68px] items-center justify-between border-b border-[#d7e0ea] bg-white/95 px-8 backdrop-blur transition-shadow duration-200 lg:flex xl:px-10 ${headerElevated ? "app-top-header-elevated" : ""}`}>
         <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-[#718096]">Flight Management System</p><p className="mt-0.5 truncate text-base font-bold text-[#16263c]">{pageTitle(pathname)}</p></div>
         {renderProfileMenu(false)}
       </header>
