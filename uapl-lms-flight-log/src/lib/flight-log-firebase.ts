@@ -204,9 +204,12 @@ export async function fetchFirebaseFlightLogRecordsPage(
   const search = String(request.query || "").trim().toLowerCase();
   const month = String(request.month || "").padStart(2, "0");
   const year = String(request.year || "");
+  const trainer = String(request.trainer || "").trim().toLowerCase();
+  const dateFrom = String(request.dateFrom || "").slice(0, 10);
+  const dateTo = String(request.dateTo || "").slice(0, 10);
   let allowedRecordIds: Set<string> | null = null;
 
-  if (request.month || request.year) {
+  if (request.month || request.year || trainer || dateFrom || dateTo) {
     const entrySnapshot = request.year
       ? await getDocs(
           query(
@@ -219,8 +222,19 @@ export async function fetchFirebaseFlightLogRecordsPage(
     allowedRecordIds = new Set(
       entrySnapshot.docs
         .filter((entry) => {
+          const data = entry.data();
           if (!request.month) return true;
-          return String(Number(entry.data().month)).padStart(2, "0") === month;
+          return String(Number(data.month)).padStart(2, "0") === month;
+        })
+        .filter((entry) => {
+          const data = entry.data();
+          const date = String(data.date || "").slice(0, 10);
+          if (dateFrom && date < dateFrom) return false;
+          if (dateTo && date > dateTo) return false;
+          if (trainer && String(data.instructorInCommand || "").trim().toLowerCase() !== trainer) {
+            return false;
+          }
+          return true;
         })
         .map((entry) => String(entry.data().recordId || ""))
         .filter(Boolean)
