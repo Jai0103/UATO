@@ -632,9 +632,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div data-profile-menu className="relative" onMouseEnter={openProfileMenu} onMouseLeave={scheduleProfileClose} onFocusCapture={openProfileMenu}>
         <button type="button" onClick={() => setProfileMenuOpen((current) => !current)} className={`group flex h-11 items-center rounded-lg border border-transparent bg-transparent outline-none transition hover:bg-[#eef3f7] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${compact ? "w-11 justify-center" : "gap-3 pl-1.5 pr-2"}`} aria-expanded={profileMenuOpen} aria-label="Open account menu">
-          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e6f2f8] text-xs font-bold text-[#075f8f] shadow-sm">
-            {profile?.photoURL ? <img src={profile.photoURL} alt="" className="h-full w-full object-cover" /> : userInitials(displayName)}
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+          <span className="relative h-8 w-8 shrink-0">
+            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#e6f2f8] text-xs font-bold text-[#075f8f] shadow-sm">
+              {profile?.photoURL ? <img key={`${profile.photoURL}-${profile.updatedAt}`} src={`${profile.photoURL}${profile.photoURL.includes("?") ? "&" : "?"}v=${encodeURIComponent(profile.updatedAt || "current")}`} alt="" className="h-full w-full object-cover" /> : userInitials(displayName)}
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 shadow-sm" />
           </span>
           {!compact ? <span className="hidden min-w-0 text-left sm:block"><span className="block max-w-36 truncate text-sm font-semibold text-[#16263c]">{displayName}</span><span className="block text-[11px] capitalize text-[#718096]">{activeSession.role}</span></span> : null}
           {!compact ? <ChevronDown className={`h-4 w-4 text-[#718096] transition-transform ${profileMenuOpen ? "rotate-180" : ""}`} /> : null}
