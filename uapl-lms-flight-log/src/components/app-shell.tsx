@@ -15,10 +15,9 @@ import {
   Loader2,
   LogOut,
   Menu,
-  Moon,
+  Settings,
   Shield,
-  Sun,
-  UserCircle,
+  UserRound,
   UserCog,
   X
 } from "lucide-react";
@@ -30,9 +29,12 @@ import {
   getSecureSession,
   isSessionExpired,
   logoutSecurely,
+  saveSecureSession,
   type SecureSession,
   verifySecureSession
 } from "@/lib/auth-api";
+import { loadPreferences, savePreferences, type AppPreferences } from "@/lib/app-preferences";
+import { fetchOwnProfile, type UserProfile } from "@/lib/profile-api";
 
 type NavigationChild = {
   href: string;
@@ -51,8 +53,6 @@ type NavigationItem = {
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 const SQUARE_LOGO_PATH = "/UATO/AGA_Logo_Square%20(1).jpg";
 const PASSWORD_PAGE = "/change-password";
-const SIDEBAR_STORAGE_KEY = "uapl-desktop-sidebar-collapsed";
-const THEME_STORAGE_KEY = "uapl-interface-theme";
 const SESSION_VERIFICATION_INTERVAL_MS = 2 * 60 * 1000;
 
 let lastSessionVerificationAt = 0;
@@ -250,6 +250,32 @@ function pathMatches(pathname: string, href: string, exact = false) {
     : pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function pageTitle(pathname: string) {
+  const entries: Array<[string, string]> = [
+    ["/admin", "Dashboard"],
+    ["/profile", "My Profile"],
+    ["/settings", "Settings"],
+    ["/approvals", "AGA Approvals"],
+    ["/attendance", "QR Attendance"],
+    ["/evaluations", "Student Evaluations"],
+    ["/flight-logs", "Flight Logs"],
+    ["/records", "Records"],
+    ["/master-data", "Master Data"],
+    ["/reports", "Reports"],
+    ["/users", "Users"],
+    ["/audit-history", "Audit History"],
+    ["/staff-training", "Staff Training"],
+    ["/ua-maintenance", "UA Maintenance"],
+    ["/fatigue-risk", "Fatigue Risk"],
+    ["/inventory", "Inventory"]
+  ];
+  return entries.find(([path]) => pathname === path || pathname.startsWith(`${path}/`))?.[1] || "Workspace";
+}
+
+function userInitials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "U";
+}
+
 function BrandLogo({
   mobile = false,
   compact = false
@@ -301,63 +327,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [checkingSession, setCheckingSession] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const prefetchedRoutes = useRef(new Set<string>());
-
-  useEffect(() => {
-    const isDark = document.documentElement.classList.contains("dark");
-    setDarkMode(isDark);
-  }, []);
-
-  function toggleDarkMode() {
-    setDarkMode((current) => {
-      const next = !current;
-      document.documentElement.classList.toggle("dark", next);
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
-      } catch {
-        // Theme still changes when browser storage is unavailable.
-      }
-      return next;
-    });
-  }
-
-  function renderThemeToggle(compact = false, iconOnly = false) {
-    const label = darkMode ? "Use light mode" : "Use dark mode";
-
-    return (
-      <button
-        type="button"
-        onClick={toggleDarkMode}
-        className={`app-theme-toggle flex h-11 items-center rounded-lg text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#4ba3c7] focus-visible:ring-offset-2 ${
-          compact || iconOnly ? "w-11 justify-center" : "w-full gap-3 px-3"
-        }`}
-        aria-label={label}
-        title={label}
-        aria-pressed={darkMode}
-      >
-        {darkMode ? (
-          <Sun className="h-[18px] w-[18px] shrink-0" />
-        ) : (
-          <Moon className="h-[18px] w-[18px] shrink-0" />
-        )}
-        {!compact && !iconOnly ? (
-          <span>{darkMode ? "Light mode" : "Dark mode"}</span>
-        ) : null}
-      </button>
-    );
-  }
+  const profileCloseTimer = useRef<number | null>(null);
 
   useEffect(() => {
     try {
-      setDesktopCollapsed(
-        localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true"
-      );
+      setDesktopCollapsed(loadPreferences().compactNavigation);
     } catch {
       setDesktopCollapsed(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const updatePreferences = (event: Event) => {
+      const preferences = (event as CustomEvent<AppPreferences>).detail;
+      setDesktopCollapsed(preferences.compactNavigation);
+    };
+    window.addEventListener("uapl-preferences-updated", updatePreferences);
+    return () => window.removeEventListener("uapl-preferences-updated", updatePreferences);
   }, []);
 
   useEffect(() => {
@@ -502,7 +493,55 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileMenuOpen(false);
+    setProfileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    const loadProfile = () => fetchOwnProfile().then((result) => {
+      if (!active) return;
+      setProfile(result);
+      setSession((current) => {
+        if (!current || current.name === result.name) return current;
+        const next = { ...current, name: result.name };
+        saveSecureSession(next);
+        return next;
+      });
+    }).catch(() => undefined);
+    void loadProfile();
+    const updateProfile = (event: Event) => {
+      const result = (event as CustomEvent<UserProfile>).detail;
+      setProfile(result);
+      setSession((current) => {
+        if (!current) return current;
+        const next = { ...current, name: result.name };
+        saveSecureSession(next);
+        return next;
+      });
+    };
+    window.addEventListener("uapl-profile-updated", updateProfile);
+    return () => {
+      active = false;
+      window.removeEventListener("uapl-profile-updated", updateProfile);
+    };
+  }, [session?.email]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!(event.target as Element | null)?.closest("[data-profile-menu]")) setProfileMenuOpen(false);
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", key);
+    };
+  }, [profileMenuOpen]);
 
   useEffect(() => {
     const links = session?.role === "admin" ? adminLinks : trainerLinks;
@@ -533,7 +572,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setDesktopCollapsed((current) => {
       const next = !current;
       try {
-        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+        savePreferences({ ...loadPreferences(), compactNavigation: next });
       } catch {
         // The preference is optional when browser storage is unavailable.
       }
@@ -570,37 +609,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const links =
     activeSession.role === "admin" ? adminLinks : trainerLinks;
 
-  function renderAccount(compact = false) {
+  function openProfileMenu() {
+    if (profileCloseTimer.current) window.clearTimeout(profileCloseTimer.current);
+    setProfileMenuOpen(true);
+  }
+
+  function scheduleProfileClose() {
+    profileCloseTimer.current = window.setTimeout(() => setProfileMenuOpen(false), 180);
+  }
+
+  function renderProfileMenu(compact = false) {
+    const displayName = profile?.name || activeSession.name;
     return (
-      <div
-        className={`app-account-panel rounded-lg border border-[#d9e2eb] bg-[#f5f8fb] ${
-          compact ? "flex justify-center p-2" : "p-3"
-        }`}
-        title={
-          compact
-            ? `${activeSession.name} - ${activeSession.role} account`
-            : undefined
-        }
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#075f8f] shadow-sm ring-1 ring-[#d7e0ea]">
-            {activeSession.role === "admin" ? (
-              <Shield className="h-5 w-5" />
-            ) : (
-              <UserCircle className="h-5 w-5" />
-            )}
-            <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
-          </div>
-          {!compact ? (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#16263c]">
-                {activeSession.name}
-              </p>
-              <p className="truncate text-xs capitalize text-[#718096]">
-                {activeSession.role} account
-              </p>
-            </div>
-          ) : null}
+      <div data-profile-menu className="relative" onMouseEnter={openProfileMenu} onMouseLeave={scheduleProfileClose} onFocusCapture={openProfileMenu}>
+        <button type="button" onClick={() => setProfileMenuOpen((current) => !current)} className={`group flex h-11 items-center rounded-lg border border-[#d7e0ea] bg-white outline-none transition hover:border-[#9ec3d7] hover:bg-[#f7fafc] focus-visible:ring-2 focus-visible:ring-[#4ba3c7] ${compact ? "w-11 justify-center" : "gap-3 pl-1.5 pr-3"}`} aria-expanded={profileMenuOpen} aria-label="Open account menu">
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e6f2f8] text-xs font-bold text-[#075f8f] ring-1 ring-[#cbd9e4]">
+            {profile?.photoURL ? <img src={profile.photoURL} alt="" className="h-full w-full object-cover" /> : userInitials(displayName)}
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+          </span>
+          {!compact ? <span className="hidden min-w-0 text-left sm:block"><span className="block max-w-36 truncate text-sm font-semibold text-[#16263c]">{displayName}</span><span className="block text-[11px] capitalize text-[#718096]">{activeSession.role}</span></span> : null}
+          {!compact ? <ChevronDown className={`h-4 w-4 text-[#718096] transition-transform ${profileMenuOpen ? "rotate-180" : ""}`} /> : null}
+        </button>
+        <div className={`absolute right-0 top-full z-[80] mt-2 w-[280px] origin-top-right rounded-lg border border-[#d7e0ea] bg-white p-2 shadow-[0_18px_45px_rgba(16,42,67,0.18)] transition ${profileMenuOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0"}`}>
+          <div className="border-b border-[#e6ecf2] px-3 py-3"><p className="truncate text-sm font-bold text-[#16263c]">{displayName}</p><p className="mt-1 truncate text-xs text-[#718096]">{activeSession.email}</p></div>
+          <Link href="/profile" className="mt-1 flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition hover:bg-[#edf4f8] hover:text-[#075f8f]"><UserRound size={17} /> My Profile</Link>
+          <Link href="/settings" className="flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition hover:bg-[#edf4f8] hover:text-[#075f8f]"><Settings size={17} /> Settings</Link>
+          <div className="my-1 border-t border-[#e6ecf2]" />
+          <button type="button" onClick={() => void logout()} disabled={signingOut} className="flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60">{signingOut ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} />} {signingOut ? "Signing out..." : "Log out"}</button>
         </div>
       </div>
     );
@@ -630,7 +665,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     if (compact) {
                       setDesktopCollapsed(false);
                       try {
-                        localStorage.setItem(SIDEBAR_STORAGE_KEY, "false");
+                        savePreferences({ ...loadPreferences(), compactNavigation: false });
                       } catch {
                         // The navigation still expands without persistence.
                       }
@@ -764,27 +799,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  function renderLogout(compact = false) {
-    return (
-      <button
-        type="button"
-        onClick={logout}
-        disabled={signingOut}
-        className={`flex h-11 w-full items-center rounded-lg text-sm font-semibold text-[#5f7187] outline-none transition hover:bg-red-50 hover:text-[#b4232d] focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
-          compact ? "justify-center px-2" : "gap-3 px-3"
-        }`}
-        title={compact ? (signingOut ? "Signing out..." : "Sign out") : undefined}
-      >
-        {signingOut ? (
-          <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin" />
-        ) : (
-          <LogOut className="h-[18px] w-[18px] shrink-0" />
-        )}
-        {!compact ? (signingOut ? "Signing out..." : "Sign out") : null}
-      </button>
-    );
-  }
-
   return (
     <div
       className={`app-shell min-h-screen w-full overflow-x-hidden bg-[#eef3f8] transition-[padding-left] duration-300 ease-out ${
@@ -795,7 +809,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex h-[68px] items-center justify-between gap-3 px-4">
           <BrandLogo mobile />
           <div className="flex items-center gap-2">
-            {renderThemeToggle(false, true)}
+            {renderProfileMenu(true)}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
@@ -843,16 +857,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          <div className="shrink-0 px-4 py-3">
-            {renderAccount()}
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
             {renderNavigation(false, true)}
-          </div>
-
-          <div className="shrink-0 border-t border-[#e3e9f0] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
-            {renderLogout()}
           </div>
         </aside>
       </div>
@@ -901,30 +907,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <div
-          className={`shrink-0 ${
-            desktopCollapsed ? "px-3 py-3" : "px-5 py-4"
-          }`}
-        >
-          {renderAccount(desktopCollapsed)}
-        </div>
-
-        <div
-          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-4 ${
+          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-4 ${
             desktopCollapsed ? "px-3" : "px-5"
           }`}
         >
           {renderNavigation(desktopCollapsed)}
         </div>
 
-        <div
-          className={`shrink-0 border-t border-[#e3e9f0] bg-[#fbfcfe] py-3 ${
-            desktopCollapsed ? "px-3" : "px-5"
-          }`}
-        >
-          <div className="mb-1">{renderThemeToggle(desktopCollapsed)}</div>
-          {renderLogout(desktopCollapsed)}
-        </div>
       </aside>
+
+      <header className="app-top-header sticky top-0 z-30 hidden h-[68px] items-center justify-between border-b border-[#d7e0ea] bg-white/95 px-8 backdrop-blur lg:flex xl:px-10">
+        <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-[#718096]">Flight Management System</p><p className="mt-0.5 truncate text-base font-bold text-[#16263c]">{pageTitle(pathname)}</p></div>
+        {renderProfileMenu(false)}
+      </header>
 
       <main className="app-main min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 md:px-7 md:py-7 lg:px-8 xl:px-10 xl:py-8">
         <div className="mx-auto w-full min-w-0 max-w-[1600px]">
