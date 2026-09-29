@@ -322,20 +322,20 @@ export default function UsersPage() {
     if (operationLabel) return;
     const confirmed = await message.confirm({
       title: "Reset password?",
-      message: `A new temporary password will be sent to ${user.email}.`,
-      confirmLabel: "Reset and email",
+      message: `A secure Firebase password reset link will be sent to ${user.email}.`,
+      confirmLabel: "Send reset link",
     });
 
     if (!confirmed) return;
-    setOperationLabel("Resetting password and sending email...");
+    setOperationLabel("Sending secure reset link...");
 
     try {
       await requestFirebasePasswordReset(user);
 
       message.notify({
         type: "success",
-        title: "Temporary password sent",
-        message: user.email,
+        title: "Reset link sent",
+        message: `A secure password reset email was sent to ${user.email}.`,
       });
     } catch (error) {
       message.notify({
@@ -519,7 +519,7 @@ export default function UsersPage() {
           <div className="w-full overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-w-lg sm:rounded-lg">
             <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><UserRound size={19} /></div><div><h2 className="text-lg font-semibold text-slate-950">Add User</h2><p className="mt-0.5 text-sm text-slate-500">Create a secure administrator or trainer account.</p></div></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
             <form onSubmit={createUser} className="space-y-4 p-5">
-              <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><Mail size={18} className="mt-0.5 shrink-0 text-sky-700" /><p>A temporary password and sign-in link will be emailed automatically after the account is created.</p></div>
+              <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><Mail size={18} className="mt-0.5 shrink-0 text-sky-700" /><p>A secure Firebase password setup link will be emailed automatically after the account is created. No temporary password is sent.</p></div>
               <FormInput label="Full name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Trainer name" />
               <FormInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="name@example.com" type="email" />
               <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
