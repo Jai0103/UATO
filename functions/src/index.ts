@@ -17,6 +17,13 @@ const region = "asia-southeast1";
 type Role = "admin" | "trainer";
 type Status = "active" | "inactive";
 
+type ActiveActor = {
+  uid: string;
+  name: string;
+  email: string;
+  role: Role;
+};
+
 type AdminActor = {
   uid: string;
   name: string;
@@ -133,6 +140,100 @@ function callable(
     handler
   );
 }
+
+async function requireActiveUser(uid: string | undefined): Promise<ActiveActor> {
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in again to continue.");
+  const snapshot = await db.collection("users").doc(uid).get();
+  const data = snapshot.data() || {};
+  if (!snapshot.exists || data.status !== "active") {
+    throw new HttpsError("permission-denied", "An active account is required.");
+  }
+  return {
+    uid,
+    name: text(data.name) || "User",
+    email: email(data.email),
+    role: data.role === "admin" ? "admin" : "trainer"
+  };
+}
+
+export const updateOwnProfile = callable(async (request) => {
+  const actor = await requireActiveUser(request.auth?.uid);
+  const name = text(request.data?.name);
+  const photoURL = text(request.data?.photoURL);
+  const avatarPath = text(request.data?.avatarPath);
+  const expectedAvatarPath = `user-avatars/${actor.uid}/avatar.webp`;
+
+  if (name.length < 2 || name.length > 100) {
+    throw new HttpsError("invalid-argument", "Enter a name between 2 and 100 characters.");
+  }
+  if (avatarPath && avatarPath !== expectedAvatarPath) {
+    throw new HttpsError("invalid-argument", "The profile image path is invalid.");
+  }
+  if (photoURL && !photoURL.startsWith("https://firebasestorage.googleapis.com/")) {
+    throw new HttpsError("invalid-argument", "The profile image URL is invalid.");
+  }
+
+  const userReference = db.collection("users").doc(actor.uid);
+  const snapshot = await userReference.get();
+  const previous = snapshot.data() || {};
+  const timestamp = new Date().toISOString();
+  const updated = {
+    ...previous,
+    name,
+    photoURL,
+    avatarPath,
+    updatedAt: timestamp
+  };
+
+  await auth.updateUser(actor.uid, { displayName: name, photoURL: photoURL || null });
+
+  const batch = db.batch();
+  batch.set(userReference, updated, { merge: true });
+  const auditId = db.collection("auditEvents").doc().id;
+  batch.set(db.collection("auditEvents").doc(auditId), {
+    id: auditId,
+    timestamp,
+    actorUserId: actor.uid,
+    actorName: name,
+    actorNameLower: name.toLowerCase(),
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "PROFILE_UPDATED",
+    entityType: "user",
+    entityId: actor.uid,
+    entityName: name,
+    entityNameLower: name.toLowerCase(),
+    detailsAvailable: true,
+    source: "firebase-live",
+    schemaVersion: 2
+  });
+  batch.set(db.collection("auditEventDetails").doc(auditId), {
+    auditId,
+    entityId: actor.uid,
+    previousValue: {
+      name: text(previous.name),
+      photoURL: text(previous.photoURL)
+    },
+    updatedValue: { name, photoURL },
+    details: null,
+    source: "firebase-live",
+    schemaVersion: 2
+  });
+  await batch.commit();
+
+  return {
+    profile: {
+      uid: actor.uid,
+      name,
+      email: actor.email,
+      role: actor.role,
+      status: "active",
+      photoURL,
+      avatarPath,
+      updatedAt: timestamp
+    }
+  };
+});
 
 export const adminCreateUser = callable(async (request) => {
   const actor = await requireAdmin(request.auth?.uid);
