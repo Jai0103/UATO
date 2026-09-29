@@ -285,6 +285,9 @@ export type RecordsPageRequest = {
   query?: string;
   month?: string;
   year?: string;
+  trainer?: string;
+  dateFrom?: string;
+  dateTo?: string;
 };
 
 export type RecordsPageResponse = {
