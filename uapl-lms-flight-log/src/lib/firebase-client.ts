@@ -4,6 +4,7 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,3 +19,4 @@ export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseC
 export const firebaseAuth = getAuth(firebaseApp);
 export const firestore = getFirestore(firebaseApp);
 export const firebaseFunctions = getFunctions(firebaseApp, "asia-southeast1");
+export const firebaseStorage = getStorage(firebaseApp);
