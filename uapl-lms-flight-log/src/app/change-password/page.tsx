@@ -26,6 +26,7 @@ import {
   getSecureSession,
   type SecureSession,
 } from "@/lib/auth-api";
+import { preferredHome } from "@/lib/app-preferences";
 
 type PasswordRule = {
   label: string;
@@ -143,9 +144,7 @@ export default function ChangePasswordPage() {
       setConfirmPassword("");
 
       window.setTimeout(() => {
-        router.replace(
-          updatedSession.role === "admin" ? "/admin" : "/flight-logs"
-        );
+        router.replace(preferredHome(updatedSession.role));
       }, 900);
     } catch (caughtError) {
       if (caughtError instanceof AuthApiError) {
