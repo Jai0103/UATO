@@ -88,13 +88,29 @@ export async function saveOwnProfile(input: {
 
 export async function uploadOwnAvatar(blob: Blob) {
   const user = await currentUser();
+  await user.getIdToken(true);
   const path = `user-avatars/${user.uid}/avatar.webp`;
   const storageReference = ref(firebaseStorage, path);
-  await uploadBytes(storageReference, blob, {
-    contentType: "image/webp",
-    cacheControl: "public,max-age=3600"
-  });
-  return { path, url: await getDownloadURL(storageReference) };
+  try {
+    await uploadBytes(storageReference, blob, {
+      contentType: "image/webp",
+      cacheControl: "private,max-age=300"
+    });
+    return { path, url: await getDownloadURL(storageReference) };
+  } catch (error) {
+    if (error instanceof FirebaseError) {
+      if (error.code === "storage/unauthorized") {
+        throw new Error(
+          "Firebase Storage refused the photo. Deploy the latest Storage rules, then sign out and sign in again."
+        );
+      }
+      if (error.code === "storage/retry-limit-exceeded") {
+        throw new Error("The photo upload timed out. Check your connection and try again.");
+      }
+      throw new Error(error.message.replace(/^Firebase:\s*/i, "").trim());
+    }
+    throw error;
+  }
 }
 
 export async function deleteOwnAvatar(path: string) {
