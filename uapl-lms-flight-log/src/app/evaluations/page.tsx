@@ -179,6 +179,9 @@ export default function EvaluationsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<EvaluationSessionStatus | "">("");
   const [year, setYear] = useState("");
+  const [month, setMonth] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [form, setForm] = useState<EvaluationSessionInput | null>(null);
   const [instructors, setInstructors] = useState<FirebaseManagedUser[]>([]);
   const [instructorsLoading, setInstructorsLoading] = useState(true);
@@ -191,6 +194,14 @@ export default function EvaluationsPage() {
     useState<EvaluationResponsesPage | null>(null);
   const [responseSearch, setResponseSearch] = useState("");
   const [responsesLoading, setResponsesLoading] = useState(false);
+
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    setYear(parameters.get("year") || "");
+    setMonth(parameters.get("month") || "");
+    setDateFrom(parameters.get("dateFrom") || "");
+    setDateTo(parameters.get("dateTo") || "");
+  }, []);
 
   const availableYears = useMemo(() => {
     const current = new Date().getFullYear();
@@ -207,13 +218,16 @@ export default function EvaluationsPage() {
           query: debouncedSearch,
           status,
           year,
+          month,
+          dateFrom,
+          dateTo,
         });
         setSessionsPage(result);
       } finally {
         if (!quiet) setTableLoading(false);
       }
     },
-    [debouncedSearch, status, year]
+    [dateFrom, dateTo, debouncedSearch, month, status, year]
   );
 
   const loadDashboard = useCallback(async () => {
@@ -257,6 +271,9 @@ export default function EvaluationsPage() {
             query: debouncedSearch,
             status,
             year,
+            month,
+            dateFrom,
+            dateTo,
           }),
         ]);
         if (!active) return;
@@ -278,7 +295,7 @@ export default function EvaluationsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, status, year]);
+  }, [dateFrom, dateTo, debouncedSearch, month, status, year]);
 
   async function refreshAfterChange() {
     await Promise.all([loadDashboard(), loadSessions(sessionsPage.page, true)]);
@@ -552,6 +569,7 @@ export default function EvaluationsPage() {
 
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4 sm:p-5">
+            {month || dateFrom || dateTo ? <div className="mb-3 flex flex-wrap gap-2">{month ? <span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">Month: {month}/{year}</span> : null}{dateFrom || dateTo ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">Dashboard range: {dateFrom || "start"} to {dateTo || "today"}</span> : null}</div> : null}
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_150px]">
               <label className="relative block">
                 <span className="sr-only">Search evaluations</span>
