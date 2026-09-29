@@ -23,6 +23,7 @@ import {
   loginSecurely,
 } from "@/lib/auth-api";
 import { LoadingScreen } from "@/components/loading-overlay";
+import { preferredHome } from "@/lib/app-preferences";
 
 const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
 
@@ -55,9 +56,7 @@ export default function LoginPage() {
     // The stored session already contains a signed token and an expiry time.
     // AppShell performs the periodic server-side account-status check, so the
     // login page can route immediately without adding another Apps Script call.
-    router.replace(
-      existingSession.role === "admin" ? "/admin" : "/flight-logs"
-    );
+    router.replace(preferredHome(existingSession.role));
   }, [router]);
 
   function clearError() {
@@ -92,7 +91,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace(session.role === "admin" ? "/admin" : "/flight-logs");
+      router.replace(preferredHome(session.role));
     } catch (error) {
       if (error instanceof AuthApiError) {
         setLoginError(error.message);
