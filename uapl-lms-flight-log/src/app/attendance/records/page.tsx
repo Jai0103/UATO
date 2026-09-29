@@ -97,10 +97,20 @@ export default function AttendanceRecordsPage() {
   const [status, setStatus] = useState<AttendanceSessionStatus | "">("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AttendanceRecordSummary | null>(null);
   const [submissions, setSubmissions] = useState<AttendanceSubmission[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    setMonth(parameters.get("month") || "");
+    setYear(parameters.get("year") || "");
+    setDateFrom(parameters.get("dateFrom") || "");
+    setDateTo(parameters.get("dateTo") || "");
+  }, []);
 
   const loadRecords = useCallback(async () => {
     try {
@@ -128,14 +138,16 @@ export default function AttendanceRecordsPage() {
       if (status && record.status !== status) return false;
       if (year && !record.courseDate.startsWith(year)) return false;
       if (month && record.courseDate.slice(5, 7) !== month) return false;
+      if (dateFrom && record.courseDate < dateFrom) return false;
+      if (dateTo && record.courseDate > dateTo) return false;
       if (!query) return true;
       return [record.courseName, record.courseCode, record.instructorName].some((value) =>
         value.toLowerCase().includes(query)
       );
     });
-  }, [month, records, search, status, year]);
+  }, [dateFrom, dateTo, month, records, search, status, year]);
 
-  useEffect(() => setPage(1), [month, search, status, year]);
+  useEffect(() => setPage(1), [dateFrom, dateTo, month, search, status, year]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -218,6 +230,7 @@ export default function AttendanceRecordsPage() {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          {dateFrom || dateTo ? <div className="border-b border-slate-200 bg-violet-50/60 px-4 py-2.5 text-xs font-bold text-violet-800">Dashboard range: {dateFrom || "start"} to {dateTo || "today"}</div> : null}
           <div className="grid gap-3 border-b border-slate-200 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_170px_150px_150px]">
             <label className="relative sm:col-span-2 xl:col-span-1"><Search className="absolute left-3 top-3.5 text-slate-400" size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" placeholder="Search course, code, or instructor" /></label>
             <select value={status} onChange={(event) => setStatus(event.target.value as AttendanceSessionStatus | "")} className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">All statuses</option><option value="draft">Draft</option><option value="open">Open</option><option value="closed">Closed</option></select>
