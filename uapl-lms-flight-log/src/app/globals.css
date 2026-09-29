@@ -563,7 +563,38 @@ html.reduce-motion *::after {
   }
 
   .app-sidebar-toggle {
-    box-shadow: 0 2px 7px rgba(28, 30, 33, 0.1);
+    box-shadow: none;
+  }
+
+  .app-header-icon-button {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-transparent bg-transparent outline-none transition;
+    color: #60748a;
+  }
+
+  .app-header-icon-button:hover {
+    background: #eef3f7;
+    color: #075f8f;
+  }
+
+  .app-header-icon-button:focus-visible {
+    box-shadow: 0 0 0 2px #4ba3c7;
+  }
+
+  .app-account-menu-item:hover {
+    background: #eaf2f8;
+    color: #075f8f;
+    transform: translateX(2px);
+  }
+
+  .app-account-logout:hover {
+    background: #fff1f2;
+    color: #be123c;
+    transform: translateX(2px);
+  }
+
+  .app-notification-item:hover {
+    border-color: #cdddea !important;
+    background: #f6f9fc !important;
   }
 
   .app-account-panel {
@@ -764,6 +795,31 @@ html.dark .app-mobile-header {
 html.dark .app-top-header {
   border-color: #3e4042 !important;
   background: rgba(36, 37, 38, 0.96) !important;
+}
+
+html.dark .app-header-icon-button {
+  color: #b0b3b8;
+}
+
+html.dark .app-header-icon-button:hover,
+html.dark .app-account-menu-item:hover {
+  background: #3a3b3c !important;
+  color: #5da3ff !important;
+}
+
+html.dark .app-account-logout:hover {
+  background: rgba(225, 29, 72, 0.14) !important;
+  color: #fb7185 !important;
+}
+
+html.dark .app-notification-popover,
+html.dark .app-notification-item {
+  border-color: #3e4042 !important;
+  background: #242526 !important;
+}
+
+html.dark .app-notification-item:hover {
+  background: #2f3031 !important;
 }
 
 html.dark .app-account-panel {
