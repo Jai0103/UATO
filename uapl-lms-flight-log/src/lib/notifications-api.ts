@@ -10,7 +10,7 @@ export type AppNotification = {
   id: string;
   title: string;
   message: string;
-  category: "approval" | "attendance" | "evaluation" | "system";
+  category: "approval" | "attendance" | "evaluation" | "flight" | "maintenance" | "training" | "fatigue" | "system";
   priority: AppNotificationPriority;
   actionUrl: string;
   actionLabel: string;
