@@ -45,9 +45,13 @@ async function optimizedAvatar(file: File) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Your browser could not process this image.");
     context.drawImage(image, sourceX, sourceY, side, side, 0, 0, 512, 512);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
-    if (!blob) throw new Error("Your browser could not process this image.");
-    return blob;
+    for (const quality of [0.82, 0.7, 0.58, 0.46]) {
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/webp", quality)
+      );
+      if (blob && blob.size < 480 * 1024) return blob;
+    }
+    throw new Error("The photo could not be compressed below the secure upload limit.");
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -88,9 +92,15 @@ export default function ProfilePage() {
     try {
       const image = await optimizedAvatar(file);
       const uploaded = await uploadOwnAvatar(image);
-      setPhotoURL(uploaded.url);
-      setAvatarPath(uploaded.path);
-      message.notify({ type: "success", title: "Photo ready", message: "Save your profile to apply the new picture." });
+      const updated = await saveOwnProfile({
+        name: name.trim() || profile?.name || "User",
+        photoURL: uploaded.url,
+        avatarPath: uploaded.path
+      });
+      setProfile(updated);
+      setPhotoURL(updated.photoURL);
+      setAvatarPath(updated.avatarPath);
+      message.notify({ type: "success", title: "Profile photo updated", message: "Your new photo is now visible across the application." });
     } catch (error) {
       message.notify({ type: "error", title: "Upload failed", message: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -102,9 +112,17 @@ export default function ProfilePage() {
     setUploading(true);
     try {
       await deleteOwnAvatar(avatarPath);
+      const updated = await saveOwnProfile({
+        name: name.trim() || profile?.name || "User",
+        photoURL: "",
+        avatarPath: ""
+      });
+      setProfile(updated);
       setPhotoURL("");
       setAvatarPath("");
-      message.notify({ type: "success", title: "Photo removed", message: "Save your profile to confirm the change." });
+      message.notify({ type: "success", title: "Photo removed", message: "Your profile picture has been removed." });
+    } catch (error) {
+      message.notify({ type: "error", title: "Photo could not be removed", message: error instanceof Error ? error.message : "Please try again." });
     } finally {
       setUploading(false);
     }
@@ -139,7 +157,7 @@ export default function ProfilePage() {
           <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
             <section className="app-card text-center">
               <div className="mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-[#e9f3f8] text-3xl font-bold text-[#075f8f] ring-4 ring-white shadow-lg outline outline-1 outline-[#d7e0ea]">
-                {photoURL ? <img src={photoURL} alt="Profile" className="h-full w-full object-cover" /> : initials(name)}
+                {photoURL ? <img key={`${photoURL}-${profile.updatedAt}`} src={`${photoURL}${photoURL.includes("?") ? "&" : "?"}v=${encodeURIComponent(profile.updatedAt || "current")}`} alt="Profile" className="h-full w-full object-cover" /> : initials(name)}
               </div>
               <h2 className="mt-5 text-lg font-bold text-[#16263c]">{name || profile.name}</h2>
               <p className="mt-1 text-sm capitalize text-[#718096]">{profile.role} account</p>
