@@ -479,6 +479,9 @@ export async function fetchFirebaseEvaluationSessionsPage(request: {
   query?: string;
   status?: EvaluationSessionStatus | "";
   year?: string;
+  month?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }): Promise<EvaluationSessionsPage> {
   const queryText = stringValue(request.query).trim().toLowerCase();
   const responses = await allResponses();
@@ -493,6 +496,9 @@ export async function fetchFirebaseEvaluationSessionsPage(request: {
     }))
     .filter((session) => !request.status || session.status === request.status)
     .filter((session) => !request.year || session.trainingDate.startsWith(request.year))
+    .filter((session) => !request.month || session.trainingDate.slice(5, 7) === String(request.month).padStart(2, "0"))
+    .filter((session) => !request.dateFrom || session.trainingDate >= request.dateFrom)
+    .filter((session) => !request.dateTo || session.trainingDate <= request.dateTo)
     .filter((session) =>
       !queryText ||
       `${session.courseName} ${session.trainerName} ${session.location}`
