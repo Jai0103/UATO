@@ -356,6 +356,8 @@ export async function fetchUaMaintenanceRecordsPage(
     query?: string;
     year?: string;
     month?: string;
+    dateFrom?: string;
+    dateTo?: string;
   } = {}
 ) {
   const pageSize = Math.max(1, Math.min(Number(request.pageSize) || 10, 25));
@@ -363,9 +365,13 @@ export async function fetchUaMaintenanceRecordsPage(
   const search = text(request.query).trim().toLowerCase();
   const year = text(request.year).trim();
   const month = text(request.month).trim().padStart(2, "0");
+  const dateFrom = text(request.dateFrom).slice(0, 10);
+  const dateTo = text(request.dateTo).slice(0, 10);
   const records = (await loadSummaries()).filter((record) => {
     if (year && record.inspectionDate.slice(0, 4) !== year) return false;
     if (request.month && record.inspectionDate.slice(5, 7) !== month) return false;
+    if (dateFrom && record.inspectionDate < dateFrom) return false;
+    if (dateTo && record.inspectionDate > dateTo) return false;
     if (!search) return true;
     return [record.uaModel, record.uaId, record.checkedByName].some((value) =>
       value.toLowerCase().includes(search)
