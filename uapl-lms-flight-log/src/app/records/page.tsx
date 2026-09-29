@@ -70,6 +70,9 @@ export default function RecordsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
+  const [trainerFilter, setTrainerFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -81,6 +84,18 @@ export default function RecordsPage() {
   const [selectedRecord, setSelectedRecord] = useState<FlightLogRecord | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const requestSequence = useRef(0);
+
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    const month = parameters.get("month") || "";
+    const year = parameters.get("year") || "";
+    const trainer = parameters.get("trainer") || "";
+    setSelectedMonth(month);
+    setSelectedYear(year);
+    setTrainerFilter(trainer);
+    setDateFrom(parameters.get("dateFrom") || "");
+    setDateTo(parameters.get("dateTo") || "");
+  }, []);
 
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -120,6 +135,9 @@ export default function RecordsPage() {
         query: debouncedQuery,
         month: selectedMonth,
         year: selectedYear,
+        trainer: trainerFilter,
+        dateFrom,
+        dateTo,
       };
       const result = await fetchFirebaseFlightLogRecordsPage(request);
 
@@ -147,7 +165,7 @@ export default function RecordsPage() {
         setLoading(false);
       }
     }
-  }, [debouncedQuery, notify, page, refreshKey, selectedMonth, selectedYear]);
+  }, [dateFrom, dateTo, debouncedQuery, notify, page, refreshKey, selectedMonth, selectedYear, trainerFilter]);
 
   useEffect(() => {
     void loadRecords();
@@ -305,6 +323,9 @@ export default function RecordsPage() {
     setDebouncedQuery("");
     setSelectedMonth("");
     setSelectedYear("");
+    setTrainerFilter("");
+    setDateFrom("");
+    setDateTo("");
     setPage(1);
   }
 
@@ -342,6 +363,7 @@ export default function RecordsPage() {
           <div className="mb-4">
             <p className="app-section-label">Find records</p>
             <p className="mt-1 text-sm text-slate-500">Search by student identity or narrow the list by month and year.</p>
+            {trainerFilter || dateFrom || dateTo ? <div className="mt-3 flex flex-wrap gap-2">{trainerFilter ? <span className="rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">Trainer: {trainerFilter}</span> : null}{dateFrom || dateTo ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">Dashboard range: {dateFrom || "start"} to {dateTo || "today"}</span> : null}</div> : null}
           </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_180px_160px_auto] lg:items-end">
             <label className="min-w-0">
