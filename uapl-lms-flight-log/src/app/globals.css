@@ -548,7 +548,22 @@ html.reduce-motion *::after {
   .app-mobile-header {
     border-color: #d8dadf;
     background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 2px 10px rgba(28, 30, 33, 0.1);
+    box-shadow: none;
+  }
+
+  .app-top-header,
+  .app-mobile-header {
+    transition: box-shadow 180ms ease, border-color 180ms ease,
+      background-color 180ms ease;
+  }
+
+  .app-top-header-elevated {
+    border-color: #cdd5df !important;
+    box-shadow: 0 6px 20px rgba(28, 30, 33, 0.1);
+  }
+
+  .app-sidebar-toggle {
+    box-shadow: 0 2px 7px rgba(28, 30, 33, 0.1);
   }
 
   .app-account-panel {
@@ -738,6 +753,12 @@ html.dark .app-mobile-header {
   border-color: #d8e1e8 !important;
   background: #ffffff !important;
   color: #13273f !important;
+}
+
+html.dark .app-mobile-header {
+  border-color: #3e4042 !important;
+  background: rgba(36, 37, 38, 0.96) !important;
+  color: #f0f2f5 !important;
 }
 
 html.dark .app-top-header {
