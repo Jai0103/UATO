@@ -5,13 +5,11 @@ import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import {
   APPROVAL_TYPE_LABELS,
-  CAAS_ESOMS_URL,
   type ApprovalDashboardSummary
 } from "@/lib/approvals";
 import { fetchFirebaseApprovalDashboardSummary } from "@/lib/approvals-api";
 import { fetchFirebaseFlightDashboard } from "@/lib/flight-log-firebase";
 import { fetchAttendanceDashboardAnalytics } from "@/lib/attendance-api";
-import { logoutSecurely } from "@/lib/auth-api";
 import type {
   AttendanceDashboardAnalytics,
   AttendanceSession
@@ -22,15 +20,11 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
-  ExternalLink,
   GraduationCap,
-  Loader2,
-  LogOut,
   ShieldCheck,
   Timer,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type RecentRecord = {
@@ -152,8 +146,6 @@ function attendanceMonthlyActivity(
 
 export default function AdminPage() {
   const { notify } = useAppMessage();
-  const router = useRouter();
-  const [signingOut, setSigningOut] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
   const [approvalDashboard, setApprovalDashboard] =
     useState<ApprovalDashboardSummary>(emptyApprovalDashboard);
@@ -167,6 +159,7 @@ export default function AdminPage() {
     });
   const [attendanceAvailable, setAttendanceAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState("");
 
   useEffect(() => {
     async function loadDashboard() {
@@ -219,6 +212,7 @@ export default function AdminPage() {
               : "Firebase approval information could not be loaded."
         });
       }
+      setLastUpdated(new Date().toISOString());
     }
 
     void loadDashboard();
@@ -243,18 +237,6 @@ export default function AdminPage() {
       )
     };
   }, [attendanceAnalytics]);
-
-  async function signOut() {
-    if (signingOut) return;
-    setSigningOut(true);
-    try {
-      await logoutSecurely();
-      router.replace("/");
-    } catch (error) {
-      setSigningOut(false);
-      notify({ type: "error", title: "Sign out failed", message: error instanceof Error ? error.message : "Please try again." });
-    }
-  }
 
   const dashboardStats = [
     {
@@ -293,21 +275,14 @@ export default function AdminPage() {
 
       <div className="app-page">
         <section className="app-page-header dashboard-header">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-wider text-[#075f8f]">Overview</p>
-              <h1 className="mt-1 text-2xl font-bold text-[#16263c] sm:text-3xl">
+              <h1 className="text-2xl font-bold text-[#16263c] sm:text-3xl">
                 Dashboard
               </h1>
+              <p className="mt-2 text-sm text-[#6b7d92]">Operational performance, training activity, and regulatory status.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Link href="/flight-logs" className="app-button-primary min-h-11 flex-1 sm:flex-none">
-                <ClipboardList className="h-4 w-4" /> New Flight Log
-              </Link>
-              <button type="button" title="Sign out" aria-label="Sign out" onClick={() => void signOut()} disabled={signingOut} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] bg-white text-[#52667d] transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075f8f] disabled:opacity-50">
-                {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-              </button>
-            </div>
+            <p className="text-xs font-medium text-[#8a99aa]">{lastUpdated ? `Updated ${formatDate(lastUpdated)}` : "Connecting to Firebase..."}</p>
           </div>
         </section>
 
@@ -382,7 +357,7 @@ export default function AdminPage() {
             <div className="mt-5 divide-y divide-[#e7edf3] border-t border-[#e7edf3]">
               {dashboard.recentRecords.length ? (
                 dashboard.recentRecords.map((record) => (
-                  <div key={record.id} className="px-1 py-4 transition hover:bg-[#f6f9fb]">
+                  <Link key={record.id} href="/records" className="block rounded-md px-2 py-4 transition hover:bg-[#f1f6fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/30">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-[#16263c]">
@@ -399,7 +374,7 @@ export default function AdminPage() {
                     <p className="mt-2 text-xs text-[#8a99aa]">
                       {formatDate(record.updatedAt || record.createdAt)}
                     </p>
-                  </div>
+                  </Link>
                 ))
               ) : (
                 <div className="bg-[#f7f9fb] p-8 text-center">
@@ -476,6 +451,7 @@ export default function AdminPage() {
 
 function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [period, setPeriod] = useState<6 | 12>(12);
 
   if (!data.length) {
     return (
@@ -490,17 +466,18 @@ function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
     );
   }
 
+  const visibleData = data.slice(-period);
   const width = 720;
   const height = 286;
   const padding = { top: 24, right: 22, bottom: 48, left: 44 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const maximum = Math.max(1, ...data.map((month) => month.count));
-  const points = data.map((month, index) => ({
+  const maximum = Math.max(1, ...visibleData.map((month) => month.count));
+  const points = visibleData.map((month, index) => ({
     ...month,
     x:
       padding.left +
-      (data.length === 1 ? chartWidth / 2 : (index / (data.length - 1)) * chartWidth),
+      (visibleData.length === 1 ? chartWidth / 2 : (index / (visibleData.length - 1)) * chartWidth),
     y: padding.top + chartHeight - (month.count / maximum) * chartHeight
   }));
   const linePath = points
@@ -514,6 +491,11 @@ function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
 
   return (
     <div className="relative mt-5 min-w-0">
+      <div className="mb-3 flex justify-end">
+        <div className="inline-flex rounded-lg border border-[#d7e0ea] bg-[#f7f9fb] p-1" aria-label="Chart period">
+          {[6, 12].map((months) => <button key={months} type="button" onClick={() => { setPeriod(months as 6 | 12); setActiveIndex(null); }} className={`h-8 rounded-md px-3 text-xs font-bold transition ${period === months ? "bg-white text-[#075f8f] shadow-sm" : "text-[#718096] hover:text-[#405168]"}`}>{months} months</button>)}
+        </div>
+      </div>
       {activePoint ? (
         <div
           className={`pointer-events-none absolute z-20 min-w-[132px] -translate-y-full rounded-lg bg-[#16263c] px-3 py-2 text-center shadow-xl transition-all duration-150 ${
@@ -866,7 +848,7 @@ function ApprovalMonitoringPanel({
 
   return (
     <section className={`dashboard-approval-panel overflow-hidden rounded-lg border ${panelTone}`}>
-      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+      <Link href="/approvals" className="group grid gap-5 p-4 transition hover:bg-white/45 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
         <div className="flex min-w-0 items-start gap-3 sm:gap-4">
           <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconTone}`}>
             {!available ? (
@@ -910,23 +892,8 @@ function ApprovalMonitoringPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-          <Link
-            href="/approvals"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#c7d4e0] bg-white px-4 text-sm font-semibold text-[#29445f] transition hover:bg-[#f5f8fb]"
-          >
-            <ShieldCheck className="h-4 w-4" /> Manage Approvals
-          </Link>
-          <a
-            href={CAAS_ESOMS_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#102a43] px-4 text-sm font-semibold text-white transition hover:bg-[#173b5d]"
-          >
-            Renew in CAAS <ExternalLink className="h-4 w-4" />
-          </a>
-        </div>
-      </div>
+        <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#075f8f]">View register <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
+      </Link>
 
       {available && dashboard.totalApprovals > 0 ? (
         <div className="grid grid-cols-2 border-t border-black/5 bg-white/65 sm:grid-cols-4">
