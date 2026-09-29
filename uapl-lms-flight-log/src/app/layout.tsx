@@ -59,8 +59,12 @@ export const viewport: Viewport = {
 const themeInitializationScript = `
   (function () {
     try {
-      var savedTheme = localStorage.getItem("uapl-interface-theme");
-      document.documentElement.classList.toggle("dark", savedTheme === "dark");
+      var saved = JSON.parse(localStorage.getItem("uapl-interface-preferences") || "{}");
+      var legacyTheme = localStorage.getItem("uapl-interface-theme");
+      var theme = saved.theme || legacyTheme || "system";
+      var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.classList.toggle("dark", theme === "dark" || (theme === "system" && systemDark));
+      document.documentElement.classList.toggle("reduce-motion", saved.reducedMotion === true);
     } catch (error) {
       document.documentElement.classList.remove("dark");
     }
