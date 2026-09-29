@@ -780,7 +780,7 @@ type UserNotification = {
   id: string;
   title: string;
   message: string;
-  category: "approval" | "attendance" | "evaluation" | "system";
+  category: "approval" | "attendance" | "evaluation" | "flight" | "maintenance" | "training" | "fatigue" | "system";
   priority: NotificationPriority;
   actionUrl: string;
   actionLabel: string;
@@ -799,16 +799,45 @@ function dateMillis(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function dayDifference(value: unknown) {
-  const target = dateMillis(value);
-  if (!target) return null;
-  const singaporeToday = new Intl.DateTimeFormat("en-CA", {
+function singaporeTodayKey() {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Singapore",
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
   }).format(new Date());
-  const today = dateMillis(singaporeToday);
+}
+
+function currentWeekMondayKey() {
+  const today = singaporeTodayKey();
+  const date = new Date(`${today}T12:00:00+08:00`);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function notificationFingerprint(values: string[]) {
+  return createHash("sha256")
+    .update([...values].sort().join("|"))
+    .digest("hex")
+    .slice(0, 12);
+}
+
+function itemPreview(values: string[]) {
+  const clean = values.map((value) => value.trim()).filter(Boolean);
+  if (clean.length <= 3) return clean.join(", ");
+  return `${clean.slice(0, 3).join(", ")} and ${clean.length - 3} more`;
+}
+
+function dayDifference(value: unknown) {
+  const target = dateMillis(value);
+  if (!target) return null;
+  const today = dateMillis(singaporeTodayKey());
   return Math.ceil((target - today) / 86_400_000);
 }
 
@@ -832,13 +861,53 @@ export const listUserNotifications = callable(async (request) => {
   const approvalPromise = actor.role === "admin"
     ? db.collection("approvalRecords").get()
     : Promise.resolve(null);
+  const flightRecordsPromise = actor.role === "admin"
+    ? db.collection("flightLogRecords").get()
+    : Promise.resolve(null);
+  const flightSignaturesPromise = actor.role === "admin"
+    ? db.collection("flightLogSignatures").get()
+    : Promise.resolve(null);
+  const maintenanceRecordsPromise = actor.role === "admin"
+    ? db.collection("uaMaintenanceRecords").get()
+    : Promise.resolve(null);
+  const maintenanceMasterPromise = actor.role === "admin"
+    ? db.collection("uaMaintenanceMasterData").get()
+    : Promise.resolve(null);
+  const staffTrainingPromise = actor.role === "admin"
+    ? db.collection("staffTrainingRecords").get()
+    : Promise.resolve(null);
+  const fatigueRecordsPromise = actor.role === "admin"
+    ? db.collection("fatigueRiskRecords").get()
+    : Promise.resolve(null);
+  const usersPromise = actor.role === "admin"
+    ? db.collection("users").get()
+    : Promise.resolve(null);
 
-  const [attendanceSnapshot, evaluationSnapshot, stateSnapshot, approvalSnapshot] =
+  const [
+    attendanceSnapshot,
+    evaluationSnapshot,
+    stateSnapshot,
+    approvalSnapshot,
+    flightRecordsSnapshot,
+    flightSignaturesSnapshot,
+    maintenanceRecordsSnapshot,
+    maintenanceMasterSnapshot,
+    staffTrainingSnapshot,
+    fatigueRecordsSnapshot,
+    usersSnapshot
+  ] =
     await Promise.all([
       attendancePromise,
       evaluationPromise,
       statePromise,
-      approvalPromise
+      approvalPromise,
+      flightRecordsPromise,
+      flightSignaturesPromise,
+      maintenanceRecordsPromise,
+      maintenanceMasterPromise,
+      staffTrainingPromise,
+      fatigueRecordsPromise,
+      usersPromise
     ]);
 
   const states = new Map<string, NotificationState>();
@@ -860,12 +929,13 @@ export const listUserNotifications = callable(async (request) => {
     const periods = [data.amOpen === true ? "AM" : "", data.pmOpen === true ? "PM" : ""]
       .filter(Boolean)
       .join(" and ");
+    const courseDays = dayDifference(data.courseDate);
     notifications.push({
       id,
       title: "Attendance QR is ready",
       message: `${courseName} has an open ${periods || "attendance"} check-in session.`,
       category: "attendance",
-      priority: "info",
+      priority: courseDays !== null && courseDays <= 0 ? "warning" : "info",
       actionUrl: "/attendance/trainer",
       actionLabel: "Open attendance",
       eventDate: text(data.courseDate) || new Date().toISOString(),
@@ -878,12 +948,13 @@ export const listUserNotifications = callable(async (request) => {
     const closesAt = dateMillis(data.closesAt);
     if (data.status !== "open" || (closesAt && closesAt < Date.now())) return;
     const id = `evaluation:${item.id}`;
+    const hoursRemaining = closesAt ? (closesAt - Date.now()) / 3_600_000 : null;
     notifications.push({
       id,
       title: "Student evaluation is open",
       message: `${text(data.courseName) || "Assigned course"} is ready for learner feedback.`,
       category: "evaluation",
-      priority: "info",
+      priority: hoursRemaining !== null && hoursRemaining <= 24 ? "warning" : "info",
       actionUrl: "/evaluations/trainer",
       actionLabel: "Open evaluation",
       eventDate: text(data.trainingDate) || text(data.opensAt) || new Date().toISOString(),
@@ -910,6 +981,142 @@ export const listUserNotifications = callable(async (request) => {
       state: states.get(id) || "unread"
     });
   });
+
+  if (flightRecordsSnapshot && flightSignaturesSnapshot) {
+    const signedIds = new Set(flightSignaturesSnapshot.docs.map((item) => item.id));
+    const incomplete = flightRecordsSnapshot.docs.filter((item) =>
+      !signedIds.has(item.id) || Number(item.data().flightCount) <= 0
+    );
+    if (incomplete.length) {
+      const ids = incomplete.map((item) => item.id);
+      const names = incomplete.map((item) => text(item.data().studentName) || item.id);
+      const id = `flight:${notificationFingerprint(ids)}`;
+      notifications.push({
+        id,
+        title: "Flight logs need completion",
+        message: `${incomplete.length} record${incomplete.length === 1 ? "" : "s"} need a signature or flight entry: ${itemPreview(names)}.`,
+        category: "flight",
+        priority: "warning",
+        actionUrl: "/records",
+        actionLabel: "Review records",
+        eventDate: singaporeTodayKey(),
+        state: states.get(id) || "unread"
+      });
+    }
+  }
+
+  if (maintenanceRecordsSnapshot && maintenanceMasterSnapshot) {
+    const latestByAircraft = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    maintenanceRecordsSnapshot.docs.forEach((item) => {
+      const data = item.data();
+      const keys = [text(data.uaId), text(data.uaModel)]
+        .map((value) => value.toLowerCase())
+        .filter(Boolean);
+      keys.forEach((key) => {
+        const current = latestByAircraft.get(key);
+        if (!current || text(data.inspectionDate) > text(current.data().inspectionDate)) {
+          latestByAircraft.set(key, item);
+        }
+      });
+    });
+    const activeAircraftMap = new Map<string, string>();
+    maintenanceMasterSnapshot.docs
+      .map((item) => item.data())
+      .filter((data) => data.section === "uaModels" && data.status !== "inactive")
+      .forEach((data) => {
+        const label = text(data.linkedUaId) || text(data.value);
+        const key = label.toLowerCase();
+        if (key && label) activeAircraftMap.set(key, label);
+      });
+    const activeAircraft = Array.from(activeAircraftMap, ([key, label]) => ({ key, label }));
+    const failed = activeAircraft.filter((aircraft) =>
+      Number(latestByAircraft.get(aircraft.key)?.data().failCount) > 0
+    );
+    const overdue = activeAircraft.filter((aircraft) => {
+      const inspectionDate = latestByAircraft.get(aircraft.key)?.data().inspectionDate;
+      const age = dayDifference(inspectionDate);
+      return age === null || age < -31;
+    });
+    if (failed.length) {
+      const id = `maintenance:${notificationFingerprint(failed.map((item) => `failed-${item.key}`))}`;
+      notifications.push({
+        id,
+        title: "UA maintenance failure requires action",
+        message: `${failed.length} aircraft have failed items on their latest check: ${itemPreview(failed.map((item) => item.label))}.`,
+        category: "maintenance",
+        priority: "critical",
+        actionUrl: "/ua-maintenance/records",
+        actionLabel: "Review maintenance",
+        eventDate: singaporeTodayKey(),
+        state: states.get(id) || "unread"
+      });
+    }
+    if (overdue.length) {
+      const id = `maintenance:${notificationFingerprint(overdue.map((item) => `overdue-${item.key}`))}`;
+      notifications.push({
+        id,
+        title: "Monthly UA maintenance is overdue",
+        message: `${overdue.length} aircraft need a current monthly check: ${itemPreview(overdue.map((item) => item.label))}.`,
+        category: "maintenance",
+        priority: "warning",
+        actionUrl: "/ua-maintenance",
+        actionLabel: "Open checklist",
+        eventDate: singaporeTodayKey(),
+        state: states.get(id) || "unread"
+      });
+    }
+  }
+
+  if (staffTrainingSnapshot) {
+    const incomplete = staffTrainingSnapshot.docs.filter((item) => {
+      const data = item.data();
+      const total = Number(data.totalCount) || 0;
+      return total > 0 && (Number(data.completedCount) || 0) < total;
+    });
+    if (incomplete.length) {
+      const id = `training:${notificationFingerprint(incomplete.map((item) => item.id))}`;
+      const names = incomplete.map((item) => text(item.data().staffName) || item.id);
+      notifications.push({
+        id,
+        title: "Staff training remains incomplete",
+        message: `${incomplete.length} staff checklist${incomplete.length === 1 ? " is" : "s are"} incomplete: ${itemPreview(names)}.`,
+        category: "training",
+        priority: "warning",
+        actionUrl: "/staff-training/records",
+        actionLabel: "Review training",
+        eventDate: singaporeTodayKey(),
+        state: states.get(id) || "unread"
+      });
+    }
+  }
+
+  if (fatigueRecordsSnapshot && usersSnapshot) {
+    const monday = currentWeekMondayKey();
+    const completedEmails = new Set(
+      fatigueRecordsSnapshot.docs
+        .filter((item) => text(item.data().assessmentDate) === monday)
+        .map((item) => email(item.data().instructorEmail))
+        .filter(Boolean)
+    );
+    const missing = usersSnapshot.docs
+      .map((item) => item.data())
+      .filter((data) => data.status === "active" && email(data.email) && !completedEmails.has(email(data.email)))
+      .map((data) => text(data.name) || email(data.email));
+    if (missing.length) {
+      const id = `fatigue:${monday.replace(/-/g, "")}`;
+      notifications.push({
+        id,
+        title: "Weekly fatigue checks are outstanding",
+        message: `${missing.length} active user${missing.length === 1 ? " has" : "s have"} no checklist for this week: ${itemPreview(missing)}.`,
+        category: "fatigue",
+        priority: "warning",
+        actionUrl: "/fatigue-risk",
+        actionLabel: "Complete checks",
+        eventDate: monday,
+        state: states.get(id) || "unread"
+      });
+    }
+  }
 
   const priorityOrder: Record<NotificationPriority, number> = {
     critical: 0,
