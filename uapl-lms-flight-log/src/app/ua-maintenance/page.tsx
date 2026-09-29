@@ -155,11 +155,22 @@ export default function UaMaintenancePage() {
   const [search, setSearch] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [masterSection, setMasterSection] =
     useState<UaMaintenanceMasterSection>("uaModels");
   const [newMasterValue, setNewMasterValue] = useState("");
   const [newMasterUaId, setNewMasterUaId] = useState("");
   const recordsRequestSequence = useRef(0);
+
+  useEffect(() => {
+    if (routeMode !== "records") return;
+    const parameters = new URLSearchParams(window.location.search);
+    setSelectedMonth(parameters.get("month") || "");
+    setSelectedYear(parameters.get("year") || "");
+    setDateFrom(parameters.get("dateFrom") || "");
+    setDateTo(parameters.get("dateTo") || "");
+  }, [routeMode]);
 
   const yearOptions = useMemo(() => {
     const year = new Date().getFullYear();
@@ -206,7 +217,7 @@ export default function UaMaintenancePage() {
     }, 350);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, selectedYear, selectedMonth, routeMode, loading]);
+  }, [search, selectedYear, selectedMonth, dateFrom, dateTo, routeMode, loading]);
 
   useEffect(() => {
     if (!recordsLoading) {
@@ -242,7 +253,9 @@ export default function UaMaintenancePage() {
         pageSize: 10,
         query,
         year,
-        month
+        month,
+        dateFrom,
+        dateTo
       };
       const result = await fetchUaMaintenanceRecordsPage(request);
 
@@ -839,7 +852,8 @@ export default function UaMaintenancePage() {
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700"><CalendarDays className="h-5 w-5" /></div>
               <div><h2 className="font-bold text-slate-950">Maintenance history</h2><p className="text-sm text-slate-500">Search and filter completed checks by aircraft and date.</p></div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_150px_auto]"><label className="relative sm:col-span-2 xl:col-span-1"><span className="sr-only">Search maintenance records</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search model, UA ID, or checker" /></label><select className={`${inputClass} mt-0`} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="">All months</option>{monthOptions.map((month, index) => <option key={month} value={String(index + 1).padStart(2, "0")}>{month}</option>)}</select><select className={`${inputClass} mt-0`} value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}><option value="">All years</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select><button type="button" onClick={() => { setSearch(""); setSelectedMonth(""); setSelectedYear(""); }} disabled={!search && !selectedMonth && !selectedYear} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button></div>
+            {dateFrom || dateTo ? <div className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">Dashboard range: {dateFrom || "start"} to {dateTo || "today"}</div> : null}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_150px_auto]"><label className="relative sm:col-span-2 xl:col-span-1"><span className="sr-only">Search maintenance records</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className={`${inputClass} mt-0 pl-10`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search model, UA ID, or checker" /></label><select className={`${inputClass} mt-0`} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}><option value="">All months</option>{monthOptions.map((month, index) => <option key={month} value={String(index + 1).padStart(2, "0")}>{month}</option>)}</select><select className={`${inputClass} mt-0`} value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)}><option value="">All years</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select><button type="button" onClick={() => { setSearch(""); setSelectedMonth(""); setSelectedYear(""); setDateFrom(""); setDateTo(""); }} disabled={!search && !selectedMonth && !selectedYear && !dateFrom && !dateTo} className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-40 md:h-11"><X className="h-4 w-4" /> Clear</button></div>
             <div className="flex flex-col gap-3 rounded-lg border border-cyan-200 bg-cyan-50 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
               <div className="flex items-center gap-3">
                 <input
