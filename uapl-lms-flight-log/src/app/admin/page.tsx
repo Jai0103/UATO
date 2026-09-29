@@ -3,927 +3,178 @@
 import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
-import {
-  APPROVAL_TYPE_LABELS,
-  type ApprovalDashboardSummary
-} from "@/lib/approvals";
 import { fetchFirebaseApprovalDashboardSummary } from "@/lib/approvals-api";
-import { fetchFirebaseFlightDashboard } from "@/lib/flight-log-firebase";
-import { fetchAttendanceDashboardAnalytics } from "@/lib/attendance-api";
-import type {
-  AttendanceDashboardAnalytics,
-  AttendanceSession
-} from "@/lib/attendance";
+import type { ApprovalDashboardSummary } from "@/lib/approvals";
 import {
-  AlertTriangle,
-  BellRing,
-  ChevronRight,
-  ClipboardList,
-  Clock,
-  GraduationCap,
-  ShieldCheck,
-  Timer,
+  fetchDashboardAnalytics,
+  type DashboardAnalytics,
+  type DashboardDateRange,
+  type DashboardMonthPoint
+} from "@/lib/dashboard-analytics";
+import {
+  Activity, CalendarDays, ChevronRight, ClipboardCheck, Gauge, Plane,
+  ShieldCheck, Star, Timer, UsersRound, Wrench
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
-type RecentRecord = {
-  id: string;
-  studentName: string;
-  company: string;
-  flightCount: number;
-  createdAt: string;
-  updatedAt: string;
+const emptyAnalytics: DashboardAnalytics = {
+  totals: {
+    flights: 0, flightMinutes: 0, trainers: 0, maintenanceChecks: 0,
+    maintenanceCompliance: 0, attendanceSessions: 0, attendanceCheckIns: 0,
+    attendanceRate: 0, evaluationResponses: 0, evaluationAverage: 0
+  },
+  months: [],
+  trainerFlightHours: []
 };
 
-type MonthlyActivity = {
-  key: string;
-  label: string;
-  count: number;
+const emptyApproval: ApprovalDashboardSummary = {
+  totalApprovals: 0, activeApprovals: 0, renewalUpcoming: 0, dueSoon: 0,
+  urgent: 0, expiringToday: 0, expired: 0, missingDocuments: 0, nextExpiry: null
 };
 
-type AttendanceMonthlyActivity = {
-  key: string;
-  label: string;
-  sessions: number;
-  checkIns: number;
-};
+type Preset = "30d" | "90d" | "6m" | "12m" | "custom";
 
-type DashboardData = {
-  totalStudents: number;
-  totalRecords: number;
-  pendingRecords: number;
-  completedRecords: number;
-  activeTrainers: number;
-  totalFlights: number;
-  totalMinutes: number;
-  recentRecords: RecentRecord[];
-  monthlyActivity: MonthlyActivity[];
-};
-
-const emptyDashboard: DashboardData = {
-  totalStudents: 0,
-  totalRecords: 0,
-  pendingRecords: 0,
-  completedRecords: 0,
-  activeTrainers: 0,
-  totalFlights: 0,
-  totalMinutes: 0,
-  recentRecords: [],
-  monthlyActivity: []
-};
-
-const emptyApprovalDashboard: ApprovalDashboardSummary = {
-  totalApprovals: 0,
-  activeApprovals: 0,
-  renewalUpcoming: 0,
-  dueSoon: 0,
-  urgent: 0,
-  expiringToday: 0,
-  expired: 0,
-  missingDocuments: 0,
-  nextExpiry: null
-};
-
-function formatDate(value: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("en-SG", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
+function localDate(date: Date) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
-function formatApprovalDate(value: string) {
-  if (!value) return "-";
-  const parts = value.slice(0, 10).split("-");
-  if (parts.length !== 3) return value;
-
-  const date = new Date(
-    Number(parts[0]),
-    Number(parts[1]) - 1,
-    Number(parts[2])
-  );
-
-  return new Intl.DateTimeFormat("en-SG", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  }).format(date);
+function presetRange(preset: Exclude<Preset, "custom">): DashboardDateRange {
+  const end = new Date();
+  const start = new Date(end);
+  if (preset === "30d") start.setDate(start.getDate() - 29);
+  if (preset === "90d") start.setDate(start.getDate() - 89);
+  if (preset === "6m") start.setMonth(start.getMonth() - 5, 1);
+  if (preset === "12m") start.setMonth(start.getMonth() - 11, 1);
+  return { dateFrom: localDate(start), dateTo: localDate(end) };
 }
 
 function formatMinutes(minutes: number) {
-  const safeMinutes = Math.max(0, Math.round(minutes));
-  const hours = Math.floor(safeMinutes / 60);
-  const remaining = safeMinutes % 60;
-  return hours ? `${hours}h ${remaining}m` : `${remaining}m`;
+  const value = Math.max(0, Math.round(minutes));
+  return `${Math.floor(value / 60)}h ${value % 60}m`;
 }
 
-function attendanceMonthlyActivity(
-  records: AttendanceSession[],
-  monthlyCheckIns: AttendanceDashboardAnalytics["monthlyCheckIns"]
-) {
-  const formatter = new Intl.DateTimeFormat("en-SG", { month: "short" });
-  const current = new Date();
-  const months: AttendanceMonthlyActivity[] = [];
+function formatPercent(value: number) {
+  return `${Math.round(value)}%`;
+}
 
-  for (let offset = 11; offset >= 0; offset -= 1) {
-    const date = new Date(current.getFullYear(), current.getMonth() - offset, 1);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    const monthlyRecords = records.filter((record) => record.courseDate.startsWith(key));
-    months.push({
-      key,
-      label: formatter.format(date),
-      sessions: monthlyRecords.length,
-      checkIns: monthlyCheckIns.find((month) => month.key === key)?.count || 0
-    });
-  }
-
-  return months;
+function monthHref(route: string, key: string) {
+  const [year, month] = key.split("-");
+  return `${route}?year=${year}&month=${month}`;
 }
 
 export default function AdminPage() {
-  const { notify } = useAppMessage();
-  const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
-  const [approvalDashboard, setApprovalDashboard] =
-    useState<ApprovalDashboardSummary>(emptyApprovalDashboard);
-  const [approvalMonitoringAvailable, setApprovalMonitoringAvailable] =
-    useState(true);
-  const [attendanceAnalytics, setAttendanceAnalytics] =
-    useState<AttendanceDashboardAnalytics>({
-      sessions: [],
-      totalCheckIns: 0,
-      monthlyCheckIns: []
-    });
-  const [attendanceAvailable, setAttendanceAvailable] = useState(true);
+  const message = useAppMessage();
+  const [preset, setPreset] = useState<Preset>("12m");
+  const [draftRange, setDraftRange] = useState(() => presetRange("12m"));
+  const [range, setRange] = useState(() => presetRange("12m"));
+  const [analytics, setAnalytics] = useState<DashboardAnalytics>(emptyAnalytics);
+  const [approval, setApproval] = useState<ApprovalDashboardSummary>(emptyApproval);
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState("");
+  const [updatedAt, setUpdatedAt] = useState("");
 
-  useEffect(() => {
-    async function loadDashboard() {
-      setLoading(true);
-      const [flightResult, attendanceResult, approvalResult] = await Promise.allSettled([
-        fetchFirebaseFlightDashboard(),
-        fetchAttendanceDashboardAnalytics(),
-        fetchFirebaseApprovalDashboardSummary()
-      ]);
-
-      if (flightResult.status === "fulfilled") {
-        setDashboard(flightResult.value);
-      } else {
-        setDashboard(emptyDashboard);
-        notify({
-          type: "error",
-          title: "Unable to load Flight Log dashboard",
-          message:
-            flightResult.reason instanceof Error
-              ? flightResult.reason.message
-              : "Firebase statistics could not be loaded."
-        });
-      }
-
-      if (attendanceResult.status === "fulfilled") {
-        setAttendanceAnalytics(attendanceResult.value);
-        setAttendanceAvailable(true);
-      } else {
-        setAttendanceAnalytics({
-          sessions: [],
-          totalCheckIns: 0,
-          monthlyCheckIns: []
-        });
-        setAttendanceAvailable(false);
-      }
-      setLoading(false);
-
-      if (approvalResult.status === "fulfilled") {
-        setApprovalDashboard(approvalResult.value);
-        setApprovalMonitoringAvailable(true);
-      } else {
-        setApprovalDashboard(emptyApprovalDashboard);
-        setApprovalMonitoringAvailable(false);
-        notify({
-          type: "warning",
-          title: "Approval monitoring unavailable",
-          message:
-            approvalResult.reason instanceof Error
-              ? approvalResult.reason.message
-              : "Firebase approval information could not be loaded."
-        });
-      }
-      setLastUpdated(new Date().toISOString());
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [analyticsResult, approvalResult] = await Promise.allSettled([
+      fetchDashboardAnalytics(range), fetchFirebaseApprovalDashboardSummary()
+    ]);
+    if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
+    else {
+      setAnalytics(emptyAnalytics);
+      message.error("Dashboard analytics could not load", analyticsResult.reason instanceof Error ? analyticsResult.reason.message : "Please refresh and try again.");
     }
+    if (approvalResult.status === "fulfilled") setApproval(approvalResult.value);
+    setUpdatedAt(new Date().toISOString());
+    setLoading(false);
+  }, [message, range]);
 
-    void loadDashboard();
-  }, [notify]);
+  useEffect(() => { void load(); }, [load]);
 
-  const annualActivityTotal = useMemo(
-    () => dashboard.monthlyActivity.reduce((total, month) => total + month.count, 0),
-    [dashboard.monthlyActivity]
-  );
-
-  const attendanceInsights = useMemo(() => {
-    const attendanceRecords = attendanceAnalytics.sessions;
-    return {
-      totalSessions: attendanceRecords.length,
-      checkIns: attendanceAnalytics.totalCheckIns,
-      open: attendanceRecords.filter((record) => record.status === "open").length,
-      closed: attendanceRecords.filter((record) => record.status === "closed").length,
-      draft: attendanceRecords.filter((record) => record.status === "draft").length,
-      monthly: attendanceMonthlyActivity(
-        attendanceRecords,
-        attendanceAnalytics.monthlyCheckIns
-      )
-    };
-  }, [attendanceAnalytics]);
-
-  const dashboardStats = [
-    {
-      label: "Students",
-      value: String(dashboard.totalStudents),
-      icon: GraduationCap,
-      description: "Unique student records",
-      tone: "bg-sky-50 text-sky-700"
-    },
-    {
-      label: "Pending",
-      value: String(dashboard.pendingRecords),
-      icon: Clock,
-      description: "Missing signature or entries",
-      tone: "bg-amber-50 text-amber-700"
-    },
-    {
-      label: "Flights",
-      value: String(dashboard.totalFlights),
-      icon: ClipboardList,
-      description: "Total flight entries",
-      tone: "bg-rose-50 text-rose-700"
-    },
-    {
-      label: "Flight Time",
-      value: formatMinutes(dashboard.totalMinutes),
-      icon: Timer,
-      description: "Combined recorded duration",
-      tone: "bg-teal-50 text-teal-700"
-    }
-  ];
-
-  return (
-    <AppShell>
-      {loading ? <LoadingOverlay label="Loading dashboard statistics..." /> : null}
-
-      <div className="app-page">
-        <section className="app-page-header dashboard-header">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-[#16263c] sm:text-3xl">
-                Dashboard
-              </h1>
-              <p className="mt-2 text-sm text-[#6b7d92]">Operational performance, training activity, and regulatory status.</p>
-            </div>
-            <p className="text-xs font-medium text-[#8a99aa]">{lastUpdated ? `Updated ${formatDate(lastUpdated)}` : "Connecting to Firebase..."}</p>
-          </div>
-        </section>
-
-        <ApprovalMonitoringPanel
-          dashboard={approvalDashboard}
-          available={approvalMonitoringAvailable}
-        />
-
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-          {dashboardStats.map((stat) => {
-            const Icon = stat.icon;
-            const [iconBackground, iconColor] = stat.tone.split(" ");
-
-            return (
-              <article
-                key={stat.label}
-                className="dashboard-stat-card group min-w-0 rounded-lg border border-[#d7e0ea] bg-white p-4 transition sm:p-5"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase text-[#6b7d92] sm:text-sm sm:normal-case">
-                      {stat.label}
-                    </p>
-                    <p className="mt-2 break-words text-2xl font-bold text-[#16263c] sm:text-3xl">
-                      {stat.value}
-                    </p>
-                  </div>
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconBackground} ${iconColor}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-[#718096]">
-                  {stat.description}
-                </p>
-              </article>
-            );
-          })}
-        </section>
-
-        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)]">
-          <article className="app-card dashboard-panel min-w-0 overflow-hidden">
-            <div className="flex flex-col gap-3 border-b border-[#e5ebf2] pb-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase text-[#075f8f]">Flight logs</p>
-                <h2 className="app-section-title mt-1">Monthly activity</h2>
-              </div>
-              <div className="w-fit rounded-lg border border-[#d4e7ef] bg-[#f0f7fa] px-4 py-2.5">
-                <p className="text-xl font-bold text-[#075f8f]">{annualActivityTotal}</p>
-                <p className="text-[11px] font-bold uppercase text-[#53748a]">
-                  12-month total
-                </p>
-              </div>
-            </div>
-
-            <MonthlyActivityChart data={dashboard.monthlyActivity} />
-          </article>
-
-          <article className="app-card dashboard-panel min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase text-[#075f8f]">Latest updates</p>
-                <h2 className="app-section-title mt-1">Recent records</h2>
-              </div>
-              <Link
-                href="/records"
-                className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-[#075f8f] transition hover:bg-[#edf5f8]"
-              >
-                View all <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="mt-5 divide-y divide-[#e7edf3] border-t border-[#e7edf3]">
-              {dashboard.recentRecords.length ? (
-                dashboard.recentRecords.map((record) => (
-                  <Link key={record.id} href="/records" className="block rounded-md px-2 py-4 transition hover:bg-[#f1f6fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/30">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-[#16263c]">
-                          {record.studentName || "-"}
-                        </p>
-                        <p className="mt-1 truncate text-sm text-[#6b7d92]">
-                          {record.company || "No company"}
-                        </p>
-                      </div>
-                      <span className="shrink-0 rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
-                        {record.flightCount} {record.flightCount === 1 ? "flight" : "flights"}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs text-[#8a99aa]">
-                      {formatDate(record.updatedAt || record.createdAt)}
-                    </p>
-                  </Link>
-                ))
-              ) : (
-                <div className="bg-[#f7f9fb] p-8 text-center">
-                  <p className="text-sm text-[#718096]">No recent records available.</p>
-                </div>
-              )}
-            </div>
-          </article>
-        </section>
-
-        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.6fr)]">
-          <article className="app-card dashboard-panel min-w-0 overflow-hidden">
-            <div className="flex flex-col gap-4 border-b border-[#e5ebf2] pb-5 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase text-[#075f8f]">Training attendance</p>
-                <h2 className="app-section-title mt-1">Attendance activity</h2>
-              </div>
-              <Link
-                href="/attendance/records"
-                className="inline-flex h-10 w-fit shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-[#075f8f] transition hover:bg-[#edf5f8]"
-              >
-                Attendance records <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#60748a]">
-              <span><strong className="text-[#16263c]">{attendanceInsights.totalSessions}</strong> sessions</span>
-              <span><strong className="text-[#16263c]">{attendanceInsights.checkIns}</strong> sign-ins</span>
-              <span><strong className="text-[#16263c]">{attendanceInsights.open}</strong> open</span>
-            </div>
-
-            {attendanceAvailable ? (
-              <AttendanceTrendChart data={attendanceInsights.monthly} />
-            ) : (
-              <div className="app-empty-state mt-5">
-                <p className="text-sm font-semibold text-[#405168]">
-                  Attendance analytics are temporarily unavailable
-                </p>
-                <p className="mt-1 text-sm text-[#718096]">
-                  Flight Log statistics remain available. Refresh to retry attendance data.
-                </p>
-              </div>
-            )}
-          </article>
-
-          <article className="app-card dashboard-panel min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase text-[#075f8f]">Session control</p>
-                <h2 className="app-section-title mt-1">Attendance status</h2>
-              </div>
-              <Link
-                href="/attendance"
-                aria-label="Manage attendance sessions"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d7e0ea] text-[#075f8f] transition hover:bg-[#edf5f8]"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <AttendanceStatusChart
-              draft={attendanceInsights.draft}
-              open={attendanceInsights.open}
-              closed={attendanceInsights.closed}
-            />
-
-          </article>
-        </section>
-
-      </div>
-    </AppShell>
-  );
-}
-
-function MonthlyActivityChart({ data }: { data: MonthlyActivity[] }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [period, setPeriod] = useState<6 | 12>(12);
-
-  if (!data.length) {
-    return (
-      <div className="app-empty-state mt-5">
-        <p className="text-sm font-semibold text-[#405168]">
-          No monthly activity available
-        </p>
-        <p className="mt-1 text-sm text-[#718096]">
-          Updated flight records will appear here.
-        </p>
-      </div>
-    );
+  function choosePreset(next: Exclude<Preset, "custom">) {
+    const nextRange = presetRange(next);
+    setPreset(next); setDraftRange(nextRange); setRange(nextRange);
   }
 
-  const visibleData = data.slice(-period);
-  const width = 720;
-  const height = 286;
-  const padding = { top: 24, right: 22, bottom: 48, left: 44 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-  const maximum = Math.max(1, ...visibleData.map((month) => month.count));
-  const points = visibleData.map((month, index) => ({
-    ...month,
-    x:
-      padding.left +
-      (visibleData.length === 1 ? chartWidth / 2 : (index / (visibleData.length - 1)) * chartWidth),
-    y: padding.top + chartHeight - (month.count / maximum) * chartHeight
-  }));
-  const linePath = points
-    .map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`)
-    .join(" ");
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${
-    padding.top + chartHeight
-  } L ${points[0].x} ${padding.top + chartHeight} Z`;
-  const activePoint = activeIndex === null ? null : points[activeIndex];
-  const pointColors = ["#0284c7", "#059669", "#d97706", "#e11d48", "#4f46e5", "#0d9488"];
+  function applyCustomRange() {
+    if (!draftRange.dateFrom || !draftRange.dateTo || draftRange.dateFrom > draftRange.dateTo) {
+      message.warning("Select a valid date range", "The start date must be on or before the end date.");
+      return;
+    }
+    setPreset("custom"); setRange(draftRange);
+  }
 
-  return (
-    <div className="relative mt-5 min-w-0">
-      <div className="mb-3 flex justify-end">
-        <div className="inline-flex rounded-lg border border-[#d7e0ea] bg-[#f7f9fb] p-1" aria-label="Chart period">
-          {[6, 12].map((months) => <button key={months} type="button" onClick={() => { setPeriod(months as 6 | 12); setActiveIndex(null); }} className={`h-8 rounded-md px-3 text-xs font-bold transition ${period === months ? "bg-white text-[#075f8f] shadow-sm" : "text-[#718096] hover:text-[#405168]"}`}>{months} months</button>)}
-        </div>
-      </div>
-      {activePoint ? (
-        <div
-          className={`pointer-events-none absolute z-20 min-w-[132px] -translate-y-full rounded-lg bg-[#16263c] px-3 py-2 text-center shadow-xl transition-all duration-150 ${
-            activeIndex === 0
-              ? "translate-x-0"
-              : activeIndex === points.length - 1
-                ? "-translate-x-full"
-                : "-translate-x-1/2"
-          }`}
-          style={{
-            left: `${(activePoint.x / width) * 100}%`,
-            top: `${(activePoint.y / height) * 100}%`
-          }}
-        >
-          <p className="text-[11px] font-semibold text-slate-300">{activePoint.label}</p>
-          <p className="mt-0.5 text-sm font-bold text-white">
-            {activePoint.count} {activePoint.count === 1 ? "updated record" : "updated records"}
-          </p>
-          <span
-            className={`absolute top-full h-2 w-2 -translate-y-1/2 rotate-45 bg-[#16263c] ${
-              activeIndex === 0
-                ? "left-4"
-                : activeIndex === points.length - 1
-                  ? "right-4"
-                  : "left-1/2 -translate-x-1/2"
-            }`}
-          />
-        </div>
-      ) : null}
-
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="block h-auto w-full overflow-visible"
-        role="img"
-        aria-label="Monthly record activity chart"
-        onMouseLeave={() => setActiveIndex(null)}
-      >
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = padding.top + chartHeight * ratio;
-          const value = Math.round(maximum * (1 - ratio));
-          return (
-            <g key={ratio}>
-              <line
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-                stroke="#dfe7ee"
-                strokeDasharray={ratio === 1 ? undefined : "4 6"}
-              />
-              <text
-                x={padding.left - 12}
-                y={y + 4}
-                textAnchor="end"
-                fill="#7b8ca0"
-                fontSize="11"
-                fontWeight="600"
-              >
-                {value}
-              </text>
-            </g>
-          );
-        })}
-
-        <path d={areaPath} fill="#dff1f6" opacity="0.72" />
-        <path
-          d={linePath}
-          fill="none"
-          stroke="#075f8f"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {points.map((point, index) => {
-          const active = activeIndex === index;
-          return (
-            <g
-              key={point.key}
-              role="button"
-              tabIndex={0}
-              aria-label={`${point.label}: ${point.count} updated records`}
-              className="cursor-pointer outline-none"
-              onMouseEnter={() => setActiveIndex(index)}
-              onFocus={() => setActiveIndex(index)}
-              onBlur={() => setActiveIndex(null)}
-              onClick={() => setActiveIndex(active ? null : index)}
-            >
-              {active ? (
-                <line
-                  x1={point.x}
-                  x2={point.x}
-                  y1={padding.top}
-                  y2={padding.top + chartHeight}
-                  stroke="#9fb5c5"
-                  strokeDasharray="3 5"
-                />
-              ) : null}
-              <circle cx={point.x} cy={point.y} r="18" fill="transparent" />
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r={active ? 7 : 5.5}
-                fill={pointColors[index % pointColors.length]}
-                stroke="white"
-                strokeWidth="3"
-                className="transition-all duration-150"
-              />
-              <text
-                x={point.x}
-                y={height - 18}
-                textAnchor="middle"
-                fill={active ? "#075f8f" : "#60748a"}
-                fontSize="12"
-                fontWeight={active ? "700" : "600"}
-              >
-                {point.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-
-    </div>
-  );
-}
-
-function AttendanceTrendChart({ data }: { data: AttendanceMonthlyActivity[] }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const width = 760;
-  const height = 280;
-  const padding = { top: 30, right: 22, bottom: 48, left: 42 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-  const maximum = Math.max(
-    1,
-    ...data.flatMap((month) => [month.sessions, month.checkIns])
-  );
-  const groupWidth = chartWidth / Math.max(1, data.length);
-  const barWidth = Math.min(16, groupWidth * 0.28);
-  const active = activeIndex === null ? null : data[activeIndex];
-
-  return (
-    <div className="relative mt-5 min-w-0">
-      <div className="flex flex-wrap items-center justify-end gap-4 px-2 pt-1 text-xs font-semibold text-[#60748a]">
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-sky-600" /> Sessions
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> AM / PM sign-ins
-        </span>
-      </div>
-
-      {active && activeIndex !== null ? (
-        <div
-          className={`pointer-events-none absolute top-14 z-20 min-w-[150px] rounded-lg bg-[#16263c] px-3 py-2 text-center shadow-xl ${
-            activeIndex < 2
-              ? "translate-x-0"
-              : activeIndex > data.length - 3
-                ? "-translate-x-full"
-                : "-translate-x-1/2"
-          }`}
-          style={{
-            left: `${((padding.left + groupWidth * (activeIndex + 0.5)) / width) * 100}%`
-          }}
-        >
-          <p className="text-[11px] font-semibold text-slate-300">{active.key}</p>
-          <p className="mt-1 text-sm font-bold text-white">
-            {active.sessions} sessions · {active.checkIns} sign-ins
-          </p>
-        </div>
-      ) : null}
-
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="block h-auto w-full"
-        role="img"
-        aria-label="Monthly attendance sessions and sign-ins"
-        onMouseLeave={() => setActiveIndex(null)}
-      >
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const y = padding.top + chartHeight * ratio;
-          return (
-            <g key={ratio}>
-              <line
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-                stroke="#dfe7ee"
-                strokeDasharray={ratio === 1 ? undefined : "4 6"}
-              />
-              <text
-                x={padding.left - 10}
-                y={y + 4}
-                textAnchor="end"
-                fill="#7b8ca0"
-                fontSize="11"
-                fontWeight="600"
-              >
-                {Math.round(maximum * (1 - ratio))}
-              </text>
-            </g>
-          );
-        })}
-
-        {data.map((month, index) => {
-          const center = padding.left + groupWidth * (index + 0.5);
-          const sessionHeight = (month.sessions / maximum) * chartHeight;
-          const checkInHeight = (month.checkIns / maximum) * chartHeight;
-          const isActive = activeIndex === index;
-          return (
-            <g
-              key={month.key}
-              role="button"
-              tabIndex={0}
-              aria-label={`${month.key}: ${month.sessions} sessions and ${month.checkIns} sign-ins`}
-              className="cursor-pointer outline-none"
-              onMouseEnter={() => setActiveIndex(index)}
-              onFocus={() => setActiveIndex(index)}
-              onBlur={() => setActiveIndex(null)}
-              onClick={() => setActiveIndex(isActive ? null : index)}
-            >
-              {isActive ? (
-                <rect
-                  x={center - groupWidth / 2 + 2}
-                  y={padding.top}
-                  width={groupWidth - 4}
-                  height={chartHeight}
-                  rx="4"
-                  fill="#edf5f8"
-                />
-              ) : null}
-              <rect
-                x={center - barWidth - 1.5}
-                y={padding.top + chartHeight - sessionHeight}
-                width={barWidth}
-                height={Math.max(month.sessions ? 2 : 0, sessionHeight)}
-                rx="3"
-                fill="#0284c7"
-              />
-              <rect
-                x={center + 1.5}
-                y={padding.top + chartHeight - checkInHeight}
-                width={barWidth}
-                height={Math.max(month.checkIns ? 2 : 0, checkInHeight)}
-                rx="3"
-                fill="#10b981"
-              />
-              <rect
-                x={center - groupWidth / 2}
-                y={padding.top}
-                width={groupWidth}
-                height={chartHeight}
-                fill="transparent"
-              />
-              <text
-                x={center}
-                y={height - 18}
-                textAnchor="middle"
-                fill={isActive ? "#075f8f" : "#60748a"}
-                fontSize="11"
-                fontWeight={isActive ? "700" : "600"}
-              >
-                {month.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-
-    </div>
-  );
-}
-
-function AttendanceStatusChart({
-  draft,
-  open,
-  closed
-}: {
-  draft: number;
-  open: number;
-  closed: number;
-}) {
-  const total = draft + open + closed;
-  const openPercent = total ? (open / total) * 100 : 0;
-  const draftPercent = total ? (draft / total) * 100 : 0;
-  const values = [
-    { label: "Open", value: open, color: "bg-emerald-500", text: "text-emerald-700" },
-    { label: "Draft", value: draft, color: "bg-amber-500", text: "text-amber-700" },
-    { label: "Closed", value: closed, color: "bg-sky-600", text: "text-sky-700" }
+  const stats = [
+    { label: "Flight time", value: formatMinutes(analytics.totals.flightMinutes), detail: `${analytics.totals.flights} flights across ${analytics.totals.trainers} trainers`, icon: Timer, tone: "bg-sky-50 text-sky-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Maintenance compliance", value: formatPercent(analytics.totals.maintenanceCompliance), detail: `${analytics.totals.maintenanceChecks} checklist decisions`, icon: Wrench, tone: "bg-emerald-50 text-emerald-700", href: `/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Attendance rate", value: formatPercent(analytics.totals.attendanceRate), detail: `${analytics.totals.attendanceCheckIns} check-ins in ${analytics.totals.attendanceSessions} sessions`, icon: ClipboardCheck, tone: "bg-violet-50 text-violet-700", href: `/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Evaluation average", value: analytics.totals.evaluationAverage ? `${analytics.totals.evaluationAverage.toFixed(2)} / 5` : "No responses", detail: `${analytics.totals.evaluationResponses} learner responses`, icon: Star, tone: "bg-amber-50 text-amber-700", href: `/evaluations?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` }
   ];
 
-  return (
-    <div className="mt-7 flex flex-col items-center gap-7 sm:flex-row xl:flex-col 2xl:flex-row">
-      <div className="flex h-36 w-36 shrink-0 items-center justify-center rounded-full" role="img" aria-label={`${open} open, ${draft} draft, ${closed} closed sessions`} style={{ background: total ? `conic-gradient(#10b981 0 ${openPercent}%, #f59e0b ${openPercent}% ${openPercent + draftPercent}%, #0284c7 ${openPercent + draftPercent}% 100%)` : "#e5ebf2" }}>
-        <div className="flex h-[112px] w-[112px] flex-col items-center justify-center rounded-full bg-white dark:bg-[#242526]">
-          <strong className="text-3xl text-[#16263c] dark:text-white">{total}</strong>
-          <span className="text-xs font-semibold text-[#718096]">sessions</span>
-        </div>
-      </div>
-      <div className="w-full space-y-3">
-        {values.map((item) => (
-          <div key={item.label} className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
-              <span className="text-sm font-semibold text-[#52667d]">{item.label}</span>
+  return <AppShell>
+    {loading ? <LoadingOverlay label="Building operational dashboard" description="Reading current Firebase activity and compliance data..." /> : null}
+    <div className="app-page space-y-4">
+      <section className="app-page-header dashboard-header">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div><p className="text-xs font-bold uppercase text-[#075f8f]">Operational intelligence</p><h1 className="mt-1 text-2xl font-bold text-[#16263c] sm:text-3xl">Dashboard</h1><p className="mt-2 text-sm text-[#6b7d92]">Flight operations, training quality, attendance, and fleet readiness.</p></div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="inline-flex w-fit rounded-lg border border-[#d7e0ea] bg-[#f6f8fb] p-1">
+              {(["30d", "90d", "6m", "12m"] as const).map((item) => <button key={item} type="button" onClick={() => choosePreset(item)} className={`h-9 rounded-md px-3 text-xs font-bold transition ${preset === item ? "bg-white text-[#0866ff] shadow-sm" : "text-[#64748b] hover:bg-white/70 hover:text-[#16263c]"}`}>{item === "30d" ? "30 days" : item === "90d" ? "90 days" : item === "6m" ? "6 months" : "12 months"}</button>)}
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-sm font-bold ${item.text}`}>{item.value}</span>
-              <span className="w-10 text-right text-xs text-[#8a99aa]">
-                {total ? Math.round((item.value / total) * 100) : 0}%
-              </span>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-[11px] font-bold uppercase text-[#64748b]">From<input type="date" value={draftRange.dateFrom} onChange={(event) => { setPreset("custom"); setDraftRange((current) => ({ ...current, dateFrom: event.target.value })); }} className="mt-1 block h-10 rounded-lg border border-[#d7e0ea] bg-white px-3 text-sm font-medium text-[#16263c]" /></label>
+              <label className="text-[11px] font-bold uppercase text-[#64748b]">To<input type="date" value={draftRange.dateTo} max={localDate(new Date())} onChange={(event) => { setPreset("custom"); setDraftRange((current) => ({ ...current, dateTo: event.target.value })); }} className="mt-1 block h-10 rounded-lg border border-[#d7e0ea] bg-white px-3 text-sm font-medium text-[#16263c]" /></label>
+              <button type="button" onClick={applyCustomRange} className="h-10 rounded-lg bg-[#0866ff] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#0758dd]">Apply</button>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+        <p className="mt-4 text-xs font-medium text-[#8a99aa]">Showing {range.dateFrom} to {range.dateTo}{updatedAt ? ` · Updated ${new Date(updatedAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+      </section>
+
+      <ApprovalStrip approval={approval} />
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => { const Icon = stat.icon; return <Link key={stat.label} href={stat.href} className="dashboard-stat-card group rounded-lg border border-[#d7e0ea] bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#b9c9dc] hover:shadow-lg"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-[#6b7d92]">{stat.label}</p><p className="mt-2 text-2xl font-bold text-[#16263c]">{stat.value}</p></div><div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.tone}`}><Icon className="h-5 w-5" /></div></div><div className="mt-3 flex items-center justify-between gap-2 text-xs text-[#718096]"><span>{stat.detail}</span><ChevronRight className="h-4 w-4 shrink-0 transition group-hover:translate-x-0.5" /></div></Link>; })}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
+        <ChartPanel eyebrow="Flight operations" title="Flight hours by month" icon={Plane} href={`/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.flightMinutes / 60} format={(value) => `${value.toFixed(1)}h`} color="#0866ff" route="/records" /></ChartPanel>
+        <ChartPanel eyebrow="Trainer activity" title="Flight hours by trainer" icon={UsersRound} href={`/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><TrainerBars analytics={analytics} range={range} /></ChartPanel>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <ChartPanel eyebrow="Fleet readiness" title="Maintenance compliance" icon={ShieldCheck} href={`/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.maintenanceCompliance} format={formatPercent} color="#059669" route="/ua-maintenance/records" emptyWhen={(item) => item.maintenancePass + item.maintenanceFail === 0} /></ChartPanel>
+        <ChartPanel eyebrow="Training attendance" title="Attendance capture rate" icon={Gauge} href={`/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note="Sessions with at least one check-in."><MonthBarChart data={analytics.months} value={(item) => item.attendanceRate} format={formatPercent} color="#7c3aed" route="/attendance/records" emptyWhen={(item) => item.attendanceSessions === 0} /></ChartPanel>
+        <ChartPanel eyebrow="Learner feedback" title="Evaluation average" icon={Activity} href={`/evaluations?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.evaluationAverage} format={(value) => `${value.toFixed(2)} / 5`} color="#d97706" route="/evaluations" maximum={5} emptyWhen={(item) => item.evaluationResponses === 0} /></ChartPanel>
+      </section>
     </div>
-  );
+  </AppShell>;
 }
 
-function ApprovalMonitoringPanel({
-  dashboard,
-  available
-}: {
-  dashboard: ApprovalDashboardSummary;
-  available: boolean;
-}) {
-  const criticalCount =
-    dashboard.expired + dashboard.expiringToday + dashboard.urgent;
-  const upcomingCount = dashboard.dueSoon + dashboard.renewalUpcoming;
-  const hasCritical = criticalCount > 0;
-  const hasUpcoming = upcomingCount > 0;
-
-  const panelTone = !available
-    ? "border-amber-200 bg-amber-50/70"
-    : hasCritical
-    ? "border-rose-200 bg-rose-50/70"
-    : hasUpcoming
-      ? "border-amber-200 bg-amber-50/70"
-      : "border-emerald-200 bg-emerald-50/60";
-
-  const iconTone = !available
-    ? "bg-amber-100 text-amber-700"
-    : hasCritical
-    ? "bg-rose-100 text-rose-700"
-    : hasUpcoming
-      ? "bg-amber-100 text-amber-700"
-      : "bg-emerald-100 text-emerald-700";
-
-  return (
-    <section className={`dashboard-approval-panel overflow-hidden rounded-lg border ${panelTone}`}>
-      <Link href="/approvals" className="group grid gap-5 p-4 transition hover:bg-white/45 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconTone}`}>
-            {!available ? (
-              <AlertTriangle className="h-5 w-5" />
-            ) : hasCritical ? (
-              <AlertTriangle className="h-5 w-5" />
-            ) : hasUpcoming ? (
-              <BellRing className="h-5 w-5" />
-            ) : (
-              <ShieldCheck className="h-5 w-5" />
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <p className="app-section-label">Regulatory monitoring</p>
-            <h2 className="mt-1 text-lg font-bold text-[#16263c]">
-              {!available
-                ? "Approval monitoring is temporarily unavailable"
-                : dashboard.totalApprovals === 0
-                ? "AGA Approvals register is ready"
-                : hasCritical
-                  ? `${criticalCount} approval ${criticalCount === 1 ? "requires" : "require"} immediate attention`
-                  : hasUpcoming
-                    ? `${upcomingCount} renewal ${upcomingCount === 1 ? "is" : "are"} approaching`
-                    : "Approvals are within their active validity period"}
-            </h2>
-
-            {!available ? (
-              <p className="mt-1 text-sm leading-6 text-[#5f7187]">
-                Flight operations remain available. Open AGA Approvals to retry the regulatory register.
-              </p>
-            ) : dashboard.nextExpiry ? (
-              <p className="mt-1 text-sm leading-6 text-[#5f7187]">
-                Next expiry: {APPROVAL_TYPE_LABELS[dashboard.nextExpiry.approvalType]} {dashboard.nextExpiry.approvalNumber} on {formatApprovalDate(dashboard.nextExpiry.displayExpiryDate)}.
-              </p>
-            ) : (
-              <p className="mt-1 text-sm leading-6 text-[#5f7187]">
-                Add UATO, UABTO, Class 1 Activity, and Operator approvals to begin expiry monitoring.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#075f8f]">View register <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
-      </Link>
-
-      {available && dashboard.totalApprovals > 0 ? (
-        <div className="grid grid-cols-2 border-t border-black/5 bg-white/65 sm:grid-cols-4">
-          <ApprovalMetric label="Tracked" value={dashboard.totalApprovals} />
-          <ApprovalMetric label="Renewal Window" value={upcomingCount} />
-          <ApprovalMetric label="Urgent / Expired" value={criticalCount} critical={criticalCount > 0} />
-          <ApprovalMetric label="Missing PDF" value={dashboard.missingDocuments} critical={dashboard.missingDocuments > 0} />
-        </div>
-      ) : null}
-    </section>
-  );
+function ChartPanel({ eyebrow, title, icon: Icon, href, note, children }: { eyebrow: string; title: string; icon: typeof Plane; href: string; note?: string; children: ReactNode }) {
+  return <article className="app-card dashboard-panel min-w-0 overflow-hidden"><header className="flex items-start justify-between gap-3 border-b border-[#e5ebf2] pb-4"><div className="flex min-w-0 items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#eef6ff] text-[#0866ff]"><Icon className="h-5 w-5" /></div><div><p className="text-[11px] font-bold uppercase text-[#075f8f]">{eyebrow}</p><h2 className="mt-1 text-lg font-bold text-[#16263c]">{title}</h2>{note ? <p className="mt-1 text-xs text-[#718096]">{note}</p> : null}</div></div><Link href={href} aria-label={`Open ${title} records`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#075f8f] transition hover:bg-[#edf5f8]"><ChevronRight className="h-4 w-4" /></Link></header>{children}</article>;
 }
 
-function ApprovalMetric({
-  label,
-  value,
-  critical = false
-}: {
-  label: string;
-  value: number;
-  critical?: boolean;
-}) {
-  return (
-    <div className="border-b border-r border-[#e5ebf2] p-3 last:border-r-0 sm:border-b-0 sm:p-4">
-      <p className={`text-xl font-bold ${critical ? "text-rose-700" : "text-[#16263c]"}`}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] font-bold uppercase text-[#718096]">
-        {label}
-      </p>
-    </div>
-  );
+function MonthBarChart({ data, value, format, color, route, maximum, emptyWhen }: { data: DashboardMonthPoint[]; value: (item: DashboardMonthPoint) => number; format: (value: number) => string; color: string; route: string; maximum?: number; emptyWhen?: (item: DashboardMonthPoint) => boolean }) {
+  const [active, setActive] = useState("");
+  const max = maximum || Math.max(1, ...data.map(value));
+  if (!data.length) return <EmptyChart />;
+  return <div className="mt-5"><div className="flex h-52 items-end gap-1.5 sm:gap-2">{data.map((item) => { const amount = value(item); const empty = emptyWhen?.(item) ?? false; const height = empty ? 3 : Math.max(5, (amount / max) * 100); return <Link key={item.key} href={monthHref(route, item.key)} onMouseEnter={() => setActive(item.key)} onMouseLeave={() => setActive("")} onFocus={() => setActive(item.key)} onBlur={() => setActive("")} className="group relative flex h-full min-w-0 flex-1 items-end rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40" aria-label={`${item.label}: ${empty ? "No data" : format(amount)}. Open records.`}>{active === item.key ? <div className="absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#16263c] px-2.5 py-1.5 text-xs font-bold text-white shadow-lg" style={{ bottom: `calc(${height}% + 8px)` }}>{item.label}: {empty ? "No data" : format(amount)}</div> : null}<span className="w-full rounded-t-md opacity-85 transition group-hover:opacity-100 group-hover:shadow-md" style={{ height: `${height}%`, backgroundColor: empty ? "#dbe3ec" : color }} /></Link>; })}</div><div className="mt-3 flex gap-1.5 sm:gap-2">{data.map((item, index) => <span key={item.key} className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold text-[#718096]">{data.length <= 6 || index % 2 === 0 ? item.label : ""}</span>)}</div></div>;
+}
+
+function TrainerBars({ analytics, range }: { analytics: DashboardAnalytics; range: DashboardDateRange }) {
+  const trainers = analytics.trainerFlightHours.slice(0, 7);
+  const max = Math.max(1, ...trainers.map((item) => item.minutes));
+  if (!trainers.length) return <EmptyChart />;
+  return <div className="mt-5 space-y-4">{trainers.map((trainer) => <Link key={trainer.name} href={`/records?trainer=${encodeURIComponent(trainer.name)}&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} className="group block rounded-lg p-1 transition hover:bg-[#f4f8fb]"><div className="mb-1.5 flex items-center justify-between gap-3 text-sm"><span className="truncate font-semibold text-[#24364d]">{trainer.name}</span><span className="shrink-0 font-bold text-[#075f8f]">{formatMinutes(trainer.minutes)}</span></div><div className="h-2 overflow-hidden rounded-full bg-[#e8eef5]"><div className="h-full rounded-full bg-[#0866ff] transition-all group-hover:bg-[#0758dd]" style={{ width: `${Math.max(4, (trainer.minutes / max) * 100)}%` }} /></div><p className="mt-1 text-[11px] text-[#8190a2]">{trainer.flights} flights</p></Link>)}</div>;
+}
+
+function EmptyChart() {
+  return <div className="mt-5 flex h-52 items-center justify-center rounded-lg border border-dashed border-[#d7e0ea] bg-[#f8fafc]"><div className="text-center"><CalendarDays className="mx-auto h-6 w-6 text-[#9aa8b7]" /><p className="mt-2 text-sm font-semibold text-[#60748a]">No activity in this period</p></div></div>;
+}
+
+function ApprovalStrip({ approval }: { approval: ApprovalDashboardSummary }) {
+  const urgent = approval.expired + approval.expiringToday + approval.urgent;
+  const warning = urgent > 0 || approval.renewalUpcoming > 0;
+  return <Link href="/approvals" className={`group flex flex-col gap-4 rounded-lg border p-5 transition hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:items-center sm:justify-between ${warning ? "border-amber-200 bg-amber-50/70" : "border-emerald-200 bg-emerald-50/70"}`}><div className="flex items-start gap-3"><div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${warning ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}><ShieldCheck className="h-5 w-5" /></div><div><p className={`text-xs font-bold uppercase ${warning ? "text-amber-700" : "text-emerald-700"}`}>Regulatory monitoring</p><p className="mt-1 font-bold text-[#16263c]">{urgent ? `${urgent} approval item${urgent === 1 ? "" : "s"} need attention` : approval.renewalUpcoming ? `${approval.renewalUpcoming} renewal approaching` : "Approvals are within their active validity period"}</p><p className="mt-1 text-sm text-[#6b7d92]">{approval.totalApprovals} tracked · {approval.missingDocuments} missing documents</p></div></div><span className="inline-flex items-center gap-1 text-sm font-bold text-[#075f8f]">View register <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span></Link>;
 }
