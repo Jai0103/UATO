@@ -132,7 +132,9 @@ function publicProjection(session: AttendanceSessionInput, id: string, token: st
     amOpen: session.status === "open" && session.amOpen,
     pmOpen: session.status === "open" && session.pmOpen,
     amOpensAt: Timestamp.fromDate(new Date(windows.amOpensAt)),
+    amClosesAt: Timestamp.fromDate(new Date(windows.amClosesAt)),
     pmOpensAt: Timestamp.fromDate(new Date(windows.pmOpensAt)),
+    pmClosesAt: Timestamp.fromDate(new Date(windows.pmClosesAt)),
     closesAt: Timestamp.fromDate(new Date(windows.closesAt)),
     updatedAt: serverTimestamp()
   };
@@ -429,7 +431,9 @@ export async function fetchPublicAttendanceSession(token: string) {
     amOpen: data.amOpen === true,
     pmOpen: data.pmOpen === true,
     amOpensAt: toIso(data.amOpensAt) || attendanceWindowTimes(String(data.courseDate || "")).amOpensAt,
+    amClosesAt: toIso(data.amClosesAt) || attendanceWindowTimes(String(data.courseDate || "")).amClosesAt,
     pmOpensAt: toIso(data.pmOpensAt) || attendanceWindowTimes(String(data.courseDate || "")).pmOpensAt,
+    pmClosesAt: toIso(data.pmClosesAt) || attendanceWindowTimes(String(data.courseDate || "")).pmClosesAt,
     closesAt: toIso(data.closesAt) || attendanceWindowTimes(String(data.courseDate || "")).closesAt
   };
   return session;
