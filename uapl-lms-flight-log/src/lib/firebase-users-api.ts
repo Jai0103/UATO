@@ -9,6 +9,7 @@ import {
   firebaseFunctions,
   firestore
 } from "@/lib/firebase-client";
+import { normalizeAccessPermissions, type AccessPermission } from "@/lib/access-control";
 
 export type FirebaseManagedUser = {
   id: string;
@@ -16,6 +17,7 @@ export type FirebaseManagedUser = {
   name: string;
   email: string;
   role: "admin" | "trainer";
+  permissions: AccessPermission[];
   status: "active" | "inactive";
   createdAt: string;
   passwordChangedAt: string;
@@ -36,6 +38,10 @@ function toUser(id: string, value: Record<string, unknown>): FirebaseManagedUser
     name: text(value.name),
     email: text(value.email).toLowerCase(),
     role: value.role === "admin" ? "admin" : "trainer",
+    permissions: normalizeAccessPermissions(
+      value.permissions,
+      value.role === "admin" ? "admin" : "trainer"
+    ),
     status: value.status === "inactive" ? "inactive" : "active",
     createdAt: text(value.createdAt),
     passwordChangedAt: text(value.passwordChangedAt),
@@ -86,6 +92,7 @@ export function createFirebaseUser(input: {
   name: string;
   email: string;
   role: "admin" | "trainer";
+  permissions: AccessPermission[];
 }) {
   return callUserFunction("adminCreateUser", input);
 }
@@ -94,6 +101,7 @@ export function updateFirebaseUser(input: {
   uid: string;
   name: string;
   role: "admin" | "trainer";
+  permissions: AccessPermission[];
 }) {
   return callUserFunction("adminUpdateUser", input);
 }
@@ -139,4 +147,3 @@ export async function deleteFirebaseUser(uid: string) {
     throw friendlyFunctionError(error);
   }
 }
-
