@@ -22,10 +22,13 @@ const emptyAnalytics: DashboardAnalytics = {
   totals: {
     flights: 0, flightMinutes: 0, trainers: 0, maintenanceChecks: 0,
     maintenanceCompliance: 0, attendanceSessions: 0, attendanceCheckIns: 0,
-    attendanceRate: 0, evaluationResponses: 0, evaluationAverage: 0
+    attendanceRate: 0, evaluationResponses: 0, evaluationAverage: 0,
+    trainerEffectiveness: 0, courseSatisfaction: 0, recommendationRate: 0
   },
   months: [],
-  trainerFlightHours: []
+  trainerFlightHours: [],
+  trainerEvaluationScores: [],
+  evaluationSectionScores: []
 };
 
 const emptyApproval: ApprovalDashboardSummary = {
@@ -108,7 +111,7 @@ export default function AdminPage() {
     { label: "Flight time", value: formatMinutes(analytics.totals.flightMinutes), detail: `${analytics.totals.flights} flights across ${analytics.totals.trainers} trainers`, icon: Timer, tone: "bg-sky-50 text-sky-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Maintenance compliance", value: formatPercent(analytics.totals.maintenanceCompliance), detail: `${analytics.totals.maintenanceChecks} checklist decisions`, icon: Wrench, tone: "bg-emerald-50 text-emerald-700", href: `/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Attendance rate", value: formatPercent(analytics.totals.attendanceRate), detail: `${analytics.totals.attendanceCheckIns} check-ins in ${analytics.totals.attendanceSessions} sessions`, icon: ClipboardCheck, tone: "bg-violet-50 text-violet-700", href: `/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
-    { label: "Evaluation average", value: analytics.totals.evaluationAverage ? `${analytics.totals.evaluationAverage.toFixed(2)} / 5` : "No responses", detail: `${analytics.totals.evaluationResponses} learner responses`, icon: Star, tone: "bg-amber-50 text-amber-700", href: `/evaluations?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` }
+    { label: "Course satisfaction", value: analytics.totals.courseSatisfaction ? `${analytics.totals.courseSatisfaction.toFixed(2)} / 5` : "No responses", detail: `${analytics.totals.recommendationRate.toFixed(0)}% would recommend · ${analytics.totals.evaluationResponses} responses`, icon: Star, tone: "bg-amber-50 text-amber-700", href: `/evaluations/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` }
   ];
 
   return <AppShell>
@@ -147,6 +150,11 @@ export default function AdminPage() {
         <ChartPanel eyebrow="Training attendance" title="Attendance capture rate" icon={Gauge} href={`/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note="Sessions with at least one check-in."><MonthBarChart data={analytics.months} value={(item) => item.attendanceRate} format={formatPercent} color="#7c3aed" route="/attendance/records" emptyWhen={(item) => item.attendanceSessions === 0} /></ChartPanel>
         <ChartPanel eyebrow="Learner feedback" title="Evaluation average" icon={Activity} href={`/evaluations?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.evaluationAverage} format={(value) => `${value.toFixed(2)} / 5`} color="#d97706" route="/evaluations" maximum={5} emptyWhen={(item) => item.evaluationResponses === 0} /></ChartPanel>
       </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <ChartPanel eyebrow="Trainer quality" title="Trainer effectiveness" icon={UsersRound} href={`/evaluations/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.trainerEffectiveness ? analytics.totals.trainerEffectiveness.toFixed(2) : "-"} / 5 overall`}><EvaluationBars items={analytics.trainerEvaluationScores} range={range} kind="trainer" /></ChartPanel>
+        <ChartPanel eyebrow="Quality assurance" title="Evaluation sections" icon={Star} href={`/reports?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.recommendationRate.toFixed(0)}% learner recommendation rate`}><EvaluationBars items={analytics.evaluationSectionScores} range={range} kind="section" /></ChartPanel>
+      </section>
     </div>
   </AppShell>;
 }
@@ -167,6 +175,12 @@ function TrainerBars({ analytics, range }: { analytics: DashboardAnalytics; rang
   const max = Math.max(1, ...trainers.map((item) => item.minutes));
   if (!trainers.length) return <EmptyChart />;
   return <div className="mt-5 space-y-4">{trainers.map((trainer) => <Link key={trainer.name} href={`/records?trainer=${encodeURIComponent(trainer.name)}&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} className="group block rounded-lg p-1 transition hover:bg-[#f4f8fb]"><div className="mb-1.5 flex items-center justify-between gap-3 text-sm"><span className="truncate font-semibold text-[#24364d]">{trainer.name}</span><span className="shrink-0 font-bold text-[#075f8f]">{formatMinutes(trainer.minutes)}</span></div><div className="h-2 overflow-hidden rounded-full bg-[#e8eef5]"><div className="h-full rounded-full bg-[#0866ff] transition-all group-hover:bg-[#0758dd]" style={{ width: `${Math.max(4, (trainer.minutes / max) * 100)}%` }} /></div><p className="mt-1 text-[11px] text-[#8190a2]">{trainer.flights} flights</p></Link>)}</div>;
+}
+
+function EvaluationBars({ items, range, kind }: { items: DashboardAnalytics["trainerEvaluationScores"]; range: DashboardDateRange; kind: "trainer" | "section" }) {
+  const visible = items.slice(0, 7);
+  if (!visible.length) return <EmptyChart />;
+  return <div className="mt-5 space-y-3">{visible.map((item) => <Link key={item.name} href={kind === "trainer" ? `/evaluations/records?query=${encodeURIComponent(item.name)}&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` : `/reports?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} className="group block rounded-lg p-1.5 transition hover:bg-[#f4f8fb]"><div className="mb-1.5 flex items-center justify-between gap-3 text-sm"><span className="truncate font-semibold text-[#24364d]">{item.name}</span><span className="shrink-0 font-bold text-[#7c3aed]">{item.average.toFixed(2)} / 5</span></div><div className="h-2 overflow-hidden rounded-full bg-[#e8eef5]"><div className="h-full rounded-full bg-[#7c3aed] transition-all group-hover:bg-[#6d28d9]" style={{ width: `${Math.max(4, item.average * 20)}%` }} /></div><p className="mt-1 text-[11px] text-[#8190a2]">{item.responses} learner response{item.responses === 1 ? "" : "s"}</p></Link>)}</div>;
 }
 
 function EmptyChart() {
