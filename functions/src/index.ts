@@ -464,8 +464,10 @@ export const adminDeleteUser = callable(async (request) => {
 function attendanceWindows(courseDate: string) {
   return {
     amOpensAt: new Date(`${courseDate}T08:00:00+08:00`),
+    amClosesAt: new Date(`${courseDate}T13:00:00+08:00`),
     pmOpensAt: new Date(`${courseDate}T12:00:00+08:00`),
-    closesAt: new Date(`${courseDate}T23:59:59+08:00`)
+    pmClosesAt: new Date(`${courseDate}T18:00:00+08:00`),
+    closesAt: new Date(`${courseDate}T18:00:00+08:00`)
   };
 }
 
@@ -496,15 +498,18 @@ export const listTrainerAttendanceSessions = callable(async (request) => {
     .map((item) => ({ id: item.id, data: item.data() }))
     .filter((item) => {
       if (item.data.status !== "open") return false;
-      return attendanceWindows(text(item.data.courseDate)).closesAt.getTime() >= now;
+      const windows = attendanceWindows(text(item.data.courseDate));
+      const schedule = ["am", "pm"].includes(text(item.data.schedule)) ? text(item.data.schedule) : "full_day";
+      const finalClose = schedule === "am" ? windows.amClosesAt : windows.pmClosesAt;
+      return finalClose.getTime() >= now;
     });
   const sessions = await Promise.all(candidates.map(async (item) => {
     const schedule = ["am", "pm"].includes(text(item.data.schedule)) ? text(item.data.schedule) : "full_day";
     const windows = attendanceWindows(text(item.data.courseDate));
     const amEnabled = schedule !== "pm";
     const pmEnabled = schedule !== "am";
-    const amOpen = amEnabled && now >= windows.amOpensAt.getTime() && now <= windows.closesAt.getTime();
-    const pmOpen = pmEnabled && now >= windows.pmOpensAt.getTime() && now <= windows.closesAt.getTime();
+    const amOpen = amEnabled && now >= windows.amOpensAt.getTime() && now <= windows.amClosesAt.getTime();
+    const pmOpen = pmEnabled && now >= windows.pmOpensAt.getTime() && now <= windows.pmClosesAt.getTime();
     const submissions = await db.collection("attendanceSubmissions").where("sessionId", "==", item.id).get();
     let amCount = 0;
     let pmCount = 0;
@@ -522,7 +527,9 @@ export const listTrainerAttendanceSessions = callable(async (request) => {
       amOpen: amEnabled,
       pmOpen: pmEnabled,
       amOpensAt: Timestamp.fromDate(windows.amOpensAt),
+      amClosesAt: Timestamp.fromDate(windows.amClosesAt),
       pmOpensAt: Timestamp.fromDate(windows.pmOpensAt),
+      pmClosesAt: Timestamp.fromDate(windows.pmClosesAt),
       closesAt: Timestamp.fromDate(windows.closesAt),
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
@@ -539,7 +546,9 @@ export const listTrainerAttendanceSessions = callable(async (request) => {
       amEnabled,
       pmEnabled,
       amOpensAt: windows.amOpensAt.toISOString(),
+      amClosesAt: windows.amClosesAt.toISOString(),
       pmOpensAt: windows.pmOpensAt.toISOString(),
+      pmClosesAt: windows.pmClosesAt.toISOString(),
       closesAt: windows.closesAt.toISOString(),
       amCount,
       pmCount
