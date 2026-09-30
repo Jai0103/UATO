@@ -1,94 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
     }
-    match /staffTrainingRecords/{recordId} {
-      allow read, create, update, delete: if isAdmin();
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
-    match /staffTrainingEntries/{entryId} {
-      allow read, create, update, delete: if isAdmin();
+    function isActiveUser() {
+      return signedIn()
+        && currentUser().data.status == "active";
     }
-    match /staffTrainingSignatures/{recordId} {
-      allow read, create, update, delete: if isAdmin();
+    function isAdmin() {
+      return isActiveUser()
+        && currentUser().data.role == "admin";
     }
-    match /staffTrainingTombstones/{recordId} {
-      allow read, create, update, delete: if isAdmin();
+    function isFlightLogAuditAction(action) {
+      return action in [
+        "FLIGHT_CREATED",
+        "FLIGHT_UPDATED",
+        "FLIGHT_DELETED"
+      ];
     }
-    match /attendanceSessions/{sessionId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /attendancePublicSessions/{token} {
-      allow get: if true;
-      allow list: if false;
-      allow create, update, delete: if isAdmin();
-    }
-    match /attendanceSubmissions/{submissionId} {
-      allow read, update, delete: if isAdmin();
-      allow create: if
-        request.resource.data.keys().hasOnly([
+    function isValidFlightLogAuditEvent(auditId) {
+      return isActiveUser()
+        && request.resource.data.keys().hasOnly([
           "id",
-          "sessionId",
-          "publicToken",
-          "period",
-          "learnerName",
-          "learnerNameLower",
-          "lastFour",
-          "identityHash",
-          "signatureDataUrl",
-          "submittedAt",
-          "updatedAt"
+          "timestamp",
+          "actorUserId",
+          "actorName",
+          "actorNameLower",
+          "actorEmail",
+          "actorRole",
+          "action",
+          "entityType",
+          "entityId",
+          "entityName",
+          "entityNameLower",
+          "detailsAvailable",
+          "source",
+          "schemaVersion"
         ])
-        && request.resource.data.id == submissionId
-        && request.resource.data.period in ["am", "pm"]
-        && request.resource.data.learnerName is string
-        && request.resource.data.learnerName.size() >= 2
-        && request.resource.data.learnerName.size() <= 100
-        && request.resource.data.learnerNameLower is string
-        && request.resource.data.lastFour is string
-        && request.resource.data.lastFour.matches("^[A-Z0-9]{4}$")
-        && request.resource.data.identityHash is string
-        && request.resource.data.identityHash.matches("^[a-f0-9]{64}$")
-        && request.resource.data.signatureDataUrl is string
-        && request.resource.data.signatureDataUrl.matches("^data:image/png;base64,.*")
-        && request.resource.data.signatureDataUrl.size() <= 350000
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.updatedAt == request.time
-        && publicAttendanceSession(request.resource.data.publicToken).data.sessionId == request.resource.data.sessionId
-        && publicAttendanceSession(request.resource.data.publicToken).data.status == "open"
-        && (
-          (request.resource.data.period == "am"
-            && publicAttendanceSession(request.resource.data.publicToken).data.amOpen == true)
-          ||
-          (request.resource.data.period == "pm"
-            && publicAttendanceSession(request.resource.data.publicToken).data.pmOpen == true)
-        );
+        && request.resource.data.id == auditId
+        && request.resource.data.actorUserId == request.auth.uid
+        && request.resource.data.actorName == currentUser().data.name
+        && request.resource.data.actorEmail == currentUser().data.email
+        && request.resource.data.actorRole == currentUser().data.role
+        && isFlightLogAuditAction(request.resource.data.action)
+        && request.resource.data.entityType == "flightLog"
+        && request.resource.data.entityId is string
+        && request.resource.data.entityId.size() > 0
+        && request.resource.data.entityName is string
+        && request.resource.data.entityName.size() > 0
+        && request.resource.data.entityName.size() <= 200
+        && request.resource.data.timestamp is string
+        && request.resource.data.detailsAvailable == true
+        && request.resource.data.source == "firebase-live"
+        && request.resource.data.schemaVersion == 2;
     }
-    match /evaluationTemplates/{templateId} {
-      allow read, create, update, delete: if isAdmin();
+    function isValidFlightLogAuditDetail(auditId) {
+      return isActiveUser()
+        && request.resource.data.keys().hasOnly([
+          "auditId",
+          "entityId",
+          "previousValue",
+          "updatedValue",
+          "details",
+          "source",
+          "schemaVersion"
+        ])
+        && request.resource.data.auditId == auditId
+        && request.resource.data.source == "firebase-live"
+        && request.resource.data.schemaVersion == 2
+        && existsAfter(/databases/$(database)/documents/auditEvents/$(auditId))
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.actorUserId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.entityType == "flightLog"
+        && isFlightLogAuditAction(getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.action)
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.entityId == request.resource.data.entityId;
     }
-    match /evaluationQuestions/{questionId} {
-      allow read, create, update, delete: if isAdmin();
+    function publicAttendanceSession(token) {
+      return get(/databases/$(database)/documents/attendancePublicSessions/$(token));
     }
-    match /evaluationSessions/{sessionId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /evaluationPublicSessions/{token} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /evaluationResponseKeys/{keyId} {
-      allow read, write: if false;
-    }
-    match /evaluationSessionQuestions/{questionId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /evaluationResponses/{responseId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /evaluationAnswers/{answerId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /migrationRuns/{runId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
+    match /users/{userId} {
+      allow read: if signedIn()
+        && (request.auth.uid == userId || isAdmin());
+      // Account administration is performed only by trusted Cloud Functions.
