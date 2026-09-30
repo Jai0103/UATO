@@ -14,7 +14,10 @@ import {
   type DocumentData
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { firebaseFunctions } from "@/lib/firebase-client";
+import { httpsCallable } from "firebase/functions";
 import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
+import { attendanceWindowTimes } from "@/lib/attendance";
 import type {
   AttendanceDashboard,
   AttendanceDashboardAnalytics,
@@ -113,6 +116,7 @@ function submissionAuditValue(submission: AttendanceSubmission) {
 }
 
 function publicProjection(session: AttendanceSessionInput, id: string, token: string) {
+  const windows = attendanceWindowTimes(session.courseDate);
   return {
     sessionId: id,
     token,
@@ -124,6 +128,9 @@ function publicProjection(session: AttendanceSessionInput, id: string, token: st
     status: session.status,
     amOpen: session.status === "open" && session.amOpen,
     pmOpen: session.status === "open" && session.pmOpen,
+    amOpensAt: Timestamp.fromDate(new Date(windows.amOpensAt)),
+    pmOpensAt: Timestamp.fromDate(new Date(windows.pmOpensAt)),
+    closesAt: Timestamp.fromDate(new Date(windows.closesAt)),
     updatedAt: serverTimestamp()
   };
 }
@@ -415,9 +422,32 @@ export async function fetchPublicAttendanceSession(token: string) {
     schedule: data.schedule === "am" || data.schedule === "pm" ? data.schedule : "full_day",
     status: data.status === "open" || data.status === "closed" ? data.status : "draft",
     amOpen: data.amOpen === true,
-    pmOpen: data.pmOpen === true
+    pmOpen: data.pmOpen === true,
+    amOpensAt: toIso(data.amOpensAt) || attendanceWindowTimes(String(data.courseDate || "")).amOpensAt,
+    pmOpensAt: toIso(data.pmOpensAt) || attendanceWindowTimes(String(data.courseDate || "")).pmOpensAt,
+    closesAt: toIso(data.closesAt) || attendanceWindowTimes(String(data.courseDate || "")).closesAt
   };
   return session;
+}
+
+export async function fetchTrainerAttendanceReportSummaries() {
+  await firebaseAuth.authStateReady();
+  if (!firebaseAuth.currentUser) throw new Error("Your Firebase session has expired. Please sign in again.");
+  const callable = httpsCallable<Record<string, never>, { records: AttendanceRecordSummary[] }>(
+    firebaseFunctions,
+    "listTrainerAttendanceReportSummaries"
+  );
+  return (await callable({})).data.records;
+}
+
+export async function fetchTrainerAttendanceSubmissions(sessionId: string) {
+  await firebaseAuth.authStateReady();
+  if (!firebaseAuth.currentUser) throw new Error("Your Firebase session has expired. Please sign in again.");
+  const callable = httpsCallable<{ sessionId: string }, { submissions: AttendanceSubmission[] }>(
+    firebaseFunctions,
+    "getTrainerAttendanceSubmissions"
+  );
+  return (await callable({ sessionId })).data.submissions;
 }
 
 async function sha256(value: string) {
