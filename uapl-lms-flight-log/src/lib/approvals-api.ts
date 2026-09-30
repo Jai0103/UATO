@@ -1,643 +1,537 @@
 "use client";
 
-import { postToGoogle } from "@/lib/google-api";
 import {
   collection,
   doc,
   getDoc,
+  getCountFromServer,
   getDocs,
   query,
+  serverTimestamp,
   Timestamp,
   where,
   writeBatch,
   type DocumentData
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { firebaseFunctions } from "@/lib/firebase-client";
+import { httpsCallable } from "firebase/functions";
 import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
+import { attendanceWindowTimes } from "@/lib/attendance";
 import type {
-  ApprovalDashboardSummary,
-  ApprovalDocument,
-  ApprovalExpiryStatus,
-  ApprovalRecord,
-  ApprovalRecordSummary,
-  ApprovalType
-} from "@/lib/approvals";
-import {
-  buildApprovalDashboardSummary,
-  summarizeApprovalRecord,
-  validateApprovalRecord
-} from "@/lib/approvals";
+  AttendanceDashboard,
+  AttendanceDashboardAnalytics,
+  AttendancePeriod,
+  AttendanceRecordSummary,
+  AttendanceSession,
+  AttendanceSessionInput,
+  AttendanceSubmission,
+  PublicAttendanceSession
+} from "@/lib/attendance";
 
-export type ApprovalsPage = {
-  records: ApprovalRecordSummary[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-  hasPreviousPage: boolean;
-  hasNextPage: boolean;
-};
-
-export type ApprovalsPageRequest = {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  approvalType?: ApprovalType | "";
-  expiryStatus?: ApprovalExpiryStatus | "";
-  includeArchived?: boolean;
-};
-
-export type ApprovalDocumentFile = {
-  document: ApprovalDocument;
-  dataUrl: string;
-};
-
-export type ApprovalDocumentUpload = {
-  approvalId: string;
-  locationId?: string;
-  file: File;
-};
-
-const APPROVAL_CACHE_MS = 60_000;
-const ADMIN_CACHE_MS = 2 * 60_000;
-
-let approvalCache: {
-  expiresAt: number;
-  records: ApprovalRecord[];
-} | null = null;
-let approvalLoadPromise: Promise<ApprovalRecord[]> | null = null;
-let adminCache: {
-  expiresAt: number;
-  uid: string;
-  user: NonNullable<typeof firebaseAuth.currentUser>;
-  name: string;
-  email: string;
-  role: "admin";
-} | null = null;
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("The selected PDF could not be read."));
-        return;
-      }
-      resolve(reader.result);
-    };
-
-    reader.onerror = () => {
-      reject(new Error("The selected PDF could not be read."));
-    };
-
-    reader.readAsDataURL(file);
-  });
-}
-
-function asText(value: unknown) {
+function toIso(value: unknown) {
   if (value instanceof Timestamp) return value.toDate().toISOString();
-  return String(value ?? "");
+  return typeof value === "string" ? value : "";
 }
 
-async function requireFirebaseAdmin() {
+function sessionFromDoc(id: string, data: DocumentData): AttendanceSession {
+  return {
+    id,
+    token: String(data.token || ""),
+    programmeId: String(data.programmeId || ""),
+    courseName: String(data.courseName || ""),
+    courseCode: String(data.courseCode || ""),
+    courseDate: String(data.courseDate || ""),
+    instructorName: String(data.instructorName || ""),
+    instructorEmail: String(data.instructorEmail || ""),
+    schedule: data.schedule === "am" || data.schedule === "pm" ? data.schedule : "full_day",
+    status: data.status === "open" || data.status === "closed" ? data.status : "draft",
+    amOpen: data.amOpen === true,
+    pmOpen: data.pmOpen === true,
+    trainerComments: String(data.trainerComments || ""),
+    createdByUid: String(data.createdByUid || ""),
+    createdByEmail: String(data.createdByEmail || ""),
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt)
+  };
+}
+
+function submissionFromDoc(id: string, data: DocumentData): AttendanceSubmission {
+  return {
+    id,
+    sessionId: String(data.sessionId || ""),
+    publicToken: String(data.publicToken || ""),
+    period: data.period === "pm" ? "pm" : "am",
+    learnerName: String(data.learnerName || ""),
+    learnerNameLower: String(data.learnerNameLower || ""),
+    lastFour: String(data.lastFour || ""),
+    identityHash: String(data.identityHash || ""),
+    signatureDataUrl: String(data.signatureDataUrl || ""),
+    submittedAt: toIso(data.submittedAt),
+    updatedAt: toIso(data.updatedAt)
+  };
+}
+
+async function requireAdmin() {
   await firebaseAuth.authStateReady();
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error("Your Firebase session has expired. Please sign in again.");
-  if (adminCache && adminCache.uid === user.uid && adminCache.expiresAt > Date.now()) {
-    return adminCache;
-  }
   const profile = await getDoc(doc(firestore, "users", user.uid));
-  if (!profile.exists()) throw new Error("Administrator access is required.");
-  const data = profile.data();
-  if (data.status !== "active" || data.role !== "admin") {
+  if (!profile.exists() || profile.data().status !== "active" || profile.data().role !== "admin") {
     throw new Error("Administrator access is required.");
   }
-  adminCache = {
-    expiresAt: Date.now() + ADMIN_CACHE_MS,
-    uid: user.uid,
+  return {
     user,
-    name: asText(data.name || user.displayName || user.email || "Administrator"),
-    email: asText(data.email || user.email || ""),
+    name: String(profile.data().name || user.displayName || user.email || "Administrator"),
+    email: String(profile.data().email || user.email || ""),
     role: "admin"
   };
-  return adminCache;
 }
 
-function safeId(value: unknown) {
-  return asText(value).trim().replace(/\//g, "_");
-}
-
-function locationDocumentId(approvalId: string, locationId: string) {
-  return `${safeId(approvalId)}__${safeId(locationId)}`;
-}
-
-function documentDocumentId(approvalId: string, documentId: string) {
-  return `${safeId(approvalId)}__${safeId(documentId)}`;
-}
-
-function locationFromDocument(data: DocumentData) {
+function sessionAuditValue(session: AttendanceSession) {
   return {
-    id: asText(data.id),
-    name: asText(data.name),
-    code: asText(data.code),
-    address: asText(data.address),
-    coordinates: asText(data.coordinates),
-    effectiveDate: asText(data.effectiveDate).slice(0, 10),
-    expiryDate: asText(data.expiryDate).slice(0, 10),
-    operationalLimitations: asText(data.operationalLimitations),
-    remarks: asText(data.remarks),
-    active: data.active === true
+    id: session.id,
+    programmeId: session.programmeId,
+    courseName: session.courseName,
+    courseCode: session.courseCode,
+    courseDate: session.courseDate,
+    instructorName: session.instructorName,
+    instructorEmail: session.instructorEmail,
+    schedule: session.schedule,
+    status: session.status,
+    amOpen: session.amOpen,
+    pmOpen: session.pmOpen,
+    trainerComments: session.trainerComments
   };
 }
 
-function documentFromDocument(data: DocumentData) {
+function submissionAuditValue(submission: AttendanceSubmission) {
   return {
-    id: asText(data.id),
-    approvalId: asText(data.approvalId),
-    locationId: asText(data.locationId),
-    fileName: asText(data.fileName),
-    mimeType: asText(data.mimeType),
-    driveFileId: asText(data.driveFileId),
-    driveUrl: asText(data.driveUrl),
-    status: data.status === "superseded" ? "superseded" as const : "current" as const,
-    uploadedAt: asText(data.uploadedAt),
-    uploadedByName: asText(data.uploadedByName),
-    uploadedByEmail: asText(data.uploadedByEmail)
+    id: submission.id,
+    sessionId: submission.sessionId,
+    period: submission.period,
+    learnerName: submission.learnerName,
+    lastFour: submission.lastFour,
+    submittedAt: submission.submittedAt,
+    updatedAt: submission.updatedAt
   };
 }
 
-function recordFromDocument(
-  id: string,
-  data: DocumentData,
-  locations: ReturnType<typeof locationFromDocument>[],
-  documents: ReturnType<typeof documentFromDocument>[]
-): ApprovalRecord {
+function publicProjection(session: AttendanceSessionInput, id: string, token: string) {
+  const windows = attendanceWindowTimes(session.courseDate);
   return {
-    id: asText(data.id || id),
-    approvalType: asText(data.approvalType) as ApprovalType,
-    approvalNumber: asText(data.approvalNumber),
-    issuingAuthority: asText(data.issuingAuthority),
-    effectiveDate: asText(data.effectiveDate).slice(0, 10),
-    expiryDate: asText(data.expiryDate).slice(0, 10),
-    responsiblePerson: asText(data.responsiblePerson),
-    responsibleEmail: asText(data.responsibleEmail),
-    renewalLeadDays: Number(data.renewalLeadDays) || 90,
-    renewalStatus: asText(data.renewalStatus) as ApprovalRecord["renewalStatus"],
-    renewalSubmittedAt: asText(data.renewalSubmittedAt),
-    renewalReference: asText(data.renewalReference),
-    generalConditions: asText(data.generalConditions),
-    remarks: asText(data.remarks),
-    locations,
-    documents,
-    archived: data.archived === true,
-    version: Number(data.version) || 1,
-    supersedesRecordId: asText(data.supersedesRecordId),
-    createdAt: asText(data.createdAt),
-    updatedAt: asText(data.updatedAt)
+    sessionId: id,
+    token,
+    programmeId: session.programmeId.trim(),
+    courseName: session.courseName.trim(),
+    courseCode: session.courseCode.trim(),
+    courseDate: session.courseDate,
+    instructorName: session.instructorName.trim(),
+    schedule: session.schedule,
+    status: session.status,
+    amOpen: session.status === "open" && session.amOpen,
+    pmOpen: session.status === "open" && session.pmOpen,
+    amOpensAt: Timestamp.fromDate(new Date(windows.amOpensAt)),
+    pmOpensAt: Timestamp.fromDate(new Date(windows.pmOpensAt)),
+    closesAt: Timestamp.fromDate(new Date(windows.closesAt)),
+    updatedAt: serverTimestamp()
   };
 }
 
-function recordDocument(record: ApprovalRecord) {
-  const activeLocations = record.locations.filter((location) => location.active);
+export async function fetchAttendanceSessions() {
+  await requireAdmin();
+  const snapshot = await getDocs(collection(firestore, "attendanceSessions"));
+  return snapshot.docs
+    .map((item) => sessionFromDoc(item.id, item.data()))
+    .sort((a, b) => b.courseDate.localeCompare(a.courseDate) || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function fetchAttendanceDashboard(): Promise<AttendanceDashboard> {
+  const [sessions, submissions] = await Promise.all([
+    fetchAttendanceSessions(),
+    requireAdmin().then(() => getDocs(collection(firestore, "attendanceSubmissions")))
+  ]);
+  const month = new Date().toISOString().slice(0, 7);
   return {
-    id: record.id,
-    approvalType: record.approvalType,
-    approvalNumber: record.approvalNumber.trim(),
-    approvalNumberLower: record.approvalNumber.trim().toLowerCase(),
-    issuingAuthority: record.issuingAuthority.trim(),
-    effectiveDate: record.effectiveDate,
-    expiryDate: record.expiryDate,
-    responsiblePerson: record.responsiblePerson.trim(),
-    responsibleEmail: record.responsibleEmail.trim().toLowerCase(),
-    renewalLeadDays: Number(record.renewalLeadDays) || 90,
-    renewalStatus: record.renewalStatus,
-    renewalSubmittedAt: record.renewalSubmittedAt,
-    renewalReference: record.renewalReference.trim(),
-    generalConditions: record.generalConditions.trim(),
-    remarks: record.remarks.trim(),
-    archived: record.archived,
-    version: record.version,
-    supersedesRecordId: record.supersedesRecordId,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    locationCount: record.locations.length,
-    activeLocationCount: activeLocations.length,
-    permittedLocations: activeLocations.map((location) => location.name.trim()).filter(Boolean),
-    documentCount: record.documents.length,
-    hasCurrentDocument: record.documents.some(
-      (item) => item.status === "current" && Boolean(item.driveFileId)
-    ),
-    source: "firebase-live",
-    schemaVersion: 2
+    totalSessions: sessions.length,
+    openSessions: sessions.filter((item) => item.status === "open").length,
+    totalAttendances: submissions.size,
+    thisMonthSessions: sessions.filter((item) => item.courseDate.startsWith(month)).length
   };
 }
 
-function locationDocument(approvalId: string, location: ApprovalRecord["locations"][number]) {
-  return {
-    ...location,
-    approvalId,
-    nameLower: location.name.trim().toLowerCase(),
-    source: "firebase-live",
-    schemaVersion: 2
-  };
-}
+export async function fetchAttendanceDashboardAnalytics(): Promise<AttendanceDashboardAnalytics> {
+  await requireAdmin();
+  const sessionsPromise = fetchAttendanceSessions();
+  const submissions = collection(firestore, "attendanceSubmissions");
+  const current = new Date();
+  const monthRanges = Array.from({ length: 12 }, (_, index) => {
+    const offset = 11 - index;
+    const start = new Date(current.getFullYear(), current.getMonth() - offset, 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    return {
+      key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      start: Timestamp.fromDate(start),
+      end: Timestamp.fromDate(end)
+    };
+  });
 
-function approvalDocumentData(document: ApprovalDocument) {
-  return {
-    ...document,
-    sourceSystem: "google-drive",
-    source: "firebase-live",
-    schemaVersion: 2
-  };
-}
+  const [sessions, totalSnapshot, ...monthlySnapshots] = await Promise.all([
+    sessionsPromise,
+    getCountFromServer(submissions),
+    ...monthRanges.map((month) =>
+      getCountFromServer(
+        query(
+          submissions,
+          where("submittedAt", ">=", month.start),
+          where("submittedAt", "<", month.end)
+        )
+      )
+    )
+  ]);
 
-function approvalAuditValue(record: ApprovalRecord) {
-  const { documents, ...value } = record;
   return {
-    ...value,
-    documents: documents.map((item) => ({
-      id: item.id,
-      fileName: item.fileName,
-      locationId: item.locationId,
-      status: item.status,
-      driveFileId: item.driveFileId
+    sessions,
+    totalCheckIns: totalSnapshot.data().count,
+    monthlyCheckIns: monthRanges.map((month, index) => ({
+      key: month.key,
+      count: monthlySnapshots[index].data().count
     }))
   };
 }
 
-function invalidateApprovalCache() {
-  approvalCache = null;
-  approvalLoadPromise = null;
-}
-
-async function loadFirebaseApprovalRecords(force = false) {
-  await requireFirebaseAdmin();
-  if (!force && approvalCache && approvalCache.expiresAt > Date.now()) {
-    return approvalCache.records;
-  }
-  if (!force && approvalLoadPromise) return approvalLoadPromise;
-
-  approvalLoadPromise = Promise.all([
-    getDocs(collection(firestore, "approvalRecords")),
-    getDocs(collection(firestore, "approvalLocations")),
-    getDocs(collection(firestore, "approvalDocuments"))
-  ])
-    .then(([recordSnapshot, locationSnapshot, documentSnapshot]) => {
-      const locationsByApproval = new Map<
-        string,
-        ReturnType<typeof locationFromDocument>[]
-      >();
-      const documentsByApproval = new Map<
-        string,
-        ReturnType<typeof documentFromDocument>[]
-      >();
-
-      locationSnapshot.docs.forEach((item) => {
-        const approvalId = asText(item.data().approvalId);
-        const values = locationsByApproval.get(approvalId) || [];
-        values.push(locationFromDocument(item.data()));
-        locationsByApproval.set(approvalId, values);
-      });
-      documentSnapshot.docs.forEach((item) => {
-        const approvalId = asText(item.data().approvalId);
-        const values = documentsByApproval.get(approvalId) || [];
-        values.push(documentFromDocument(item.data()));
-        documentsByApproval.set(approvalId, values);
-      });
-
-      const records = recordSnapshot.docs.map((item) => {
-        const id = asText(item.data().id || item.id);
-        return recordFromDocument(
-          item.id,
-          item.data(),
-          locationsByApproval.get(id) || [],
-          documentsByApproval.get(id) || []
-        );
-      });
-      approvalCache = {
-        expiresAt: Date.now() + APPROVAL_CACHE_MS,
-        records
-      };
-      return records;
-    })
-    .finally(() => {
-      approvalLoadPromise = null;
-    });
-
-  return approvalLoadPromise;
-}
-
-export async function setupApprovals() {
-  return postToGoogle<{
-    message: string;
-    folderId: string;
-    folderUrl: string;
-  }>({
-    action: "setupApprovals"
-  });
-}
-
-export async function fetchApprovalsPage(
-  request: ApprovalsPageRequest = {}
-) {
-  const queryText = request.search?.trim().toLowerCase() || "";
-  const records = (await loadFirebaseApprovalRecords())
-    .map((record) => summarizeApprovalRecord(record))
-    .filter((record) => request.includeArchived || !record.archived)
-    .filter((record) => !request.approvalType || record.approvalType === request.approvalType)
-    .filter((record) => !request.expiryStatus || record.expiryStatus === request.expiryStatus)
-    .filter((record) => {
-      if (!queryText) return true;
-      return `${record.approvalNumber} ${record.issuingAuthority} ${record.responsiblePerson} ${record.permittedLocations.join(" ")}`
-        .toLowerCase()
-        .includes(queryText);
-    })
-    .sort(
-      (first, second) =>
-        Number(first.archived) - Number(second.archived) ||
-        (first.daysRemaining ?? Number.MAX_SAFE_INTEGER) -
-          (second.daysRemaining ?? Number.MAX_SAFE_INTEGER) ||
-        second.updatedAt.localeCompare(first.updatedAt)
-    );
-  const pageSize = Math.max(1, Math.min(Number(request.pageSize) || 10, 50));
-  const totalPages = Math.max(1, Math.ceil(records.length / pageSize));
-  const page = Math.max(1, Math.min(Number(request.page) || 1, totalPages));
-
-  return {
-    records: records.slice((page - 1) * pageSize, page * pageSize),
-    page,
-    pageSize,
-    total: records.length,
-    totalPages,
-    hasPreviousPage: page > 1,
-    hasNextPage: page < totalPages
-  } satisfies ApprovalsPage;
-}
-
-export async function fetchApprovalRecord(approvalId: string) {
-  const record = (await loadFirebaseApprovalRecords()).find(
-    (item) => item.id === approvalId
-  );
-  if (!record) throw new Error("The approval record was not found.");
-  return record;
-}
-
-export async function fetchFirebaseApprovalDashboardSummary() {
-  return buildApprovalDashboardSummary(await loadFirebaseApprovalRecords());
-}
-
-export async function fetchApprovalDashboardSummary() {
-  return fetchFirebaseApprovalDashboardSummary();
-}
-
-export async function saveApprovalRecord(approval: ApprovalRecord) {
-  const validation = validateApprovalRecord(approval, false);
-  if (!validation.valid) throw new Error(validation.errors[0]);
-  const actor = await requireFirebaseAdmin();
-  const existing = (await loadFirebaseApprovalRecords()).find(
-    (record) => record.id === approval.id
-  ) || null;
-  const now = new Date().toISOString();
-  const saved: ApprovalRecord = {
-    ...approval,
-    approvalNumber: approval.approvalNumber.trim(),
-    issuingAuthority: approval.issuingAuthority.trim(),
-    responsiblePerson: approval.responsiblePerson.trim(),
-    responsibleEmail: approval.responsibleEmail.trim().toLowerCase(),
-    renewalReference: approval.renewalReference.trim(),
-    generalConditions: approval.generalConditions.trim(),
-    remarks: approval.remarks.trim(),
-    locations: approval.locations.map((location) => ({
-      ...location,
-      name: location.name.trim(),
-      code: location.code.trim(),
-      address: location.address.trim(),
-      coordinates: location.coordinates.trim(),
-      operationalLimitations: location.operationalLimitations.trim(),
-      remarks: location.remarks.trim()
-    })),
-    documents: existing?.documents || approval.documents,
-    version: existing ? existing.version + 1 : Math.max(1, approval.version),
-    createdAt: existing?.createdAt || approval.createdAt || now,
-    updatedAt: now
-  };
-  const existingLocations = await getDocs(
-    query(collection(firestore, "approvalLocations"), where("approvalId", "==", saved.id))
-  );
+export async function saveAttendanceSession(input: AttendanceSessionInput) {
+  const actor = await requireAdmin();
+  const user = actor.user;
+  const id = input.id || crypto.randomUUID();
+  const reference = doc(firestore, "attendanceSessions", id);
+  const existing = await getDoc(reference);
+  const previousSession = existing.exists()
+    ? sessionFromDoc(existing.id, existing.data())
+    : null;
+  const token = existing.exists() ? String(existing.data().token || "") : crypto.randomUUID();
+  const now = serverTimestamp();
   const batch = writeBatch(firestore);
-  existingLocations.docs.forEach((item) => batch.delete(item.ref));
-  batch.set(doc(firestore, "approvalRecords", safeId(saved.id)), recordDocument(saved));
-  saved.locations.forEach((location) => {
-    batch.set(
-      doc(firestore, "approvalLocations", locationDocumentId(saved.id, location.id)),
-      locationDocument(saved.id, location)
-    );
-  });
-  addFirebaseAuditToBatch(batch, {
-    actorUserId: actor.user.uid,
-    actorName: actor.name,
-    actorEmail: actor.email,
-    actorRole: actor.role,
-    action: existing ? "APPROVAL_UPDATED" : "APPROVAL_CREATED",
-    entityType: "approval",
-    entityId: saved.id,
-    entityName: saved.approvalNumber,
-    previousValue: existing ? approvalAuditValue(existing) : null,
-    updatedValue: approvalAuditValue(saved),
-    details: { approvalType: saved.approvalType, source: "firebase-primary" }
-  });
-  await batch.commit();
-  invalidateApprovalCache();
-  return saved;
-}
 
-export async function archiveApprovalRecord(approvalId: string) {
-  const actor = await requireFirebaseAdmin();
-  const existing = await fetchApprovalRecord(approvalId);
-  const archived: ApprovalRecord = {
-    ...existing,
-    archived: true,
-    version: existing.version + 1,
+  batch.set(reference, {
+    ...publicProjection(input, id, token),
+    id,
+    token,
+    programmeId: input.programmeId.trim(),
+    instructorEmail: input.instructorEmail.trim().toLowerCase(),
+    trainerComments: input.trainerComments.trim(),
+    createdByUid: existing.exists() ? String(existing.data().createdByUid || user.uid) : user.uid,
+    createdByEmail: existing.exists() ? String(existing.data().createdByEmail || user.email || "") : user.email || "",
+    createdAt: existing.exists() ? existing.data().createdAt || now : now,
+    updatedAt: now
+  });
+  batch.set(doc(firestore, "attendancePublicSessions", token), publicProjection(input, id, token));
+  const auditSession: AttendanceSession = {
+    id,
+    token,
+    programmeId: input.programmeId.trim(),
+    courseName: input.courseName.trim(),
+    courseCode: input.courseCode.trim(),
+    courseDate: input.courseDate,
+    instructorName: input.instructorName.trim(),
+    instructorEmail: input.instructorEmail.trim().toLowerCase(),
+    schedule: input.schedule,
+    status: input.status,
+    amOpen: input.status === "open" && input.amOpen,
+    pmOpen: input.status === "open" && input.pmOpen,
+    trainerComments: input.trainerComments.trim(),
+    createdByUid: previousSession?.createdByUid || user.uid,
+    createdByEmail: previousSession?.createdByEmail || user.email || "",
+    createdAt: previousSession?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-  const batch = writeBatch(firestore);
-  batch.set(doc(firestore, "approvalRecords", safeId(approvalId)), recordDocument(archived));
   addFirebaseAuditToBatch(batch, {
-    actorUserId: actor.user.uid,
+    actorUserId: user.uid,
     actorName: actor.name,
     actorEmail: actor.email,
     actorRole: actor.role,
-    action: "APPROVAL_ARCHIVED",
-    entityType: "approval",
-    entityId: archived.id,
-    entityName: archived.approvalNumber,
-    previousValue: approvalAuditValue(existing),
-    updatedValue: approvalAuditValue(archived),
-    details: { approvalType: archived.approvalType, source: "firebase-primary" }
-  });
-  await batch.commit();
-  invalidateApprovalCache();
-  return archived;
-}
-
-export async function uploadApprovalDocument({
-  approvalId,
-  locationId = "",
-  file
-}: ApprovalDocumentUpload) {
-  if (file.type !== "application/pdf") {
-    throw new Error("Only PDF approval documents can be uploaded.");
-  }
-
-  if (file.size > 10 * 1024 * 1024) {
-    throw new Error("The PDF must be 10 MB or smaller.");
-  }
-
-  const actor = await requireFirebaseAdmin();
-  const existingRecord = await fetchApprovalRecord(approvalId);
-  const dataUrl = await fileToDataUrl(file);
-
-  // Apps Script remains the Google Drive gateway. Register the latest Firebase
-  // metadata only when a Drive upload is actually requested.
-  await postToGoogle<{ record: ApprovalRecord }>({
-    action: "saveApprovalRecord",
-    approval: existingRecord
-  });
-  const data = await postToGoogle<{ document: ApprovalDocument }>({
-    action: "saveApprovalDocument",
-    approvalId,
-    locationId,
-    fileName: file.name,
-    dataUrl
-  });
-  const savedDocument: ApprovalDocument = {
-    ...data.document,
-    approvalId,
-    locationId: data.document.locationId || locationId,
-    fileName: data.document.fileName || file.name,
-    mimeType: data.document.mimeType || "application/pdf",
-    driveFileId: data.document.driveFileId || "",
-    driveUrl: data.document.driveUrl || "",
-    status: data.document.status === "superseded" ? "superseded" : "current",
-    uploadedAt: data.document.uploadedAt || new Date().toISOString(),
-    uploadedByName: data.document.uploadedByName || "",
-    uploadedByEmail: data.document.uploadedByEmail || ""
-  };
-  const existingDocuments = await getDocs(
-    query(collection(firestore, "approvalDocuments"), where("approvalId", "==", approvalId))
-  );
-  const batch = writeBatch(firestore);
-  existingDocuments.docs.forEach((item) => {
-    const existingDocument = documentFromDocument(item.data());
-    if (
-      existingDocument.status === "current" &&
-      existingDocument.locationId === locationId
-    ) {
-      batch.update(item.ref, { status: "superseded" });
+    action: previousSession ? "ATTENDANCE_SESSION_UPDATED" : "ATTENDANCE_SESSION_CREATED",
+    entityType: "attendance",
+    entityId: id,
+    entityName: auditSession.courseName,
+    previousValue: previousSession ? sessionAuditValue(previousSession) : null,
+    updatedValue: sessionAuditValue(auditSession),
+    details: {
+      courseDate: auditSession.courseDate,
+      instructorName: auditSession.instructorName,
+      schedule: auditSession.schedule
     }
   });
-  batch.set(
-    doc(
-      firestore,
-      "approvalDocuments",
-      documentDocumentId(approvalId, savedDocument.id)
-    ),
-    approvalDocumentData(savedDocument)
+  await batch.commit();
+  const saved = await getDoc(reference);
+  return sessionFromDoc(saved.id, saved.data() || {});
+}
+
+export async function deleteAttendanceSession(session: AttendanceSession) {
+  const actor = await requireAdmin();
+  const submissions = await getDocs(
+    query(collection(firestore, "attendanceSubmissions"), where("sessionId", "==", session.id))
   );
-  const updatedRecord: ApprovalRecord = {
-    ...existingRecord,
-    documents: [
-      ...existingRecord.documents.map((item) =>
-        item.status === "current" && item.locationId === locationId
-          ? { ...item, status: "superseded" as const }
-          : item
-      ),
-      savedDocument
-    ],
-    version: existingRecord.version + 1,
-    updatedAt: new Date().toISOString()
-  };
-  batch.set(
-    doc(firestore, "approvalRecords", safeId(approvalId)),
-    recordDocument(updatedRecord)
-  );
+  const references = submissions.docs.map((item) => item.ref);
+  for (let start = 0; start < references.length; start += 400) {
+    const batch = writeBatch(firestore);
+    references.slice(start, start + 400).forEach((reference) => batch.delete(reference));
+    await batch.commit();
+  }
+  const batch = writeBatch(firestore);
+  batch.delete(doc(firestore, "attendanceSessions", session.id));
+  batch.delete(doc(firestore, "attendancePublicSessions", session.token));
   addFirebaseAuditToBatch(batch, {
     actorUserId: actor.user.uid,
     actorName: actor.name,
     actorEmail: actor.email,
     actorRole: actor.role,
-    action: "APPROVAL_DOCUMENT_UPLOADED",
-    entityType: "approval",
-    entityId: approvalId,
-    entityName: existingRecord.approvalNumber,
-    previousValue: null,
-    updatedValue: {
-      id: savedDocument.id,
-      fileName: savedDocument.fileName,
-      locationId: savedDocument.locationId,
-      status: savedDocument.status,
-      driveFileId: savedDocument.driveFileId
-    },
-    details: { approvalType: existingRecord.approvalType, source: "google-drive" }
+    action: "ATTENDANCE_SESSION_DELETED",
+    entityType: "attendance",
+    entityId: session.id,
+    entityName: session.courseName,
+    previousValue: sessionAuditValue(session),
+    updatedValue: null,
+    details: { deletedSubmissions: submissions.size }
   });
   await batch.commit();
-  invalidateApprovalCache();
-  return savedDocument;
 }
 
-export async function fetchApprovalDocumentFile(documentId: string) {
-  return postToGoogle<ApprovalDocumentFile>({
-    action: "getApprovalDocumentFile",
-    documentId
-  });
-}
-
-export async function deleteApprovalDocument(documentId: string) {
-  const actor = await requireFirebaseAdmin();
-  const documentSnapshot = await getDocs(
-    query(collection(firestore, "approvalDocuments"), where("id", "==", documentId))
+export async function fetchAttendanceSubmissions(sessionId: string) {
+  await requireAdmin();
+  const snapshot = await getDocs(
+    query(collection(firestore, "attendanceSubmissions"), where("sessionId", "==", sessionId))
   );
-  const matched = documentSnapshot.docs[0];
-  if (!matched) throw new Error("The approval document was not found.");
-  const existingDocument = documentFromDocument(matched.data());
-  const existingRecord = await fetchApprovalRecord(existingDocument.approvalId);
-  const result = await postToGoogle<{ documentId: string }>({
-    action: "deleteApprovalDocument",
-    documentId
+  return snapshot.docs
+    .map((item) => submissionFromDoc(item.id, item.data()))
+    .sort((a, b) => a.learnerName.localeCompare(b.learnerName) || a.period.localeCompare(b.period));
+}
+
+export async function fetchAttendanceRecordSummaries(): Promise<AttendanceRecordSummary[]> {
+  await requireAdmin();
+  const [sessions, submissionSnapshot] = await Promise.all([
+    fetchAttendanceSessions(),
+    getDocs(collection(firestore, "attendanceSubmissions"))
+  ]);
+  const counts = new Map<
+    string,
+    { amCount: number; pmCount: number; learners: Set<string> }
+  >();
+
+  submissionSnapshot.docs.forEach((item) => {
+    const data = item.data();
+    const sessionId = String(data.sessionId || "");
+    if (!sessionId) return;
+    const current = counts.get(sessionId) || {
+      amCount: 0,
+      pmCount: 0,
+      learners: new Set<string>()
+    };
+    if (data.period === "pm") current.pmCount += 1;
+    else current.amCount += 1;
+    const identity = String(data.identityHash || `${data.learnerNameLower || ""}|${data.lastFour || ""}`);
+    if (identity) current.learners.add(identity);
+    counts.set(sessionId, current);
   });
-  const updatedRecord: ApprovalRecord = {
-    ...existingRecord,
-    documents: existingRecord.documents.filter((item) => item.id !== documentId),
-    version: existingRecord.version + 1,
+
+  return sessions.map((session) => {
+    const current = counts.get(session.id);
+    return {
+      ...session,
+      amCount: current?.amCount || 0,
+      pmCount: current?.pmCount || 0,
+      uniqueLearnerCount: current?.learners.size || 0
+    };
+  });
+}
+
+export async function deleteAttendanceSubmission(id: string) {
+  const actor = await requireAdmin();
+  const reference = doc(firestore, "attendanceSubmissions", id);
+  const existing = await getDoc(reference);
+  if (!existing.exists()) throw new Error("Attendance submission was not found.");
+  const submission = submissionFromDoc(existing.id, existing.data());
+  const batch = writeBatch(firestore);
+  batch.delete(reference);
+  addFirebaseAuditToBatch(batch, {
+    actorUserId: actor.user.uid,
+    actorName: actor.name,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action: "ATTENDANCE_CHECK_IN_DELETED",
+    entityType: "attendance",
+    entityId: submission.id,
+    entityName: submission.learnerName,
+    previousValue: submissionAuditValue(submission),
+    updatedValue: null,
+    details: { sessionId: submission.sessionId, period: submission.period }
+  });
+  await batch.commit();
+}
+
+export async function updateAttendanceSubmission(
+  id: string,
+  values: Pick<AttendanceSubmission, "learnerName" | "lastFour">
+) {
+  const actor = await requireAdmin();
+  const learnerName = values.learnerName.trim();
+  const lastFour = values.lastFour.trim().toUpperCase();
+  if (!learnerName || !/^[A-Z0-9]{4}$/.test(lastFour)) {
+    throw new Error("Enter the learner name and exactly four NRIC/FIN characters.");
+  }
+  const reference = doc(firestore, "attendanceSubmissions", id);
+  const existing = await getDoc(reference);
+  if (!existing.exists()) throw new Error("Attendance submission was not found.");
+  const previousSubmission = submissionFromDoc(existing.id, existing.data());
+  const updatedSubmission: AttendanceSubmission = {
+    ...previousSubmission,
+    learnerName,
+    learnerNameLower: learnerName.toLowerCase(),
+    lastFour,
     updatedAt: new Date().toISOString()
   };
   const batch = writeBatch(firestore);
-  batch.delete(matched.ref);
-  batch.set(
-    doc(firestore, "approvalRecords", safeId(existingRecord.id)),
-    recordDocument(updatedRecord)
-  );
+  batch.update(reference, {
+    learnerName,
+    learnerNameLower: learnerName.toLowerCase(),
+    lastFour,
+    updatedAt: serverTimestamp()
+  });
   addFirebaseAuditToBatch(batch, {
     actorUserId: actor.user.uid,
     actorName: actor.name,
     actorEmail: actor.email,
     actorRole: actor.role,
-    action: "APPROVAL_DOCUMENT_DELETED",
-    entityType: "approval",
-    entityId: existingRecord.id,
-    entityName: existingRecord.approvalNumber,
-    previousValue: {
-      id: existingDocument.id,
-      fileName: existingDocument.fileName,
-      locationId: existingDocument.locationId,
-      status: existingDocument.status,
-      driveFileId: existingDocument.driveFileId
-    },
-    updatedValue: null,
-    details: { approvalType: existingRecord.approvalType, source: "google-drive" }
+    action: "ATTENDANCE_CHECK_IN_UPDATED",
+    entityType: "attendance",
+    entityId: id,
+    entityName: learnerName,
+    previousValue: submissionAuditValue(previousSubmission),
+    updatedValue: submissionAuditValue(updatedSubmission),
+    details: { sessionId: previousSubmission.sessionId, period: previousSubmission.period }
   });
   await batch.commit();
-  invalidateApprovalCache();
-  return result;
+}
+
+export async function fetchPublicAttendanceSession(token: string) {
+  const snapshot = await getDoc(doc(firestore, "attendancePublicSessions", token));
+  if (!snapshot.exists()) throw new Error("This attendance link is invalid or no longer available.");
+  const data = snapshot.data();
+  const session: PublicAttendanceSession = {
+    id: String(data.sessionId || ""),
+    token: String(data.token || token),
+    courseName: String(data.courseName || ""),
+    courseCode: String(data.courseCode || ""),
+    courseDate: String(data.courseDate || ""),
+    instructorName: String(data.instructorName || ""),
+    schedule: data.schedule === "am" || data.schedule === "pm" ? data.schedule : "full_day",
+    status: data.status === "open" || data.status === "closed" ? data.status : "draft",
+    amOpen: data.amOpen === true,
+    pmOpen: data.pmOpen === true,
+    amOpensAt: toIso(data.amOpensAt) || attendanceWindowTimes(String(data.courseDate || "")).amOpensAt,
+    pmOpensAt: toIso(data.pmOpensAt) || attendanceWindowTimes(String(data.courseDate || "")).pmOpensAt,
+    closesAt: toIso(data.closesAt) || attendanceWindowTimes(String(data.courseDate || "")).closesAt
+  };
+  return session;
+}
+
+export async function fetchTrainerAttendanceReportSummaries() {
+  await firebaseAuth.authStateReady();
+  if (!firebaseAuth.currentUser) throw new Error("Your Firebase session has expired. Please sign in again.");
+  const callable = httpsCallable<Record<string, never>, { records: AttendanceRecordSummary[] }>(
+    firebaseFunctions,
+    "listTrainerAttendanceReportSummaries"
+  );
+  return (await callable({})).data.records;
+}
+
+export async function fetchTrainerAttendanceSubmissions(sessionId: string) {
+  await firebaseAuth.authStateReady();
+  if (!firebaseAuth.currentUser) throw new Error("Your Firebase session has expired. Please sign in again.");
+  const callable = httpsCallable<{ sessionId: string }, { submissions: AttendanceSubmission[] }>(
+    firebaseFunctions,
+    "getTrainerAttendanceSubmissions"
+  );
+  return (await callable({ sessionId })).data.submissions;
+}
+
+async function sha256(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function submitPublicAttendance(input: {
+  session: PublicAttendanceSession;
+  period: AttendancePeriod;
+  learnerName: string;
+  lastFour: string;
+  signatureDataUrl: string;
+}) {
+  const learnerName = input.learnerName.trim().replace(/\s+/g, " ");
+  const lastFour = input.lastFour.trim().toUpperCase();
+  if (learnerName.length < 2 || learnerName.length > 100) throw new Error("Enter your full name as shown on your NRIC or passport.");
+  if (!/^[A-Z0-9]{4}$/.test(lastFour)) throw new Error("Enter exactly the last four NRIC/FIN or travel document characters.");
+  if (!input.signatureDataUrl.startsWith("data:image/png;base64,") || input.signatureDataUrl.length > 350000) {
+    throw new Error("Please provide a valid signature.");
+  }
+
+  const identityHash = await sha256(`${learnerName.toLowerCase()}|${lastFour}`);
+  const submissionId = `${input.session.id}_${input.period}_${identityHash.slice(0, 36)}`;
+  const submissionReference = doc(firestore, "attendanceSubmissions", submissionId);
+
+  try {
+    // The deterministic document ID makes a second set an update. Public
+    // users may create but cannot update, so duplicates remain protected
+    // without allowing access to read another learner's signature.
+    const batch = writeBatch(firestore);
+    batch.set(submissionReference, {
+      id: submissionId,
+      sessionId: input.session.id,
+      publicToken: input.session.token,
+      period: input.period,
+      learnerName,
+      learnerNameLower: learnerName.toLowerCase(),
+      lastFour,
+      identityHash,
+      signatureDataUrl: input.signatureDataUrl,
+      submittedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    addFirebaseAuditToBatch(batch, {
+      id: `${submissionId}_checkin`,
+      actorUserId: identityHash,
+      actorName: learnerName,
+      actorEmail: "",
+      actorRole: "learner",
+      action: "ATTENDANCE_CHECKED_IN",
+      entityType: "attendance",
+      entityId: submissionId,
+      entityName: learnerName,
+      previousValue: null,
+      updatedValue: {
+        sessionId: input.session.id,
+        period: input.period,
+        learnerName,
+        lastFour
+      },
+      details: {
+        courseName: input.session.courseName,
+        courseDate: input.session.courseDate,
+        instructorName: input.session.instructorName,
+        period: input.period
+      }
+    });
+    await batch.commit();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
+    if (errorMessage.includes("permission") || errorMessage.includes("insufficient")) {
+      throw new Error(
+        `Your ${input.period.toUpperCase()} attendance may already be submitted, or this signing window has closed.`
+      );
+    }
+    throw error;
+  }
+
+  return submissionId;
 }
