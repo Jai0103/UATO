@@ -592,7 +592,7 @@ export default function EvaluationPage() {
         ) : null}
 
         <footer className="px-2 py-7 text-center text-xs leading-5 text-slate-500">
-          Apollo Global Academy · Flight Management System
+          Apollo Global Academy · UATO Management System
         </footer>
       </div>
     </main>
