@@ -138,6 +138,10 @@ function responseFromData(id: string, data: DocumentData): EvaluationResponse {
   return {
     id,
     sessionId: stringValue(data.sessionId),
+    courseName: stringValue(data.courseName),
+    trainingDate: stringValue(data.trainingDate),
+    trainerName: stringValue(data.trainerName),
+    trainerEmail: stringValue(data.trainerEmail),
     studentName: stringValue(data.studentName),
     company: stringValue(data.company),
     trainingComponent: stringValue(data.trainingComponent),
@@ -566,4 +570,48 @@ export async function fetchAllFirebaseEvaluationResponses(sessionId: string) {
     value: stringValue(item.data().value)
   }));
   return { responses, summary: summaryForResponses(responses), questions, answers };
+}
+
+export async function fetchFirebaseEvaluationReportingData(request: {
+  dateFrom: string;
+  dateTo: string;
+  sessionId?: string;
+  courseName?: string;
+  trainerEmail?: string;
+}) {
+  const sessions = (await allSessions())
+    .filter((session) => !request.sessionId || session.id === request.sessionId)
+    .filter((session) => !request.courseName || session.courseName === request.courseName)
+    .filter((session) => !request.trainerEmail || session.trainerEmail === request.trainerEmail)
+    .filter((session) => !request.dateFrom || session.trainingDate >= request.dateFrom)
+    .filter((session) => !request.dateTo || session.trainingDate <= request.dateTo)
+    .sort((first, second) => first.trainingDate.localeCompare(second.trainingDate));
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  const responses = (await allResponses()).filter((response) => sessionIds.has(response.sessionId));
+  const responseIds = new Set(responses.map((response) => response.id));
+  const [questionGroups, answerSnapshot] = await Promise.all([
+    Promise.all(sessions.map((session) => questionsForSession(session.id))),
+    getDocs(collection(firestore, "evaluationAnswers"))
+  ]);
+  const questionMap = new Map<string, EvaluationQuestion>();
+  questionGroups.flat().forEach((question) => {
+    const key = `${question.id}__${question.text}`;
+    if (!questionMap.has(key)) questionMap.set(key, question);
+  });
+  const answers: EvaluationAnswer[] = answerSnapshot.docs
+    .map((item) => ({
+      responseId: stringValue(item.data().responseId),
+      questionId: stringValue(item.data().questionId),
+      rating: numberValue(item.data().rating),
+      value: stringValue(item.data().value)
+    }))
+    .filter((answer) => responseIds.has(answer.responseId));
+  return {
+    sessions,
+    responses,
+    questions: Array.from(questionMap.values()).sort(
+      (first, second) => first.sortOrder - second.sortOrder || first.text.localeCompare(second.text)
+    ),
+    answers
+  };
 }
