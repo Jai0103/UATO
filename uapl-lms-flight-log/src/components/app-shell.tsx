@@ -316,7 +316,7 @@ function BrandLogo({
               : "text-sm font-bold leading-5 text-[#16263c]"
           }
         >
-          Flight Management
+          UATO Management
           <span className="block">System</span>
         </p>
       </div>
