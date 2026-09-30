@@ -35,6 +35,12 @@ import {
 const PAGE_SIZE = 10;
 
 const actionLabels: Record<string, string> = {
+  EVALUATION_QUESTION_CREATED: "Evaluation question created",
+  EVALUATION_QUESTION_UPDATED: "Evaluation question updated",
+  EVALUATION_QUESTION_DELETED: "Evaluation question deleted",
+  EVALUATION_SESSION_CREATED: "Evaluation session created",
+  EVALUATION_SESSION_UPDATED: "Evaluation session updated",
+  EVALUATION_SESSION_CLOSED: "Evaluation session closed",
   FLIGHT_CREATED: "Flight created",
   FLIGHT_UPDATED: "Flight updated",
   FLIGHT_DELETED: "Flight deleted",
@@ -50,6 +56,12 @@ const actionLabels: Record<string, string> = {
   MASTER_DATA_ACTIVATED: "Master Data activated",
   MASTER_DATA_DEACTIVATED: "Master Data deactivated",
   MASTER_DATA_DELETED: "Master Data deleted",
+  TRAINING_PROGRAMME_CREATED: "Training programme created",
+  TRAINING_PROGRAMME_UPDATED: "Training programme updated",
+  TRAINING_PROGRAMME_DELETED: "Training programme deleted",
+  TRAINING_LOCATION_CREATED: "Training location created",
+  TRAINING_LOCATION_UPDATED: "Training location updated",
+  TRAINING_LOCATION_DELETED: "Training location deleted",
   FLIGHT_MASTER_DATA_UPDATED: "Flight Log Master Data updated",
   REPORT_GENERATED: "Report generated",
   APPROVAL_CREATED: "Approval created",
