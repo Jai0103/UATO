@@ -26,7 +26,9 @@ type AssignedAttendanceSession = {
   amOpen: boolean;
   pmOpen: boolean;
   amOpensAt: string;
+  amClosesAt: string;
   pmOpensAt: string;
+  pmClosesAt: string;
   closesAt: string;
   amCount: number;
   pmCount: number;
@@ -55,7 +57,7 @@ function formatSubmitted(value: string) {
 function periodIsOpen(session: AssignedAttendanceSession, period: AttendancePeriod, now: number) {
   const enabled = period === "am" ? session.amEnabled : session.pmEnabled;
   const opensAt = Date.parse(period === "am" ? session.amOpensAt : session.pmOpensAt);
-  const closesAt = Date.parse(session.closesAt);
+  const closesAt = Date.parse(period === "am" ? session.amClosesAt : session.pmClosesAt);
   return enabled && now >= opensAt && now <= closesAt;
 }
 
@@ -117,7 +119,7 @@ export default function TrainerAttendancePage() {
   }
 
   return <AppShell><div className="app-page">
-    <section className="app-page-header"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-xs font-bold uppercase text-cyan-800">Assigned sessions</p><h1 className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">QR Attendance</h1><p className="mt-2 text-sm text-slate-500">Attendance opens automatically at 8:00 AM and 12:00 PM Singapore time.</p></div><button type="button" onClick={() => void load()} disabled={loading} title="Refresh sessions" aria-label="Refresh sessions" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div></section>
+    <section className="app-page-header"><div className="flex items-center justify-between gap-4"><div className="min-w-0"><p className="text-xs font-bold uppercase text-cyan-800">Assigned sessions</p><h1 className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">QR Attendance</h1><p className="mt-2 text-sm text-slate-500">AM: 8:00 AM-1:00 PM. PM: 12:00 PM-6:00 PM Singapore time.</p></div><button type="button" onClick={() => void load()} disabled={loading} title="Refresh sessions" aria-label="Refresh sessions" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div></section>
 
     {loading ? <div className="flex min-h-48 items-center justify-center gap-3 text-sm font-semibold text-slate-600"><Loader2 className="h-5 w-5 animate-spin text-cyan-700" />Loading assigned sessions...</div> : null}
     {!loading && loadError ? <section className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"><p className="font-semibold">Attendance sessions could not be loaded</p><p className="mt-1">{loadError}</p><button type="button" onClick={() => void load()} className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 font-semibold ring-1 ring-amber-200"><RefreshCw className="h-4 w-4" />Retry</button></section> : null}
