@@ -5,6 +5,7 @@ export type AttendanceSessionStatus = "draft" | "open" | "closed";
 export type AttendanceSession = {
   id: string;
   token: string;
+  programmeId: string;
   courseName: string;
   courseCode: string;
   courseDate: string;
@@ -24,6 +25,7 @@ export type AttendanceSession = {
 export type AttendanceSessionInput = Pick<
   AttendanceSession,
   | "id"
+  | "programmeId"
   | "courseName"
   | "courseCode"
   | "courseDate"
