@@ -52,6 +52,7 @@ import {
   type EvaluationSessionStatus,
 } from "@/lib/evaluations";
 import { fetchFirebaseUsers, type FirebaseManagedUser } from "@/lib/firebase-users-api";
+import { fetchTrainingCatalogue, type TrainingLocation, type TrainingProgramme } from "@/lib/training-catalogue-api";
 
 const inputClass =
   "mt-2 h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-base text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-600 focus:ring-4 focus:ring-sky-100 sm:h-11 sm:text-sm";
@@ -95,11 +96,13 @@ function todayValue() {
 function emptyForm(): EvaluationSessionInput {
   return {
     id: "",
+    programmeId: "",
     courseName: "",
     trainerName: "",
     trainerEmail: "",
     trainingDate: todayValue(),
     location: "",
+    locationId: "",
     status: "draft",
     opensAt: "",
     closesAt: "",
@@ -184,6 +187,8 @@ export default function EvaluationsPage() {
   const [dateTo, setDateTo] = useState("");
   const [form, setForm] = useState<EvaluationSessionInput | null>(null);
   const [instructors, setInstructors] = useState<FirebaseManagedUser[]>([]);
+  const [programmes, setProgrammes] = useState<TrainingProgramme[]>([]);
+  const [locations, setLocations] = useState<TrainingLocation[]>([]);
   const [instructorsLoading, setInstructorsLoading] = useState(true);
   const [instructorError, setInstructorError] = useState("");
   const [qrSession, setQrSession] = useState<EvaluationSession | null>(null);
@@ -238,8 +243,10 @@ export default function EvaluationsPage() {
     setInstructorsLoading(true);
     setInstructorError("");
     try {
-      const users = await fetchFirebaseUsers();
+      const [users, catalogue] = await Promise.all([fetchFirebaseUsers(), fetchTrainingCatalogue(false)]);
       setInstructors(users.filter((user) => user.status === "active" && user.email));
+      setProgrammes(catalogue.programmes);
+      setLocations(catalogue.locations);
     } catch (error) {
       setInstructorError(error instanceof Error ? error.message : "Please try again.");
     } finally {
@@ -304,11 +311,13 @@ export default function EvaluationsPage() {
   function editSession(session: EvaluationSession) {
     setForm({
       id: session.id,
+      programmeId: session.programmeId,
       courseName: session.courseName,
       trainerName: session.trainerName,
       trainerEmail: session.trainerEmail,
       trainingDate: session.trainingDate,
       location: session.location,
+      locationId: session.locationId,
       status: session.status,
       opensAt: toLocalDateTime(session.opensAt),
       closesAt: toLocalDateTime(session.closesAt),
@@ -320,15 +329,17 @@ export default function EvaluationsPage() {
     if (!form || working) return;
 
     if (
+      !form.programmeId.trim() ||
       !form.courseName.trim() ||
       !form.trainerName.trim() ||
       !form.trainerEmail.trim() ||
       !form.trainingDate ||
+      !form.locationId.trim() ||
       !form.location.trim()
     ) {
       message.warning(
         "Complete required fields",
-        "Course, an assigned trainer account, training date, and location are required."
+        "Select an active programme, trainer account, training date, and training location."
       );
       return;
     }
@@ -803,16 +814,20 @@ export default function EvaluationsPage() {
           <form onSubmit={handleSave}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Course or programme" required wide>
-                <input
-                  value={form.courseName}
-                  onChange={(event) =>
-                    setForm({ ...form, courseName: event.target.value })
-                  }
+                <select
+                  value={form.programmeId || (form.courseName ? `legacy:${form.courseName}` : "")}
+                  onChange={(event) => {
+                    const selected = programmes.find((item) => item.id === event.target.value);
+                    if (selected) setForm({ ...form, programmeId: selected.id, courseName: selected.name });
+                  }}
                   className={inputClass}
-                  maxLength={160}
-                  placeholder="Enter training programme"
                   autoFocus
-                />
+                >
+                  <option value="">Select a programme</option>
+                  {form.courseName && !programmes.some((item) => item.id === form.programmeId) ? <option disabled value={`legacy:${form.courseName}`}>{form.courseName} (select current catalogue item)</option> : null}
+                  {programmes.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
+                </select>
+                {!programmes.length ? <a href="/UATO/training-catalogue/" className="mt-2 inline-block text-xs font-bold text-sky-700 hover:underline">Add programmes in Master Data</a> : null}
               </Field>
               <Field label="Assigned trainer" required>
                 <select
@@ -857,15 +872,19 @@ export default function EvaluationsPage() {
                 />
               </Field>
               <Field label="Training location" required>
-                <input
-                  value={form.location}
-                  onChange={(event) =>
-                    setForm({ ...form, location: event.target.value })
-                  }
+                <select
+                  value={form.locationId || (form.location ? `legacy:${form.location}` : "")}
+                  onChange={(event) => {
+                    const selected = locations.find((item) => item.id === event.target.value);
+                    if (selected) setForm({ ...form, locationId: selected.id, location: selected.name });
+                  }}
                   className={inputClass}
-                  maxLength={160}
-                  placeholder="Enter training location"
-                />
+                >
+                  <option value="">Select a location</option>
+                  {form.location && !locations.some((item) => item.id === form.locationId) ? <option disabled value={`legacy:${form.location}`}>{form.location} (select current catalogue item)</option> : null}
+                  {locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                {!locations.length ? <a href="/UATO/training-catalogue/" className="mt-2 inline-block text-xs font-bold text-sky-700 hover:underline">Add locations in Master Data</a> : null}
               </Field>
               <Field label="Status" required>
                 <select
