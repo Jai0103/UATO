@@ -46,6 +46,7 @@ const actionLabels: Record<string, string> = {
   FLIGHT_DELETED: "Flight deleted",
   USER_CREATED: "User created",
   USER_UPDATED: "User updated",
+  USER_ACCESS_UPDATED: "User access updated",
   USER_ACTIVATED: "User activated",
   USER_DEACTIVATED: "User deactivated",
   USER_DELETED: "User deleted",
