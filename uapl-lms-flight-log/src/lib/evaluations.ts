@@ -133,6 +133,10 @@ export type EvaluationSessionsPage = {
 export type EvaluationResponse = {
   id: string;
   sessionId: string;
+  courseName?: string;
+  trainingDate?: string;
+  trainerName?: string;
+  trainerEmail?: string;
   studentName: string;
   company: string;
   trainingComponent?: string;
@@ -143,6 +147,15 @@ export type EvaluationResponse = {
   additionalComments: string;
   submittedAt: string;
 } & EvaluationRatings;
+
+export type EvaluationReportScope = "session" | "course" | "trainer" | "all";
+
+export type EvaluationReportingData = {
+  sessions: EvaluationSession[];
+  responses: EvaluationResponse[];
+  questions: import("@/lib/evaluation-firebase-api").EvaluationQuestion[];
+  answers: import("@/lib/evaluation-firebase-api").EvaluationAnswer[];
+};
 
 export type EvaluationResponseSummary = {
   responseCount: number;
