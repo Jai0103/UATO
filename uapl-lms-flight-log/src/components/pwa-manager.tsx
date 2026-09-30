@@ -264,7 +264,7 @@ export function PwaManager() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-slate-950">
-                Install Flight Management System
+                Install UATO Management System
               </p>
               <p className="mt-1 text-sm leading-5 text-slate-500">
                 Add it to your Home Screen for faster repeat access.
