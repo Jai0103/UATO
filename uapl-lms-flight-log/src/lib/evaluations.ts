@@ -84,11 +84,13 @@ export type EvaluationSessionStatus = "draft" | "open" | "closed";
 export type EvaluationSession = {
   id: string;
   token: string;
+  programmeId: string;
   courseName: string;
   trainerName: string;
   trainerEmail: string;
   trainingDate: string;
   location: string;
+  locationId: string;
   status: EvaluationSessionStatus;
   opensAt: string;
   closesAt: string;
@@ -102,11 +104,13 @@ export type EvaluationSession = {
 export type EvaluationSessionInput = Pick<
   EvaluationSession,
   | "id"
+  | "programmeId"
   | "courseName"
   | "trainerName"
   | "trainerEmail"
   | "trainingDate"
   | "location"
+  | "locationId"
   | "status"
   | "opensAt"
   | "closesAt"
