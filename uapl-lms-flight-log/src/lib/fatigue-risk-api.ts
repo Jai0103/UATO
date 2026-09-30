@@ -12,6 +12,7 @@ import {
   type DocumentData
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { hasAccess, normalizeAccessPermissions } from "@/lib/access-control";
 import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
 import {
   createFatigueResponses,
@@ -45,7 +46,7 @@ type FirebaseActor = {
   uid: string;
   name: string;
   email: string;
-  role: "admin";
+  role: "admin" | "trainer";
 };
 
 function text(value: unknown) {
@@ -90,14 +91,15 @@ async function requireAdmin(): Promise<FirebaseActor> {
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error("Your Firebase session has expired. Please sign in again.");
   const profile = await getDoc(doc(firestore, "users", user.uid));
-  if (!profile.exists() || profile.data().status !== "active" || profile.data().role !== "admin") {
-    throw new Error("Administrator access is required.");
-  }
+  const data = profile.data();
+  const role = data?.role === "admin" ? "admin" : "trainer";
+  const permissions = normalizeAccessPermissions(data?.permissions, role);
+  if (!profile.exists() || data?.status !== "active" || !hasAccess({ role, permissions }, "fatigueRisk")) throw new Error("Fatigue Risk access is required.");
   return {
     uid: user.uid,
-    name: text(profile.data().name || user.displayName || user.email || "Administrator"),
-    email: text(profile.data().email || user.email).toLowerCase(),
-    role: "admin"
+    name: text(data?.name || user.displayName || user.email || "User"),
+    email: text(data?.email || user.email).toLowerCase(),
+    role
   };
 }
 
