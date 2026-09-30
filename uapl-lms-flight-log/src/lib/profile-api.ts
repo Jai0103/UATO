@@ -15,12 +15,14 @@ import {
   firestore,
   firebaseStorage
 } from "@/lib/firebase-client";
+import { normalizeAccessPermissions, type AccessPermission } from "@/lib/access-control";
 
 export type UserProfile = {
   uid: string;
   name: string;
   email: string;
   role: "admin" | "trainer";
+  permissions: AccessPermission[];
   status: "active" | "inactive";
   photoURL: string;
   avatarPath: string;
@@ -38,6 +40,10 @@ function profile(uid: string, data: Record<string, unknown>): UserProfile {
     name: value(data.name),
     email: value(data.email).toLowerCase(),
     role: data.role === "admin" ? "admin" : "trainer",
+    permissions: normalizeAccessPermissions(
+      data.permissions,
+      data.role === "admin" ? "admin" : "trainer"
+    ),
     status: data.status === "inactive" ? "inactive" : "active",
     photoURL: value(data.photoURL),
     avatarPath: value(data.avatarPath),
