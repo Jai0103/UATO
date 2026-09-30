@@ -1,82 +1,86 @@
-      allow create: if
-        request.resource.data.keys().hasOnly([
-          "id",
-          "sessionId",
-          "publicToken",
-          "period",
-          "learnerName",
-          "learnerNameLower",
-          "lastFour",
-          "identityHash",
-          "signatureDataUrl",
-          "submittedAt",
-          "updatedAt"
-        ])
-        && request.resource.data.id == submissionId
-        && request.resource.data.period in ["am", "pm"]
-        && request.resource.data.learnerName is string
-        && request.resource.data.learnerName.size() >= 2
-        && request.resource.data.learnerName.size() <= 100
-        && request.resource.data.learnerNameLower is string
-        && request.resource.data.lastFour is string
-        && request.resource.data.lastFour.matches("^[A-Z0-9]{4}$")
-        && request.resource.data.identityHash is string
-        && request.resource.data.identityHash.matches("^[a-f0-9]{64}$")
-        && request.resource.data.signatureDataUrl is string
-        && request.resource.data.signatureDataUrl.matches("^data:image/png;base64,.*")
-        && request.resource.data.signatureDataUrl.size() <= 350000
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.updatedAt == request.time
-        && publicAttendanceSession(request.resource.data.publicToken).data.sessionId == request.resource.data.sessionId
-        && publicAttendanceSession(request.resource.data.publicToken).data.status == "open"
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isActiveUser() {
+      return signedIn()
+        && currentUser().data.status == "active";
+    }
+    function isAdmin() {
+      return isActiveUser()
+        && currentUser().data.role == "admin";
+    }
+    function hasModule(permission) {
+      return isAdmin() || (
+        isActiveUser()
+        && currentUser().data.role == "trainer"
         && (
-          (request.resource.data.period == "am"
-            && publicAttendanceSession(request.resource.data.publicToken).data.amOpen == true)
-          ||
-          (request.resource.data.period == "pm"
-            && publicAttendanceSession(request.resource.data.publicToken).data.pmOpen == true)
+          (
+            currentUser().data.keys().hasAny(["permissions"])
+            && currentUser().data.permissions is list
+            && currentUser().data.permissions.hasAny([permission])
+          )
+          || (
+            !currentUser().data.keys().hasAny(["permissions"])
+            && permission in ["flightLogs", "attendance", "evaluations", "reports"]
+          )
         )
-        && publicAttendanceSession(request.resource.data.publicToken).data.amOpensAt is timestamp
-        && publicAttendanceSession(request.resource.data.publicToken).data.pmOpensAt is timestamp
-        && publicAttendanceSession(request.resource.data.publicToken).data.closesAt is timestamp
-        && request.time <= publicAttendanceSession(request.resource.data.publicToken).data.closesAt
-        && (
-          (request.resource.data.period == "am"
-            && request.time >= publicAttendanceSession(request.resource.data.publicToken).data.amOpensAt)
-          ||
-          (request.resource.data.period == "pm"
-            && request.time >= publicAttendanceSession(request.resource.data.publicToken).data.pmOpensAt)
-        );
+      );
     }
-    match /evaluationTemplates/{templateId} {
-      allow read, create, update, delete: if isAdmin();
+    function isOperationalAuditAction(action) {
+      return (hasModule("staffTraining") && action in ["STAFF_TRAINING_CREATED", "STAFF_TRAINING_UPDATED", "STAFF_TRAINING_DELETED"])
+        || (hasModule("uaMaintenance") && action in ["UA_MAINTENANCE_CREATED", "UA_MAINTENANCE_UPDATED", "UA_MAINTENANCE_DELETED"])
+        || (hasModule("fatigueRisk") && action in ["FATIGUE_RISK_CREATED", "FATIGUE_RISK_UPDATED", "FATIGUE_RISK_DELETED"]);
     }
-    match /evaluationQuestions/{questionId} {
-      allow read, create, update, delete: if isAdmin();
+    function isValidOperationalAuditEvent(auditId) {
+      return isActiveUser()
+        && request.resource.data.keys().hasOnly([
+          "id", "timestamp", "actorUserId", "actorName", "actorNameLower",
+          "actorEmail", "actorRole", "action", "entityType", "entityId",
+          "entityName", "entityNameLower", "detailsAvailable", "source", "schemaVersion"
+        ])
+        && request.resource.data.id == auditId
+        && request.resource.data.actorUserId == request.auth.uid
+        && request.resource.data.actorName == currentUser().data.name
+        && request.resource.data.actorEmail == currentUser().data.email
+        && request.resource.data.actorRole == currentUser().data.role
+        && isOperationalAuditAction(request.resource.data.action)
+        && request.resource.data.entityId is string
+        && request.resource.data.entityId.size() > 0
+        && request.resource.data.entityName is string
+        && request.resource.data.detailsAvailable == true
+        && request.resource.data.source == "firebase-live"
+        && request.resource.data.schemaVersion == 2;
     }
-    match /evaluationSessions/{sessionId} {
-      allow read, create, update, delete: if isAdmin();
+    function isValidOperationalAuditDetail(auditId) {
+      return isActiveUser()
+        && request.resource.data.keys().hasOnly([
+          "auditId", "entityId", "previousValue", "updatedValue", "details", "source", "schemaVersion"
+        ])
+        && request.resource.data.auditId == auditId
+        && request.resource.data.source == "firebase-live"
+        && request.resource.data.schemaVersion == 2
+        && existsAfter(/databases/$(database)/documents/auditEvents/$(auditId))
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.actorUserId == request.auth.uid
+        && isOperationalAuditAction(getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.action)
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.entityId == request.resource.data.entityId;
     }
-    match /evaluationPublicSessions/{token} {
-      allow read, create, update, delete: if isAdmin();
+    function isFlightLogAuditAction(action) {
+      return action in [
+        "FLIGHT_CREATED",
+        "FLIGHT_UPDATED",
+        "FLIGHT_DELETED"
+      ];
     }
-    match /evaluationResponseKeys/{keyId} {
-      allow read, write: if false;
-    }
-    match /evaluationSessionQuestions/{questionId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /evaluationResponses/{responseId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /evaluationAnswers/{answerId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /migrationRuns/{runId} {
-      allow read, create, update, delete: if isAdmin();
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
+    function isValidFlightLogAuditEvent(auditId) {
+      return isActiveUser()
+        && request.resource.data.keys().hasOnly([
+          "id",
+          "timestamp",
+          "actorUserId",
+          "actorName",
