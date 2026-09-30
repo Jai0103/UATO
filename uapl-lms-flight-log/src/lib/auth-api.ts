@@ -14,6 +14,10 @@ import { doc, getDoc } from "firebase/firestore";
 import { sessionKey } from "@/lib/demo-auth";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import { googleAppsScriptUrl } from "@/lib/google-config";
+import {
+  normalizeAccessPermissions,
+  type AccessPermission
+} from "@/lib/access-control";
 
 export type SecureUserRole = "admin" | "trainer";
 
@@ -22,6 +26,7 @@ export type SecureUser = {
   name: string;
   email: string;
   role: SecureUserRole;
+  permissions: AccessPermission[];
   mustChangePassword?: boolean;
 };
 
@@ -29,6 +34,7 @@ export type SecureSession = {
   name: string;
   email: string;
   role: SecureUserRole;
+  permissions: AccessPermission[];
   mustChangePassword?: boolean;
   sessionToken: string;
   expiresAt: string;
@@ -146,7 +152,11 @@ async function firebaseProfile() {
     user,
     name: String(profile.name || user.displayName || user.email || "User"),
     email: String(profile.email || user.email || "").toLowerCase(),
-    role: profile.role === "admin" ? "admin" as const : "trainer" as const
+    role: profile.role === "admin" ? "admin" as const : "trainer" as const,
+    permissions: normalizeAccessPermissions(
+      profile.permissions,
+      profile.role === "admin" ? "admin" : "trainer"
+    )
   };
 }
 
@@ -163,6 +173,7 @@ export async function loginSecurely(identifier: string, password: string): Promi
       name: profile.name,
       email: profile.email,
       role: profile.role,
+      permissions: profile.permissions,
       mustChangePassword: false,
       sessionToken: "",
       expiresAt: new Date(Date.now() + FIREBASE_SESSION_HOURS * 60 * 60 * 1000).toISOString()
@@ -228,6 +239,7 @@ export async function verifySecureSession(session: SecureSession): Promise<Secur
       name: profile.name,
       email: profile.email,
       role: profile.role,
+      permissions: profile.permissions,
       mustChangePassword: false
     };
     saveSecureSession(verified);
@@ -302,6 +314,7 @@ export function getSecureSession(): SecureSession | null {
       name: parsed.name,
       email: parsed.email,
       role: parsed.role,
+      permissions: normalizeAccessPermissions(parsed.permissions, parsed.role),
       mustChangePassword: false,
       sessionToken: String(parsed.sessionToken || ""),
       expiresAt: parsed.expiresAt
