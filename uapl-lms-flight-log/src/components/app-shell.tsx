@@ -36,6 +36,12 @@ import {
 } from "@/lib/auth-api";
 import { loadPreferences, savePreferences, type AppPreferences } from "@/lib/app-preferences";
 import { fetchOwnProfile, type UserProfile } from "@/lib/profile-api";
+import {
+  firstAccessiblePath,
+  hasAccess,
+  permissionForPath,
+  type AccessPermission
+} from "@/lib/access-control";
 
 type NavigationChild = {
   href: string;
@@ -90,21 +96,6 @@ function isTemporaryVerificationError(error: unknown) {
     ["NETWORK_ERROR", "HTTP_ERROR", "INVALID_RESPONSE"].includes(error.code)
   );
 }
-
-const adminOnlyPages = [
-  "/admin",
-  "/approvals",
-  "/master-data",
-  "/training-catalogue",
-  "/users",
-  "/audit-history",
-  "/staff-training",
-  "/ua-maintenance",
-  "/inventory",
-  "/fatigue-risk",
-  "/evaluations",
-  "/attendance"
-];
 
 const adminLinks: NavigationItem[] = [
   {
@@ -219,33 +210,19 @@ const adminLinks: NavigationItem[] = [
   }
 ];
 
-const trainerLinks: NavigationItem[] = [
-  {
-    href: "/flight-logs",
-    label: "Flight Logs",
-    icon: ClipboardList
-  },
-  {
-    href: "/records",
-    label: "Records",
-    icon: Archive
-  },
-  {
-    href: "/evaluations/trainer",
-    label: "Student Evaluations",
-    icon: ClipboardList
-  },
-  {
-    href: "/attendance/trainer",
-    label: "QR Attendance",
-    icon: ClipboardList
-  },
-  {
-    href: "/reports",
-    label: "Reports",
-    icon: FileText
-  }
-];
+function trainerLinksFor(permissions: AccessPermission[]): NavigationItem[] {
+  const subject = { role: "trainer" as const, permissions };
+  return [
+    hasAccess(subject, "flightLogs") ? { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList } : null,
+    hasAccess(subject, "flightLogs") ? { href: "/records", label: "Flight Log Records", icon: Archive } : null,
+    hasAccess(subject, "attendance") ? { href: "/attendance/trainer", label: "QR Attendance", icon: ClipboardList } : null,
+    hasAccess(subject, "evaluations") ? { href: "/evaluations/trainer", label: "Student Evaluations", icon: ClipboardList } : null,
+    hasAccess(subject, "staffTraining") ? { href: "/staff-training", label: "Staff Training", icon: ClipboardList } : null,
+    hasAccess(subject, "uaMaintenance") ? { href: "/ua-maintenance", label: "UA Maintenance", icon: ClipboardList } : null,
+    hasAccess(subject, "fatigueRisk") ? { href: "/fatigue-risk", label: "Fatigue Risk", icon: ClipboardList } : null,
+    hasAccess(subject, "reports") ? { href: "/reports", label: "Reports", icon: FileText } : null
+  ].filter((item): item is NavigationItem => item !== null);
+}
 
 function pathMatches(pathname: string, href: string, exact = false) {
   return exact
@@ -413,12 +390,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const normalizedPath = pathname.replace(/\/+$/, "") || "/";
-    const adminOnly = !["/evaluations/trainer", "/attendance/trainer"].includes(normalizedPath) && adminOnlyPages.some((page) =>
-      normalizedPath === page || normalizedPath.startsWith(`${page}/`)
-    );
-    if (session.role !== "admin" && adminOnly) {
-      router.replace("/flight-logs");
+    if (session.role !== "admin") {
+      const required = permissionForPath(pathname);
+      if (required === "admin" || (required && !hasAccess(session, required))) {
+        router.replace(firstAccessiblePath(session.permissions));
+      }
     }
   }, [pathname, router, session]);
 
@@ -515,8 +491,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (!active) return;
       setProfile(result);
       setSession((current) => {
-        if (!current || current.name === result.name) return current;
-        const next = { ...current, name: result.name };
+        if (!current) return current;
+        const next = { ...current, name: result.name, role: result.role, permissions: result.permissions };
+        if (JSON.stringify(current) === JSON.stringify(next)) return current;
         saveSecureSession(next);
         return next;
       });
@@ -527,7 +504,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setProfile(result);
       setSession((current) => {
         if (!current) return current;
-        const next = { ...current, name: result.name };
+        const next = { ...current, name: result.name, role: result.role, permissions: result.permissions };
         saveSecureSession(next);
         return next;
       });
@@ -556,7 +533,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [profileMenuOpen]);
 
   useEffect(() => {
-    const links = session?.role === "admin" ? adminLinks : trainerLinks;
+    const links = session?.role === "admin" ? adminLinks : trainerLinksFor(session?.permissions || []);
     const activeGroup = links.find((item) =>
       item.children?.some((child) =>
         pathMatches(pathname, child.href, child.exact)
@@ -566,7 +543,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (activeGroup) {
       setExpandedGroup(activeGroup.href);
     }
-  }, [pathname, session?.role]);
+  }, [pathname, session?.permissions, session?.role]);
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -619,7 +596,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const activeSession = session;
   const links =
-    activeSession.role === "admin" ? adminLinks : trainerLinks;
+    activeSession.role === "admin" ? adminLinks : trainerLinksFor(activeSession.permissions);
 
   function openProfileMenu() {
     if (profileCloseTimer.current) window.clearTimeout(profileCloseTimer.current);
