@@ -12,6 +12,7 @@ import {
   type DocumentReference
 } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
+import { hasAccess, normalizeAccessPermissions } from "@/lib/access-control";
 import {
   addFirebaseAuditToTransaction,
   writeFirebaseAudit
@@ -57,7 +58,7 @@ let actorCache: {
   uid: string;
   name: string;
   email: string;
-  role: "admin";
+  role: "admin" | "trainer";
 } | null = null;
 
 export class StaffTrainingFirebaseError extends Error {
@@ -84,23 +85,22 @@ async function requireFirebaseUser() {
   }
 
   const profile = await getDoc(doc(firestore, "users", user.uid));
-  if (
-    !profile.exists() ||
-    profile.data().status !== "active" ||
-    profile.data().role !== "admin"
-  ) {
+  const data = profile.data();
+  const role = data?.role === "admin" ? "admin" : "trainer";
+  const permissions = normalizeAccessPermissions(data?.permissions, role);
+  if (!profile.exists() || data?.status !== "active" || !hasAccess({ role, permissions }, "staffTraining")) {
     throw new StaffTrainingFirebaseError(
-      "Administrator access is required.",
-      "ADMIN_REQUIRED"
+      "Staff Training access is required.",
+      "ACCESS_REQUIRED"
     );
   }
 
   actorCache = {
     expiresAt: Date.now() + 2 * 60_000,
     uid: user.uid,
-    name: text(profile.data().name || user.displayName || user.email || "Administrator"),
-    email: text(profile.data().email || user.email).trim().toLowerCase(),
-    role: "admin"
+    name: text(data?.name || user.displayName || user.email || "User"),
+    email: text(data?.email || user.email).trim().toLowerCase(),
+    role
   };
   return actorCache;
 }
