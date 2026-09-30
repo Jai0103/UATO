@@ -112,11 +112,13 @@ function sessionFromData(id: string, data: DocumentData): EvaluationSession {
   return {
     id,
     token: stringValue(data.token),
+    programmeId: stringValue(data.programmeId),
     courseName: stringValue(data.courseName),
     trainerName: stringValue(data.trainerName),
     trainerEmail: stringValue(data.trainerEmail),
     trainingDate: stringValue(data.trainingDate),
     location: stringValue(data.location),
+    locationId: stringValue(data.locationId),
     status: (["draft", "open", "closed"].includes(status)
       ? status
       : "draft") as EvaluationSessionStatus,
@@ -271,10 +273,12 @@ function publicQuestion(question: EvaluationQuestion) {
 function publicSession(session: EvaluationSession, questions: EvaluationQuestion[]) {
   return {
     sessionId: session.id,
+    programmeId: session.programmeId,
     courseName: session.courseName,
     trainerName: session.trainerName,
     trainingDate: session.trainingDate,
     location: session.location,
+    locationId: session.locationId,
     status: session.status,
     opensAt: session.opensAt,
     closesAt: session.closesAt,
@@ -322,9 +326,11 @@ export async function saveFirebaseEvaluationSession(input: EvaluationSessionInpu
     id,
     token: previous?.token || crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, ""),
     courseName: input.courseName.trim(),
+    programmeId: input.programmeId.trim(),
     trainerName: input.trainerName.trim(),
     trainerEmail: input.trainerEmail.trim().toLowerCase(),
     location: input.location.trim(),
+    locationId: input.locationId.trim(),
     createdByName: previous?.createdByName || actor.name,
     createdByEmail: previous?.createdByEmail || actor.email,
     createdAt: previous?.createdAt || now,
