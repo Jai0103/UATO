@@ -52,13 +52,17 @@ export type PublicAttendanceSession = Pick<
   | "pmOpen"
 > & {
   amOpensAt: string;
+  amClosesAt: string;
   pmOpensAt: string;
+  pmClosesAt: string;
   closesAt: string;
 };
 
 export type AttendanceWindowState = {
   amOpen: boolean;
   pmOpen: boolean;
+  amExpired: boolean;
+  pmExpired: boolean;
   expired: boolean;
   nextOpensAt: string;
 };
@@ -66,23 +70,28 @@ export type AttendanceWindowState = {
 export function attendanceWindowTimes(courseDate: string) {
   return {
     amOpensAt: `${courseDate}T08:00:00+08:00`,
+    amClosesAt: `${courseDate}T13:00:00+08:00`,
     pmOpensAt: `${courseDate}T12:00:00+08:00`,
-    closesAt: `${courseDate}T23:59:59+08:00`
+    pmClosesAt: `${courseDate}T18:00:00+08:00`,
+    closesAt: `${courseDate}T18:00:00+08:00`
   };
 }
 
 export function attendanceWindowState(
-  session: Pick<PublicAttendanceSession, "status" | "schedule" | "amOpen" | "pmOpen" | "amOpensAt" | "pmOpensAt" | "closesAt">,
+  session: Pick<PublicAttendanceSession, "status" | "schedule" | "amOpen" | "pmOpen" | "amOpensAt" | "amClosesAt" | "pmOpensAt" | "pmClosesAt" | "closesAt">,
   now = Date.now()
 ): AttendanceWindowState {
   const amTime = Date.parse(session.amOpensAt);
+  const amCloseTime = Date.parse(session.amClosesAt);
   const pmTime = Date.parse(session.pmOpensAt);
-  const closeTime = Date.parse(session.closesAt);
-  const active = session.status === "open" && (!Number.isFinite(closeTime) || now <= closeTime);
+  const pmCloseTime = Date.parse(session.pmClosesAt || session.closesAt);
+  const active = session.status === "open";
   const amEnabled = session.schedule !== "pm" && session.amOpen;
   const pmEnabled = session.schedule !== "am" && session.pmOpen;
-  const amOpen = active && amEnabled && (!Number.isFinite(amTime) || now >= amTime);
-  const pmOpen = active && pmEnabled && (!Number.isFinite(pmTime) || now >= pmTime);
+  const amExpired = Number.isFinite(amCloseTime) && now > amCloseTime;
+  const pmExpired = Number.isFinite(pmCloseTime) && now > pmCloseTime;
+  const amOpen = active && amEnabled && !amExpired && (!Number.isFinite(amTime) || now >= amTime);
+  const pmOpen = active && pmEnabled && !pmExpired && (!Number.isFinite(pmTime) || now >= pmTime);
   const candidates = [
     amEnabled && !amOpen && Number.isFinite(amTime) && now < amTime ? session.amOpensAt : "",
     pmEnabled && !pmOpen && Number.isFinite(pmTime) && now < pmTime ? session.pmOpensAt : ""
@@ -90,7 +99,9 @@ export function attendanceWindowState(
   return {
     amOpen,
     pmOpen,
-    expired: Number.isFinite(closeTime) && now > closeTime,
+    amExpired,
+    pmExpired,
+    expired: (!amEnabled || amExpired) && (!pmEnabled || pmExpired),
     nextOpensAt: candidates[0] || ""
   };
 }
