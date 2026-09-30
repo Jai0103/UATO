@@ -1,5 +1,7 @@
 "use client";
 
+import { firstAccessiblePath, type AccessPermission } from "@/lib/access-control";
+
 export type AppTheme = "light" | "dark" | "system";
 
 export type AppPreferences = {
@@ -65,6 +67,6 @@ export function savePreferences(preferences: AppPreferences) {
   window.dispatchEvent(new CustomEvent("uapl-preferences-updated", { detail: preferences }));
 }
 
-export function preferredHome(role: "admin" | "trainer") {
-  return role === "admin" ? loadPreferences().startPage : "/flight-logs";
+export function preferredHome(role: "admin" | "trainer", permissions: AccessPermission[] = []) {
+  return role === "admin" ? loadPreferences().startPage : firstAccessiblePath(permissions);
 }
