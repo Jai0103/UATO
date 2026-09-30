@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Loader2, PenLine, RotateCcw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from "react";
-import type { AttendancePeriod, PublicAttendanceSession } from "@/lib/attendance";
+import { attendanceWindowState, type AttendancePeriod, type PublicAttendanceSession } from "@/lib/attendance";
 import { fetchPublicAttendanceSession, submitPublicAttendance } from "@/lib/attendance-api";
 
 function formatDate(value: string) {
@@ -102,6 +102,12 @@ export default function AttendanceCheckInPage() {
   const [signature, setSignature] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const parameters = new URLSearchParams(window.location.search);
@@ -120,7 +126,8 @@ export default function AttendanceCheckInPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const periodOpen = session?.status === "open" && (period === "am" ? session.amOpen : session.pmOpen);
+  const windows = session ? attendanceWindowState(session, currentTime) : null;
+  const periodOpen = period === "am" ? windows?.amOpen === true : windows?.pmOpen === true;
   const scheduleAllowsPeriod = session?.schedule === "full_day" || session?.schedule === period;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -156,7 +163,7 @@ export default function AttendanceCheckInPage() {
 
           {success ? <section className="mt-5 rounded-xl border border-emerald-200 bg-white p-7 text-center shadow-sm"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><CheckCircle2 size={30} /></div><h2 className="mt-4 text-2xl font-bold">Attendance recorded</h2><p className="mt-2 text-sm leading-6 text-slate-600">Your {period.toUpperCase()} attendance for <strong>{session.courseName}</strong> has been submitted successfully.</p><p className="mt-5 text-xs text-slate-500">You may close this page.</p></section> : null}
 
-          {!success && (!periodOpen || !scheduleAllowsPeriod) ? <section className="mt-5 rounded-xl border border-amber-200 bg-white p-6 text-center shadow-sm"><h2 className="text-xl font-bold">Signing is not open</h2><p className="mt-2 text-sm leading-6 text-slate-600">The instructor has not opened the {period.toUpperCase()} attendance window. Please confirm that you scanned the correct QR code.</p></section> : null}
+          {!success && (!periodOpen || !scheduleAllowsPeriod) ? <section className="mt-5 rounded-xl border border-amber-200 bg-white p-6 text-center shadow-sm"><h2 className="text-xl font-bold">Signing is not open</h2><p className="mt-2 text-sm leading-6 text-slate-600">{windows?.expired ? "This attendance session has closed." : `The ${period.toUpperCase()} attendance window opens automatically at ${period === "am" ? "8:00 AM" : "12:00 PM"} Singapore time on the course date.`}</p></section> : null}
 
           {!success && periodOpen && scheduleAllowsPeriod ? <form onSubmit={handleSubmit} className="mt-5 space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div><h2 className="text-lg font-bold">Confirm your attendance</h2><p className="mt-1 text-sm text-slate-500">Enter your details exactly as shown on your identification document.</p></div>
