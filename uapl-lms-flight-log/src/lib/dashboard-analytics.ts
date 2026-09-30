@@ -28,6 +28,13 @@ export type TrainerFlightHours = {
   flights: number;
 };
 
+export type EvaluationKpiScore = {
+  name: string;
+  average: number;
+  ratings: number;
+  responses: number;
+};
+
 export type DashboardAnalytics = {
   totals: {
     flights: number;
@@ -40,9 +47,14 @@ export type DashboardAnalytics = {
     attendanceRate: number;
     evaluationResponses: number;
     evaluationAverage: number;
+    trainerEffectiveness: number;
+    courseSatisfaction: number;
+    recommendationRate: number;
   };
   months: DashboardMonthPoint[];
   trainerFlightHours: TrainerFlightHours[];
+  trainerEvaluationScores: EvaluationKpiScore[];
+  evaluationSectionScores: EvaluationKpiScore[];
 };
 
 function text(value: unknown) {
@@ -122,14 +134,16 @@ export async function fetchDashboardAnalytics(
     attendanceSessionSnapshot,
     attendanceSubmissionSnapshot,
     evaluationResponseSnapshot,
-    evaluationAnswerSnapshot
+    evaluationAnswerSnapshot,
+    evaluationSessionSnapshot
   ] = await Promise.all([
     getDocs(collection(firestore, "flightEntries")),
     getDocs(collection(firestore, "uaMaintenanceRecords")),
     getDocs(collection(firestore, "attendanceSessions")),
     getDocs(collection(firestore, "attendanceSubmissions")),
     getDocs(collection(firestore, "evaluationResponses")),
-    getDocs(collection(firestore, "evaluationAnswers"))
+    getDocs(collection(firestore, "evaluationAnswers")),
+    getDocs(collection(firestore, "evaluationSessions"))
   ]);
 
   const months = monthSeries(range);
@@ -181,22 +195,32 @@ export async function fetchDashboardAnalytics(
     if ((attendanceCounts.get(session.id) || 0) > 0) month.attendanceCoveredSessions += 1;
   });
 
-  const answersByResponse = new Map<string, number[]>();
+  const answersByResponse = new Map<string, Array<{ rating: number; section: string }>>();
   evaluationAnswerSnapshot.docs.forEach((item) => {
     const data = item.data();
     const responseId = text(data.responseId);
     const rating = number(data.rating);
     if (!responseId || rating <= 0) return;
     const values = answersByResponse.get(responseId) || [];
-    values.push(rating);
+    values.push({ rating, section: text(data.section) || "General" });
     answersByResponse.set(responseId, values);
   });
   const evaluationTotals = new Map<string, { sum: number; count: number }>();
+  const sessionById = new Map(evaluationSessionSnapshot.docs.map((item) => [item.id, item.data()]));
+  const trainerScores = new Map<string, { name: string; sum: number; count: number; responses: Set<string> }>();
+  const sectionScores = new Map<string, { sum: number; count: number; responses: Set<string> }>();
+  let recommendationYes = 0;
+  let recommendationCount = 0;
+  let trainerRatingSum = 0;
+  let trainerRatingCount = 0;
+  let courseRatingSum = 0;
+  let courseRatingCount = 0;
   evaluationResponseSnapshot.docs.forEach((item) => {
     const data = item.data();
     const date = isoDate(data.submittedAt);
     if (!inRange(date, range)) return;
-    const answerRatings = answersByResponse.get(item.id) || [];
+    const answerDetails = answersByResponse.get(item.id) || [];
+    const answerRatings = answerDetails.map((answer) => answer.rating);
     const legacyRatings = evaluationRatingFields
       .map((field) => number(data[field]))
       .filter((value) => value > 0);
@@ -210,6 +234,35 @@ export async function fetchDashboardAnalytics(
       current.count += ratings.length;
       evaluationTotals.set(month.key, current);
     }
+    const recommendation = text(data.recommendTraining);
+    if (recommendation === "yes" || recommendation === "no") {
+      recommendationCount += 1;
+      if (recommendation === "yes") recommendationYes += 1;
+    }
+    const session = sessionById.get(text(data.sessionId));
+    const trainerName = text(data.trainerName) || text(session?.trainerName) || "Unassigned trainer";
+    answerDetails.forEach((answer) => {
+      const section = answer.section;
+      const sectionCurrent = sectionScores.get(section) || { sum: 0, count: 0, responses: new Set<string>() };
+      sectionCurrent.sum += answer.rating;
+      sectionCurrent.count += 1;
+      sectionCurrent.responses.add(item.id);
+      sectionScores.set(section, sectionCurrent);
+      if (section === "Trainer / Instructor") {
+        trainerRatingSum += answer.rating;
+        trainerRatingCount += 1;
+        const key = trainerName.toLowerCase();
+        const trainerCurrent = trainerScores.get(key) || { name: trainerName, sum: 0, count: 0, responses: new Set<string>() };
+        trainerCurrent.sum += answer.rating;
+        trainerCurrent.count += 1;
+        trainerCurrent.responses.add(item.id);
+        trainerScores.set(key, trainerCurrent);
+      }
+      if (section === "Course Content & Learning" || section === "Overall Course Evaluation") {
+        courseRatingSum += answer.rating;
+        courseRatingCount += 1;
+      }
+    });
   });
 
   months.forEach((month) => {
@@ -261,11 +314,26 @@ export async function fetchDashboardAnalytics(
       evaluationResponses: totalEvaluationResponses,
       evaluationAverage: totalEvaluationResponses
         ? evaluationWeightedSum / totalEvaluationResponses
-        : 0
+        : 0,
+      trainerEffectiveness: trainerRatingCount ? trainerRatingSum / trainerRatingCount : 0,
+      courseSatisfaction: courseRatingCount ? courseRatingSum / courseRatingCount : 0,
+      recommendationRate: recommendationCount ? recommendationYes * 100 / recommendationCount : 0
     },
     months,
     trainerFlightHours: Array.from(trainers.values()).sort(
       (first, second) => second.minutes - first.minutes || first.name.localeCompare(second.name)
-    )
+    ),
+    trainerEvaluationScores: Array.from(trainerScores.values()).map((item) => ({
+      name: item.name,
+      average: item.count ? item.sum / item.count : 0,
+      ratings: item.count,
+      responses: item.responses.size
+    })).sort((first, second) => second.average - first.average || first.name.localeCompare(second.name)),
+    evaluationSectionScores: Array.from(sectionScores, ([name, item]) => ({
+      name,
+      average: item.count ? item.sum / item.count : 0,
+      ratings: item.count,
+      responses: item.responses.size
+    })).sort((first, second) => second.average - first.average || first.name.localeCompare(second.name))
   };
 }
