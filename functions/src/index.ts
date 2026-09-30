@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import {
   CallableRequest,
   HttpsError,
@@ -420,36 +420,160 @@ export const adminDeleteUser = callable(async (request) => {
   return { uid };
 });
 
-export const listTrainerAttendanceSessions = callable(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in again to continue.");
-  const profileSnapshot = await db.collection("users").doc(uid).get();
-  const profile = profileSnapshot.data();
-  if (!profileSnapshot.exists || profile?.status !== "active" ||
-    !["admin", "trainer"].includes(text(profile.role))) {
-    throw new HttpsError("permission-denied", "An active trainer account is required.");
+function attendanceWindows(courseDate: string) {
+  return {
+    amOpensAt: new Date(`${courseDate}T08:00:00+08:00`),
+    pmOpensAt: new Date(`${courseDate}T12:00:00+08:00`),
+    closesAt: new Date(`${courseDate}T23:59:59+08:00`)
+  };
+}
+
+function firestoreIso(value: unknown) {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  return text(value);
+}
+
+async function assignedAttendanceSession(actor: ActiveActor, sessionId: string) {
+  const reference = db.collection("attendanceSessions").doc(sessionId);
+  const snapshot = await reference.get();
+  const data = snapshot.data() || {};
+  if (!snapshot.exists || email(data.instructorEmail) !== actor.email) {
+    throw new HttpsError("permission-denied", "This attendance session is not assigned to your account.");
   }
-  const instructorEmail = email(profile.email);
-  if (!instructorEmail) throw new HttpsError("failed-precondition", "Your account has no email address.");
+  return { reference, snapshot, data };
+}
+
+export const listTrainerAttendanceSessions = callable(async (request) => {
+  const actor = await requireActiveUser(request.auth?.uid);
+  if (!actor.email) throw new HttpsError("failed-precondition", "Your account has no email address.");
   const snapshot = await db.collection("attendanceSessions")
-    .where("instructorEmail", "==", instructorEmail)
+    .where("instructorEmail", "==", actor.email)
     .get();
-  const sessions = snapshot.docs
+  const now = Date.now();
+  const candidates = snapshot.docs
     .map((item) => ({ id: item.id, data: item.data() }))
-    .filter((item) => item.data.status === "open" && (item.data.amOpen === true || item.data.pmOpen === true))
-    .map((item) => ({
+    .filter((item) => {
+      if (item.data.status !== "open") return false;
+      return attendanceWindows(text(item.data.courseDate)).closesAt.getTime() >= now;
+    });
+  const sessions = await Promise.all(candidates.map(async (item) => {
+    const schedule = ["am", "pm"].includes(text(item.data.schedule)) ? text(item.data.schedule) : "full_day";
+    const windows = attendanceWindows(text(item.data.courseDate));
+    const amEnabled = schedule !== "pm";
+    const pmEnabled = schedule !== "am";
+    const amOpen = amEnabled && now >= windows.amOpensAt.getTime() && now <= windows.closesAt.getTime();
+    const pmOpen = pmEnabled && now >= windows.pmOpensAt.getTime() && now <= windows.closesAt.getTime();
+    const submissions = await db.collection("attendanceSubmissions").where("sessionId", "==", item.id).get();
+    let amCount = 0;
+    let pmCount = 0;
+    submissions.docs.forEach((submission) => submission.data().period === "pm" ? pmCount += 1 : amCount += 1);
+    const publicReference = db.collection("attendancePublicSessions").doc(text(item.data.token));
+    await publicReference.set({
+      sessionId: item.id,
+      token: text(item.data.token),
+      courseName: text(item.data.courseName),
+      courseCode: text(item.data.courseCode),
+      courseDate: text(item.data.courseDate),
+      instructorName: text(item.data.instructorName),
+      schedule,
+      status: "open",
+      amOpen: amEnabled,
+      pmOpen: pmEnabled,
+      amOpensAt: Timestamp.fromDate(windows.amOpensAt),
+      pmOpensAt: Timestamp.fromDate(windows.pmOpensAt),
+      closesAt: Timestamp.fromDate(windows.closesAt),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return {
       id: item.id,
       token: text(item.data.token),
       courseName: text(item.data.courseName),
       courseCode: text(item.data.courseCode),
       courseDate: text(item.data.courseDate),
       instructorName: text(item.data.instructorName),
-      amOpen: item.data.amOpen === true,
-      pmOpen: item.data.pmOpen === true
-    }))
+      schedule,
+      amOpen,
+      pmOpen,
+      amEnabled,
+      pmEnabled,
+      amOpensAt: windows.amOpensAt.toISOString(),
+      pmOpensAt: windows.pmOpensAt.toISOString(),
+      closesAt: windows.closesAt.toISOString(),
+      amCount,
+      pmCount
+    };
+  }));
+  const sorted = sessions
     .filter((item) => item.token)
     .sort((first, second) => second.courseDate.localeCompare(first.courseDate));
-  return { sessions };
+  return { sessions: sorted };
+});
+
+export const getTrainerAttendanceSubmissions = callable(async (request) => {
+  const actor = await requireActiveUser(request.auth?.uid);
+  const sessionId = text(request.data?.sessionId);
+  if (!sessionId) throw new HttpsError("invalid-argument", "Attendance session is required.");
+  await assignedAttendanceSession(actor, sessionId);
+  const snapshot = await db.collection("attendanceSubmissions").where("sessionId", "==", sessionId).get();
+  const submissions = snapshot.docs.map((item) => {
+    const data = item.data();
+    return {
+      id: item.id,
+      sessionId,
+      publicToken: text(data.publicToken),
+      period: data.period === "pm" ? "pm" : "am",
+      learnerName: text(data.learnerName),
+      learnerNameLower: text(data.learnerNameLower),
+      lastFour: text(data.lastFour),
+      identityHash: text(data.identityHash),
+      signatureDataUrl: text(data.signatureDataUrl),
+      submittedAt: firestoreIso(data.submittedAt),
+      updatedAt: firestoreIso(data.updatedAt)
+    };
+  }).sort((first, second) => first.learnerName.localeCompare(second.learnerName));
+  return { submissions };
+});
+
+export const listTrainerAttendanceReportSummaries = callable(async (request) => {
+  const actor = await requireActiveUser(request.auth?.uid);
+  const sessionSnapshot = await db.collection("attendanceSessions")
+    .where("instructorEmail", "==", actor.email)
+    .get();
+  const records = await Promise.all(sessionSnapshot.docs.map(async (item) => {
+    const data = item.data();
+    const submissions = await db.collection("attendanceSubmissions").where("sessionId", "==", item.id).get();
+    let amCount = 0;
+    let pmCount = 0;
+    const learners = new Set<string>();
+    submissions.docs.forEach((submission) => {
+      const entry = submission.data();
+      entry.period === "pm" ? pmCount += 1 : amCount += 1;
+      learners.add(text(entry.identityHash) || `${text(entry.learnerNameLower)}|${text(entry.lastFour)}`);
+    });
+    return {
+      id: item.id,
+      token: text(data.token),
+      courseName: text(data.courseName),
+      courseCode: text(data.courseCode),
+      courseDate: text(data.courseDate),
+      instructorName: text(data.instructorName),
+      instructorEmail: email(data.instructorEmail),
+      schedule: ["am", "pm"].includes(text(data.schedule)) ? text(data.schedule) : "full_day",
+      status: ["open", "closed"].includes(text(data.status)) ? text(data.status) : "draft",
+      amOpen: data.amOpen === true,
+      pmOpen: data.pmOpen === true,
+      trainerComments: text(data.trainerComments),
+      createdByUid: text(data.createdByUid),
+      createdByEmail: email(data.createdByEmail),
+      createdAt: firestoreIso(data.createdAt),
+      updatedAt: firestoreIso(data.updatedAt),
+      amCount,
+      pmCount,
+      uniqueLearnerCount: learners.size
+    };
+  }));
+  records.sort((first, second) => second.courseDate.localeCompare(first.courseDate));
+  return { records };
 });
 
 export const listTrainerEvaluationSessions = callable(async (request) => {
