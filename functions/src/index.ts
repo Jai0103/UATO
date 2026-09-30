@@ -853,6 +853,10 @@ export const submitPublicEvaluation = callable(async (request) => {
     transaction.set(responseReference, {
       id: responseId,
       sessionId,
+      courseName: text(sessionSnapshot.data()?.courseName),
+      trainingDate: text(sessionSnapshot.data()?.trainingDate),
+      trainerName: text(sessionSnapshot.data()?.trainerName),
+      trainerEmail: email(sessionSnapshot.data()?.trainerEmail),
       studentName,
       studentNameLower: studentName.toLowerCase(),
       company,
