@@ -38,6 +38,7 @@ function sessionFromDoc(id: string, data: DocumentData): AttendanceSession {
   return {
     id,
     token: String(data.token || ""),
+    programmeId: String(data.programmeId || ""),
     courseName: String(data.courseName || ""),
     courseCode: String(data.courseCode || ""),
     courseDate: String(data.courseDate || ""),
@@ -90,6 +91,7 @@ async function requireAdmin() {
 function sessionAuditValue(session: AttendanceSession) {
   return {
     id: session.id,
+    programmeId: session.programmeId,
     courseName: session.courseName,
     courseCode: session.courseCode,
     courseDate: session.courseDate,
@@ -120,6 +122,7 @@ function publicProjection(session: AttendanceSessionInput, id: string, token: st
   return {
     sessionId: id,
     token,
+    programmeId: session.programmeId.trim(),
     courseName: session.courseName.trim(),
     courseCode: session.courseCode.trim(),
     courseDate: session.courseDate,
@@ -214,6 +217,7 @@ export async function saveAttendanceSession(input: AttendanceSessionInput) {
     ...publicProjection(input, id, token),
     id,
     token,
+    programmeId: input.programmeId.trim(),
     instructorEmail: input.instructorEmail.trim().toLowerCase(),
     trainerComments: input.trainerComments.trim(),
     createdByUid: existing.exists() ? String(existing.data().createdByUid || user.uid) : user.uid,
@@ -225,6 +229,7 @@ export async function saveAttendanceSession(input: AttendanceSessionInput) {
   const auditSession: AttendanceSession = {
     id,
     token,
+    programmeId: input.programmeId.trim(),
     courseName: input.courseName.trim(),
     courseCode: input.courseCode.trim(),
     courseDate: input.courseDate,
