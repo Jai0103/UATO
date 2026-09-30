@@ -37,13 +37,18 @@ import {
 import { fetchFirebaseFlightLogsByDateRange } from "@/lib/flight-log-firebase";
 import {
   fetchAllFirebaseEvaluationResponses,
+  fetchFirebaseEvaluationReportingData,
   fetchFirebaseEvaluationSessionsPage
 } from "@/lib/evaluation-firebase-api";
-import type { EvaluationSession } from "@/lib/evaluations";
+import type { EvaluationReportScope, EvaluationSession } from "@/lib/evaluations";
 import {
   downloadDynamicEvaluationCsv,
   downloadDynamicEvaluationPdf
 } from "@/lib/evaluation-dynamic-report";
+import {
+  downloadCombinedEvaluationCsv,
+  downloadCombinedEvaluationPdf
+} from "@/lib/evaluation-combined-report";
 import { fetchStaffTrainingReportRecords } from "@/lib/staff-training-api";
 import {
   fetchUaMaintenanceRecord,
@@ -158,8 +163,11 @@ export default function ReportsPage() {
   const [fatigueTrainerNames, setFatigueTrainerNames] = useState<string[]>([]);
   const [fatigueTrainersLoading, setFatigueTrainersLoading] = useState(false);
   const [fatigueTrainersError, setFatigueTrainersError] = useState("");
-  const [evaluationSearch, setEvaluationSearch] = useState("");
-  const [evaluationYear, setEvaluationYear] = useState("");
+  const [evaluationFrom, setEvaluationFrom] = useState(firstDayOfMonth());
+  const [evaluationTo, setEvaluationTo] = useState(today());
+  const [evaluationScope, setEvaluationScope] = useState<EvaluationReportScope>("session");
+  const [evaluationCourse, setEvaluationCourse] = useState("");
+  const [evaluationTrainerEmail, setEvaluationTrainerEmail] = useState("");
   const [evaluationSessions, setEvaluationSessions] = useState<
     EvaluationSession[]
   >([]);
@@ -179,13 +187,12 @@ export default function ReportsPage() {
   const [attendanceLoadError, setAttendanceLoadError] = useState("");
   const [attendancePreviewOpen, setAttendancePreviewOpen] = useState(false);
 
-  const evaluationYears = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    return Array.from(
-      { length: 8 },
-      (_, index) => String(currentYear - index)
-    );
-  }, []);
+  const evaluationCourses = useMemo(() => Array.from(new Set(evaluationSessions.map((item) => item.courseName).filter(Boolean))).sort(), [evaluationSessions]);
+  const evaluationTrainers = useMemo(() => {
+    const values = new Map<string, string>();
+    evaluationSessions.forEach((item) => { if (item.trainerEmail) values.set(item.trainerEmail, item.trainerName || item.trainerEmail); });
+    return Array.from(values, ([email, name]) => ({ email, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [evaluationSessions]);
 
   const attendanceInstructorNames = useMemo(
     () =>
@@ -319,10 +326,12 @@ export default function ReportsPage() {
       try {
         const result = await fetchFirebaseEvaluationSessionsPage({
           page: 1,
-          pageSize: 25,
-          query: evaluationSearch.trim(),
+          pageSize: 100,
+          query: "",
           status: "",
-          year: evaluationYear
+          year: "",
+          dateFrom: evaluationFrom,
+          dateTo: evaluationTo
         });
         if (!active) return;
 
@@ -351,7 +360,7 @@ export default function ReportsPage() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [evaluationSearch, evaluationYear, isAdmin]);
+  }, [evaluationFrom, evaluationTo, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin || !fatigueFrom || !fatigueTo || fatigueFrom > fatigueTo) {
@@ -801,15 +810,28 @@ export default function ReportsPage() {
 
   async function generateEvaluationReport(format: "pdf" | "csv") {
     if (working) return;
+    const validation = validateRange(evaluationFrom, evaluationTo, "evaluation date range");
+    if (validation) {
+      message.warning("Check evaluation dates", validation);
+      return;
+    }
     const selectedSession = evaluationSessions.find(
       (evaluation) => evaluation.id === selectedEvaluationId
     );
 
-    if (!selectedSession) {
+    if (evaluationScope === "session" && !selectedSession) {
       message.warning(
         "Select an evaluation session",
         "Search for and select the training evaluation to export."
       );
+      return;
+    }
+    if (evaluationScope === "course" && !evaluationCourse) {
+      message.warning("Select a course", "Choose the course to include in the combined report.");
+      return;
+    }
+    if (evaluationScope === "trainer" && !evaluationTrainerEmail) {
+      message.warning("Select a trainer", "Choose the assigned trainer for the performance report.");
       return;
     }
 
@@ -819,12 +841,33 @@ export default function ReportsPage() {
     setWorkingLabel("Loading all evaluation responses...");
 
     try {
-      const complete = await fetchAllFirebaseEvaluationResponses(selectedSession.id);
+      if (evaluationScope === "session" && selectedSession) {
+        const complete = await fetchAllFirebaseEvaluationResponses(selectedSession.id);
+
+        if (!complete.responses.length) {
+          message.warning("No evaluation responses found", "The selected session does not have any submitted responses.");
+          return;
+        }
+
+        setWorkingLabel(format === "pdf" ? "Building evaluation PDF..." : "Preparing evaluation CSV...");
+        await allowBrowserPaint();
+        if (format === "pdf") await downloadDynamicEvaluationPdf(selectedSession, complete);
+        else downloadDynamicEvaluationCsv(selectedSession, complete);
+        message.success(format === "pdf" ? "Evaluation PDF downloaded" : "Evaluation CSV downloaded", `${complete.responses.length} response${complete.responses.length === 1 ? "" : "s"} included.`);
+        return;
+      }
+
+      const complete = await fetchFirebaseEvaluationReportingData({
+        dateFrom: evaluationFrom,
+        dateTo: evaluationTo,
+        courseName: evaluationScope === "course" ? evaluationCourse : undefined,
+        trainerEmail: evaluationScope === "trainer" ? evaluationTrainerEmail : undefined
+      });
 
       if (!complete.responses.length) {
         message.warning(
           "No evaluation responses found",
-          "The selected session does not have any submitted responses."
+          "No submitted responses match the selected report scope and date range."
         );
         return;
       }
@@ -836,11 +879,15 @@ export default function ReportsPage() {
       );
       await allowBrowserPaint();
 
-      if (format === "pdf") {
-        await downloadDynamicEvaluationPdf(selectedSession, complete);
-      } else {
-        downloadDynamicEvaluationCsv(selectedSession, complete);
-      }
+      const trainer = evaluationTrainers.find((item) => item.email === evaluationTrainerEmail);
+      const meta = {
+        title: evaluationScope === "trainer" ? "TRAINER EVALUATION REPORT" : evaluationScope === "course" ? "COURSE EVALUATION REPORT" : "TOTAL COURSE EVALUATION REPORT",
+        scopeLabel: evaluationScope === "trainer" ? trainer?.name || evaluationTrainerEmail : evaluationScope === "course" ? evaluationCourse : "All courses and trainers",
+        dateFrom: evaluationFrom,
+        dateTo: evaluationTo
+      };
+      if (format === "pdf") await downloadCombinedEvaluationPdf(meta, complete);
+      else downloadCombinedEvaluationCsv(meta, complete);
 
       message.success(
         format === "pdf"
@@ -1245,41 +1292,28 @@ export default function ReportsPage() {
             <ReportCard
               icon={<MessageSquareText className="h-5 w-5" />}
               title="Student Evaluations"
-              description="Training feedback summary and response data"
+              description="Course quality, trainer performance, and total programme reporting"
               accent="violet"
             >
-              <Field label="Search training or trainer">
-                <div className="relative">
-                  <Search className="absolute left-3 top-[26px] h-4 w-4 text-slate-400" />
-                  <input
-                    className={`${fieldClass} pl-10`}
-                    value={evaluationSearch}
-                    onChange={(event) =>
-                      setEvaluationSearch(event.target.value)
-                    }
-                    placeholder="Search evaluation sessions"
-                  />
-                </div>
-              </Field>
-
-              <Field label="Training year">
+              <Field label="Report scope">
                 <select
                   className={fieldClass}
-                  value={evaluationYear}
-                  onChange={(event) =>
-                    setEvaluationYear(event.target.value)
-                  }
+                  value={evaluationScope}
+                  onChange={(event) => setEvaluationScope(event.target.value as EvaluationReportScope)}
                 >
-                  <option value="">All years</option>
-                  {evaluationYears.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
+                  <option value="session">Individual course session</option>
+                  <option value="course">Combined course evaluation</option>
+                  <option value="trainer">Trainer performance evaluation</option>
+                  <option value="all">Total evaluation report</option>
                 </select>
               </Field>
 
-              <Field label="Evaluation session">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <Field label="Date from"><input type="date" className={fieldClass} value={evaluationFrom} max={evaluationTo || today()} onChange={(event) => setEvaluationFrom(event.target.value)} /></Field>
+                <Field label="Date to"><input type="date" className={fieldClass} value={evaluationTo} min={evaluationFrom} max={today()} onChange={(event) => setEvaluationTo(event.target.value)} /></Field>
+              </div>
+
+              {evaluationScope === "session" ? <Field label="Evaluation session">
                 <select
                   className={fieldClass}
                   value={selectedEvaluationId}
@@ -1303,7 +1337,13 @@ export default function ReportsPage() {
                     </option>
                   ))}
                 </select>
-              </Field>
+              </Field> : null}
+
+              {evaluationScope === "course" ? <Field label="Course / programme"><select className={fieldClass} value={evaluationCourse} onChange={(event) => setEvaluationCourse(event.target.value)}><option value="">Select a course</option>{evaluationCourses.map((course) => <option key={course} value={course}>{course}</option>)}</select></Field> : null}
+
+              {evaluationScope === "trainer" ? <Field label="Assigned trainer"><select className={fieldClass} value={evaluationTrainerEmail} onChange={(event) => setEvaluationTrainerEmail(event.target.value)}><option value="">Select a trainer</option>{evaluationTrainers.map((trainer) => <option key={trainer.email} value={trainer.email}>{trainer.name}</option>)}</select></Field> : null}
+
+              {evaluationScope === "all" ? <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-3 text-xs leading-5 text-violet-800">Includes every course, trainer, section score, recommendation result, and anonymized written comment in the selected period.</div> : null}
 
               {evaluationLoadError ? (
                 <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
@@ -1319,7 +1359,9 @@ export default function ReportsPage() {
                   disabled={
                     working !== null ||
                     evaluationSessionsLoading ||
-                    !selectedEvaluationId
+                    (evaluationScope === "session" && !selectedEvaluationId) ||
+                    (evaluationScope === "course" && !evaluationCourse) ||
+                    (evaluationScope === "trainer" && !evaluationTrainerEmail)
                   }
                   label="PDF report"
                   onClick={() => void generateEvaluationReport("pdf")}
@@ -1330,7 +1372,9 @@ export default function ReportsPage() {
                   disabled={
                     working !== null ||
                     evaluationSessionsLoading ||
-                    !selectedEvaluationId
+                    (evaluationScope === "session" && !selectedEvaluationId) ||
+                    (evaluationScope === "course" && !evaluationCourse) ||
+                    (evaluationScope === "trainer" && !evaluationTrainerEmail)
                   }
                   className="mt-auto inline-flex h-12 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
