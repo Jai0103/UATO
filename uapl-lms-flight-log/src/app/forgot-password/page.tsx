@@ -202,7 +202,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         <footer className="border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
-          Powered by: Jairus Github
+          Powered by: JO
         </footer>
       </section>
     </main>
