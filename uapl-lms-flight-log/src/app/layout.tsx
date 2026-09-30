@@ -5,10 +5,10 @@ import { PwaManager } from "@/components/pwa-manager";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  applicationName: "Apollo Flight Management System",
+  applicationName: "UATO Management System",
   title: {
-    default: "Apollo Flight Management System",
-    template: "%s | Apollo Flight Management System",
+    default: "UATO Management System",
+    template: "%s | UATO Management System",
   },
   description:
     "Operations, training, maintenance, inventory, records, and reporting for Apollo Global Academy.",
