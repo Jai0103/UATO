@@ -1,8 +1,3 @@
-      allow list: if false;
-      allow create, update, delete: if isAdmin();
-    }
-    match /attendanceSubmissions/{submissionId} {
-      allow read, update, delete: if isAdmin();
       allow create: if
         request.resource.data.keys().hasOnly([
           "id",
