@@ -16,12 +16,17 @@ const region = "asia-southeast1";
 
 type Role = "admin" | "trainer";
 type Status = "active" | "inactive";
+type AccessPermission = "flightLogs" | "attendance" | "evaluations" | "reports" | "staffTraining" | "uaMaintenance" | "fatigueRisk";
+
+const accessPermissions: AccessPermission[] = ["flightLogs", "attendance", "evaluations", "reports", "staffTraining", "uaMaintenance", "fatigueRisk"];
+const defaultTrainerPermissions: AccessPermission[] = ["flightLogs", "attendance", "evaluations", "reports"];
 
 type ActiveActor = {
   uid: string;
   name: string;
   email: string;
   role: Role;
+  permissions: AccessPermission[];
 };
 
 type AdminActor = {
@@ -51,6 +56,24 @@ function status(value: unknown): Status {
     throw new HttpsError("invalid-argument", "Select a valid account status.");
   }
   return value;
+}
+
+function permissions(value: unknown, userRole: Role): AccessPermission[] {
+  if (userRole === "admin") return [...accessPermissions];
+  if (!Array.isArray(value)) return [...defaultTrainerPermissions];
+  return Array.from(new Set(value.filter((item): item is AccessPermission =>
+    typeof item === "string" && accessPermissions.includes(item as AccessPermission)
+  )));
+}
+
+function requirePermission(actor: ActiveActor, permission: AccessPermission) {
+  if (!canAccess(actor, permission)) {
+    throw new HttpsError("permission-denied", "Your account does not have access to this module.");
+  }
+}
+
+function canAccess(actor: ActiveActor, permission: AccessPermission) {
+  return actor.role === "admin" || actor.permissions.includes(permission);
 }
 
 function validEmail(value: string) {
@@ -152,7 +175,8 @@ async function requireActiveUser(uid: string | undefined): Promise<ActiveActor> 
     uid,
     name: text(data.name) || "User",
     email: email(data.email),
-    role: data.role === "admin" ? "admin" : "trainer"
+    role: data.role === "admin" ? "admin" : "trainer",
+    permissions: permissions(data.permissions, data.role === "admin" ? "admin" : "trainer")
   };
 }
 
@@ -227,6 +251,7 @@ export const updateOwnProfile = callable(async (request) => {
       name,
       email: actor.email,
       role: actor.role,
+      permissions: actor.permissions,
       status: "active",
       photoURL,
       avatarPath,
@@ -240,6 +265,7 @@ export const adminCreateUser = callable(async (request) => {
   const name = text(request.data?.name);
   const userEmail = email(request.data?.email);
   const userRole = role(request.data?.role);
+  const userPermissions = permissions(request.data?.permissions, userRole);
 
   if (name.length < 2 || name.length > 100 || !validEmail(userEmail)) {
     throw new HttpsError("invalid-argument", "Enter a valid name and email address.");
@@ -268,6 +294,7 @@ export const adminCreateUser = callable(async (request) => {
     email: userEmail,
     emailLower: userEmail,
     role: userRole,
+    permissions: userPermissions,
     status: "active" as const,
     createdAt: now,
     passwordChangedAt: null,
@@ -283,7 +310,8 @@ export const adminCreateUser = callable(async (request) => {
     batch.set(db.collection("users").doc(account.uid), profile);
     auditBatch(batch, actor, "User created", account.uid, name, null, profile, {
       email: userEmail,
-      role: userRole
+      role: userRole,
+      permissions: userPermissions
     });
     await batch.commit();
   } catch (error) {
@@ -299,6 +327,7 @@ export const adminUpdateUser = callable(async (request) => {
   const uid = text(request.data?.uid);
   const name = text(request.data?.name);
   const userRole = role(request.data?.role);
+  const userPermissions = permissions(request.data?.permissions, userRole);
   if (!uid || name.length < 2 || name.length > 100) {
     throw new HttpsError("invalid-argument", "Enter a valid user name.");
   }
@@ -314,12 +343,24 @@ export const adminUpdateUser = callable(async (request) => {
     ...previous,
     name,
     role: userRole,
+    permissions: userPermissions,
     updatedAt: new Date().toISOString(),
     updatedByUid: actor.uid
   };
   const batch = db.batch();
   batch.set(reference, updated);
-  auditBatch(batch, actor, "User updated", uid, name, previous, updated);
+  const previousPermissions = permissions(previous.permissions, previous.role === "admin" ? "admin" : "trainer");
+  const accessChanged = previous.role !== userRole || JSON.stringify(previousPermissions) !== JSON.stringify(userPermissions);
+  auditBatch(
+    batch,
+    actor,
+    accessChanged ? "USER_ACCESS_UPDATED" : "USER_UPDATED",
+    uid,
+    name,
+    previous,
+    updated,
+    accessChanged ? { previousPermissions, permissions: userPermissions } : null
+  );
   await batch.commit();
   return { user: { id: uid, ...updated } };
 });
@@ -445,6 +486,7 @@ async function assignedAttendanceSession(actor: ActiveActor, sessionId: string) 
 
 export const listTrainerAttendanceSessions = callable(async (request) => {
   const actor = await requireActiveUser(request.auth?.uid);
+  requirePermission(actor, "attendance");
   if (!actor.email) throw new HttpsError("failed-precondition", "Your account has no email address.");
   const snapshot = await db.collection("attendanceSessions")
     .where("instructorEmail", "==", actor.email)
@@ -511,6 +553,7 @@ export const listTrainerAttendanceSessions = callable(async (request) => {
 
 export const getTrainerAttendanceSubmissions = callable(async (request) => {
   const actor = await requireActiveUser(request.auth?.uid);
+  requirePermission(actor, "attendance");
   const sessionId = text(request.data?.sessionId);
   if (!sessionId) throw new HttpsError("invalid-argument", "Attendance session is required.");
   await assignedAttendanceSession(actor, sessionId);
@@ -536,6 +579,8 @@ export const getTrainerAttendanceSubmissions = callable(async (request) => {
 
 export const listTrainerAttendanceReportSummaries = callable(async (request) => {
   const actor = await requireActiveUser(request.auth?.uid);
+  requirePermission(actor, "attendance");
+  requirePermission(actor, "reports");
   const sessionSnapshot = await db.collection("attendanceSessions")
     .where("instructorEmail", "==", actor.email)
     .get();
@@ -577,14 +622,9 @@ export const listTrainerAttendanceReportSummaries = callable(async (request) => 
 });
 
 export const listTrainerEvaluationSessions = callable(async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in again to continue.");
-  const profileSnapshot = await db.collection("users").doc(uid).get();
-  const profile = profileSnapshot.data();
-  if (!profileSnapshot.exists || profile?.status !== "active") {
-    throw new HttpsError("permission-denied", "An active account is required.");
-  }
-  const trainerEmail = email(profile.email);
+  const actor = await requireActiveUser(request.auth?.uid);
+  requirePermission(actor, "evaluations");
+  const trainerEmail = actor.email;
   if (!trainerEmail) throw new HttpsError("failed-precondition", "Your account has no email address.");
   const snapshot = await db.collection("evaluationSessions")
     .where("trainerEmail", "==", trainerEmail)
@@ -977,12 +1017,12 @@ function approvalMessage(name: string, days: number) {
 
 export const listUserNotifications = callable(async (request) => {
   const actor = await requireActiveUser(request.auth?.uid);
-  const attendancePromise = db.collection("attendanceSessions")
-    .where("instructorEmail", "==", actor.email)
-    .get();
-  const evaluationPromise = db.collection("evaluationSessions")
-    .where("trainerEmail", "==", actor.email)
-    .get();
+  const attendancePromise = canAccess(actor, "attendance")
+    ? db.collection("attendanceSessions").where("instructorEmail", "==", actor.email).get()
+    : Promise.resolve(null);
+  const evaluationPromise = canAccess(actor, "evaluations")
+    ? db.collection("evaluationSessions").where("trainerEmail", "==", actor.email).get()
+    : Promise.resolve(null);
   const statePromise = db.collection("notificationStates")
     .where("uid", "==", actor.uid)
     .get();
@@ -995,19 +1035,19 @@ export const listUserNotifications = callable(async (request) => {
   const flightSignaturesPromise = actor.role === "admin"
     ? db.collection("flightLogSignatures").get()
     : Promise.resolve(null);
-  const maintenanceRecordsPromise = actor.role === "admin"
+  const maintenanceRecordsPromise = canAccess(actor, "uaMaintenance")
     ? db.collection("uaMaintenanceRecords").get()
     : Promise.resolve(null);
-  const maintenanceMasterPromise = actor.role === "admin"
+  const maintenanceMasterPromise = canAccess(actor, "uaMaintenance")
     ? db.collection("uaMaintenanceMasterData").get()
     : Promise.resolve(null);
-  const staffTrainingPromise = actor.role === "admin"
+  const staffTrainingPromise = canAccess(actor, "staffTraining")
     ? db.collection("staffTrainingRecords").get()
     : Promise.resolve(null);
-  const fatigueRecordsPromise = actor.role === "admin"
+  const fatigueRecordsPromise = canAccess(actor, "fatigueRisk")
     ? db.collection("fatigueRiskRecords").get()
     : Promise.resolve(null);
-  const usersPromise = actor.role === "admin"
+  const usersPromise = actor.role === "admin" || canAccess(actor, "fatigueRisk")
     ? db.collection("users").get()
     : Promise.resolve(null);
 
@@ -1049,7 +1089,7 @@ export const listUserNotifications = callable(async (request) => {
 
   const notifications: UserNotification[] = [];
 
-  attendanceSnapshot.docs.forEach((item) => {
+  attendanceSnapshot?.docs.forEach((item) => {
     const data = item.data();
     if (data.status !== "open" || (data.amOpen !== true && data.pmOpen !== true)) return;
     const id = `attendance:${item.id}`;
@@ -1071,7 +1111,7 @@ export const listUserNotifications = callable(async (request) => {
     });
   });
 
-  evaluationSnapshot.docs.forEach((item) => {
+  evaluationSnapshot?.docs.forEach((item) => {
     const data = item.data();
     const closesAt = dateMillis(data.closesAt);
     if (data.status !== "open" || (closesAt && closesAt < Date.now())) return;
