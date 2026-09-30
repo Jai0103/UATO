@@ -17,6 +17,13 @@ import {
   type FirebaseManagedUser,
 } from "@/lib/firebase-users-api";
 import {
+  accessPermissions,
+  defaultTrainerPermissions,
+  normalizeAccessPermissions,
+  permissionOptions,
+  type AccessPermission
+} from "@/lib/access-control";
+import {
   CheckCircle2,
   KeyRound,
   Mail,
@@ -46,12 +53,14 @@ type CreateUserForm = {
   name: string;
   email: string;
   role: UserRole;
+  permissions: AccessPermission[];
 };
 
 const emptyForm: CreateUserForm = {
   name: "",
   email: "",
   role: "trainer",
+  permissions: [...defaultTrainerPermissions],
 };
 
 function formatDate(value: string) {
@@ -222,7 +231,12 @@ export default function UsersPage() {
     setOperationLabel("Creating user and sending email...");
 
     try {
-      const newUser = await createFirebaseUser({ name, email, role: form.role });
+      const newUser = await createFirebaseUser({
+        name,
+        email,
+        role: form.role,
+        permissions: normalizeAccessPermissions(form.permissions, form.role)
+      });
       const nextUsers = [...users, newUser].sort((first, second) => first.name.localeCompare(second.name));
       setUsers(nextUsers);
       await syncGoogleBackup(nextUsers, {
@@ -394,6 +408,7 @@ export default function UsersPage() {
         uid: editingUser.id,
         name,
         role: editingUser.role,
+        permissions: normalizeAccessPermissions(editingUser.permissions, editingUser.role),
       });
       const nextUsers = users
         .map((item) => (item.id === updatedUser.id ? updatedUser : item))
@@ -476,7 +491,7 @@ export default function UsersPage() {
 
                 <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
                   <span className="capitalize text-slate-600">{user.role}</span>
-                  <span className="text-slate-500">{formatDate(user.createdAt)}</span>
+                  <span className="text-slate-500">{user.role === "admin" ? "Full access" : `${user.permissions.length} modules`}</span>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
@@ -496,18 +511,19 @@ export default function UsersPage() {
 
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">User</th><th className="px-5 py-3 font-semibold">Role</th><th className="px-5 py-3 font-semibold">Status</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
+              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500"><th className="px-5 py-3 font-semibold">User</th><th className="px-5 py-3 font-semibold">Role</th><th className="px-5 py-3 font-semibold">Access</th><th className="px-5 py-3 font-semibold">Status</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
               <tbody>
                 {filteredUsers.map((user) => (
                   <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50/70">
                     <td className="px-5 py-4"><p className="font-semibold text-slate-950">{user.name}</p><p className="mt-0.5 text-xs text-slate-500">{user.email}</p></td>
                     <td className="px-5 py-4 capitalize text-slate-700">{user.role}</td>
+                    <td className="px-5 py-4 text-slate-600">{user.role === "admin" ? "Full system" : `${user.permissions.length} modules`}</td>
                     <td className="px-5 py-4"><StatusBadge status={accountStatus(user)} /></td>
                     <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(user.createdAt)}</td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2"><IconButton label="Edit user" onClick={() => setEditingUser(user)}><Pencil size={16} /></IconButton><IconButton label="Reset password" onClick={() => void resetPassword(user)}><KeyRound size={16} /></IconButton><IconButton label={accountStatus(user) === "active" ? "Deactivate user" : "Activate user"} danger={accountStatus(user) === "active"} active={accountStatus(user) === "inactive"} onClick={() => void changeStatus(user)}><Power size={16} /></IconButton><IconButton label="Delete user" danger onClick={() => void deleteUser(user)}><Trash2 size={16} /></IconButton></div></td>
                   </tr>
                 ))}
-                {!filteredUsers.length && !loading ? <tr><td colSpan={5} className="p-10 text-center text-slate-500">No users found.</td></tr> : null}
+                {!filteredUsers.length && !loading ? <tr><td colSpan={6} className="p-10 text-center text-slate-500">No users found.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -516,13 +532,14 @@ export default function UsersPage() {
 
       {createOpen ? (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-w-lg sm:rounded-lg">
+          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-lg bg-white shadow-2xl sm:max-w-3xl sm:rounded-lg">
             <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><UserRound size={19} /></div><div><h2 className="text-lg font-semibold text-slate-950">Add User</h2><p className="mt-0.5 text-sm text-slate-500">Create a secure administrator or trainer account.</p></div></div><button type="button" onClick={() => setCreateOpen(false)} className="app-icon-button" aria-label="Close"><X size={18} /></button></div>
             <form onSubmit={createUser} className="space-y-4 p-5">
               <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><Mail size={18} className="mt-0.5 shrink-0 text-sky-700" /><p>A secure Firebase password setup link will be emailed automatically after the account is created. No temporary password is sent.</p></div>
               <FormInput label="Full name" value={form.name} onChange={(value) => setForm((current) => ({ ...current, name: value }))} placeholder="Trainer name" />
               <FormInput label="Email" value={form.email} onChange={(value) => setForm((current) => ({ ...current, email: value }))} placeholder="name@example.com" type="email" />
-              <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserRole }))} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
+              <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={form.role} onChange={(event) => { const role = event.target.value as UserRole; setForm((current) => ({ ...current, role, permissions: role === "admin" ? [...accessPermissions] : current.role === "admin" ? [...defaultTrainerPermissions] : current.permissions })); }} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
+              <AccessPermissionGrid role={form.role} permissions={form.permissions} onChange={(permissions) => setForm((current) => ({ ...current, permissions }))} />
               <div className="grid grid-cols-2 gap-3 pt-2"><button type="button" onClick={() => setCreateOpen(false)} className="app-button-secondary justify-center">Cancel</button><button type="submit" className="app-button-primary justify-center"><Plus size={16} /> Create</button></div>
             </form>
           </div>
@@ -531,24 +548,75 @@ export default function UsersPage() {
 
       {editingUser ? (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="w-full overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-w-lg sm:rounded-lg">
+          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-lg bg-white shadow-2xl sm:max-w-3xl sm:rounded-lg">
             <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700"><Pencil size={19} /></div>
-                <div><h2 className="text-lg font-semibold text-slate-950">Edit User</h2><p className="mt-0.5 text-sm text-slate-500">Update the account name or access role.</p></div>
+                <div><h2 className="text-lg font-semibold text-slate-950">Edit User Access</h2><p className="mt-0.5 text-sm text-slate-500">Update the account role and operational module access.</p></div>
               </div>
               <button type="button" onClick={() => setEditingUser(null)} className="app-icon-button" aria-label="Close"><X size={18} /></button>
             </div>
             <form onSubmit={editUser} className="space-y-4 p-5">
               <FormInput label="Full name" value={editingUser.name} onChange={(value) => setEditingUser((current) => current ? { ...current, name: value } : current)} placeholder="Trainer name" />
               <label className="block"><span className="text-sm font-medium text-slate-700">Email</span><input value={editingUser.email} className="app-input mt-2 bg-slate-100 text-slate-500" disabled /></label>
-              <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={editingUser.role} onChange={(event) => setEditingUser((current) => current ? { ...current, role: event.target.value as UserRole } : current)} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
+              <label className="block"><span className="text-sm font-medium text-slate-700">Role</span><select value={editingUser.role} onChange={(event) => { const role = event.target.value as UserRole; setEditingUser((current) => current ? { ...current, role, permissions: role === "admin" ? [...accessPermissions] : current.role === "admin" ? [...defaultTrainerPermissions] : current.permissions } : current); }} className="app-input mt-2"><option value="trainer">Trainer</option><option value="admin">Administrator</option></select></label>
+              <AccessPermissionGrid role={editingUser.role} permissions={editingUser.permissions} onChange={(permissions) => setEditingUser((current) => current ? { ...current, permissions } : current)} />
               <div className="grid grid-cols-2 gap-3 pt-2"><button type="button" onClick={() => setEditingUser(null)} className="app-button-secondary justify-center">Cancel</button><button type="submit" className="app-button-primary justify-center"><CheckCircle2 size={16} /> Save changes</button></div>
             </form>
           </div>
         </div>
       ) : null}
     </AppShell>
+  );
+}
+
+function AccessPermissionGrid({
+  role,
+  permissions,
+  onChange
+}: {
+  role: UserRole;
+  permissions: AccessPermission[];
+  onChange: (permissions: AccessPermission[]) => void;
+}) {
+  if (role === "admin") {
+    return (
+      <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 shrink-0 text-indigo-700" size={19} />
+          <div><p className="text-sm font-bold text-indigo-950">Full administrator access</p><p className="mt-1 text-xs leading-5 text-indigo-700">Administrators can access every module, Master Data, Users, Audit History, and system settings.</p></div>
+        </div>
+      </section>
+    );
+  }
+
+  const selected = new Set(permissions);
+  const toggle = (permission: AccessPermission) => {
+    const next = new Set(selected);
+    if (next.has(permission)) next.delete(permission);
+    else next.add(permission);
+    onChange(accessPermissions.filter((item) => next.has(item)));
+  };
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="text-sm font-bold text-slate-900">Operational access</p><p className="mt-1 text-xs leading-5 text-slate-500">Select only the modules required for this trainer.</p></div>
+        <span className="text-xs font-bold text-sky-700">{permissions.length} of {accessPermissions.length} enabled</span>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {permissionOptions.map((option) => {
+          const checked = selected.has(option.id);
+          return (
+            <label key={option.id} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${checked ? "border-sky-300 bg-white shadow-sm" : "border-slate-200 bg-white/60 hover:border-slate-300"}`}>
+              <input type="checkbox" checked={checked} onChange={() => toggle(option.id)} className="mt-1 h-4 w-4 rounded border-slate-300 text-sky-700 focus:ring-sky-500" />
+              <span className="min-w-0"><span className="flex items-center gap-2 text-sm font-bold text-slate-900">{option.label}{option.standard ? <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] uppercase text-sky-700">Default</span> : null}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{option.description}</span></span>
+            </label>
+          );
+        })}
+      </div>
+      {!permissions.length ? <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">This trainer will only be able to open their profile and settings.</p> : null}
+    </section>
   );
 }
 
