@@ -831,7 +831,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0 text-center">
-            <p className="truncate text-[10px] font-bold uppercase text-[#718096]">Flight Management</p>
+            <p className="truncate text-[10px] font-bold uppercase text-[#718096]">UATO Management</p>
             <p className="truncate text-sm font-bold text-[#16263c]">{pageTitle(pathname)}</p>
           </div>
           <div className="flex items-center justify-end gap-1">
@@ -931,7 +931,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <header className={`app-top-header fixed right-0 top-0 z-30 hidden h-[68px] items-center justify-between border-b border-[#d7e0ea] bg-white/95 px-8 backdrop-blur transition-[left,box-shadow] duration-300 lg:flex xl:px-10 ${desktopCollapsed ? "lg:left-[84px]" : "lg:left-[288px]"} ${headerElevated ? "app-top-header-elevated" : ""}`}>
-        <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-[#718096]">Flight Management System</p><p className="mt-0.5 truncate text-base font-bold text-[#16263c]">{pageTitle(pathname)}</p></div>
+        <div className="min-w-0"><p className="text-[11px] font-bold uppercase text-[#718096]">UATO Management System</p><p className="mt-0.5 truncate text-base font-bold text-[#16263c]">{pageTitle(pathname)}</p></div>
         <div className="flex items-center gap-1.5">
           <NotificationCenter />
           {renderProfileMenu(false)}
