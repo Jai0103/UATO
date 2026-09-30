@@ -95,6 +95,7 @@ const adminOnlyPages = [
   "/admin",
   "/approvals",
   "/master-data",
+  "/training-catalogue",
   "/users",
   "/audit-history",
   "/staff-training",
@@ -178,6 +179,7 @@ const adminLinks: NavigationItem[] = [
     icon: Database,
     children: [
       { href: "/master-data", label: "Flight Log Data", exact: true },
+      { href: "/training-catalogue", label: "Training Catalogue", exact: true },
       {
         href: "/staff-training/master-data",
         label: "Staff Training Data",
@@ -261,6 +263,7 @@ function pageTitle(pathname: string) {
     ["/evaluations", "Student Evaluations"],
     ["/flight-logs", "Flight Logs"],
     ["/records", "Records"],
+    ["/training-catalogue", "Training Catalogue"],
     ["/master-data", "Master Data"],
     ["/reports", "Reports"],
     ["/users", "Users"],
