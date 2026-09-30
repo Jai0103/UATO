@@ -127,7 +127,7 @@ export default function LoginPage() {
             className="mx-auto h-auto max-h-20 w-auto max-w-[238px] object-contain sm:max-w-[268px]"
           />
           <h1 className="mt-6 text-2xl font-bold text-[#16263c]">
-            Flight Management System
+            UATO Management System
           </h1>
           <p className="mt-1.5 text-sm leading-6 text-[#6b7d92]">
             Sign in with the account issued by your administrator.
@@ -254,7 +254,7 @@ export default function LoginPage() {
 
         <footer className="flex items-center justify-center gap-2 border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
           <ShieldCheck className="h-3.5 w-3.5 text-[#075f8f]" />
-          Powered by: Jairus Github
+          Powered by: JO
         </footer>
       </section>
     </main>
