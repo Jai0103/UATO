@@ -22,7 +22,9 @@ import { useAppMessage } from "@/components/message-provider";
 import { getSecureSession } from "@/lib/auth-api";
 import {
   fetchAttendanceRecordSummaries,
-  fetchAttendanceSubmissions
+  fetchAttendanceSubmissions,
+  fetchTrainerAttendanceReportSummaries,
+  fetchTrainerAttendanceSubmissions
 } from "@/lib/attendance-api";
 import type {
   AttendanceRecordSummary,
@@ -271,13 +273,13 @@ export default function ReportsPage() {
   }, [maintenanceFrom, maintenanceTo]);
 
   useEffect(() => {
-    if (!isAdmin) return;
-
     let active = true;
     setAttendanceLoading(true);
     setAttendanceLoadError("");
 
-    void fetchAttendanceRecordSummaries()
+    void (isAdmin
+      ? fetchAttendanceRecordSummaries()
+      : fetchTrainerAttendanceReportSummaries())
       .then((records) => {
         if (!active) return;
         setAttendanceRecords(records);
@@ -458,7 +460,9 @@ export default function ReportsPage() {
       const loaded = await Promise.all(
         batch.map(async (session) => ({
           session,
-          submissions: await fetchAttendanceSubmissions(session.id)
+          submissions: await (isAdmin
+            ? fetchAttendanceSubmissions(session.id)
+            : fetchTrainerAttendanceSubmissions(session.id))
         }))
       );
       records.push(...loaded);
@@ -1080,11 +1084,10 @@ export default function ReportsPage() {
             </ReportCard>
           ) : null}
 
-          {isAdmin ? (
-            <ReportCard
+          <ReportCard
               icon={<ClipboardCheck className="h-5 w-5" />}
               title="Attendance"
-              description="Combined learner attendance sheets"
+              description={isAdmin ? "Combined learner attendance sheets" : "Your assigned course attendance reports"}
               accent="sky"
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
@@ -1122,16 +1125,16 @@ export default function ReportsPage() {
                     />
                   </div>
                 </Field>
-                <Field label="Instructor">
+                <Field label={isAdmin ? "Instructor" : "Assigned instructor"}>
                   <select
                     className={fieldClass}
                     value={attendanceInstructor}
                     onChange={(event) =>
                       setAttendanceInstructor(event.target.value)
                     }
-                    disabled={attendanceLoading}
+                    disabled={attendanceLoading || !isAdmin}
                   >
-                    <option value="">All instructors</option>
+                    <option value="">{isAdmin ? "All instructors" : session?.name || "My assigned sessions"}</option>
                     {attendanceInstructorNames.map((name) => (
                       <option key={name} value={name}>
                         {name}
@@ -1237,7 +1240,6 @@ export default function ReportsPage() {
                 />
               </div>
             </ReportCard>
-          ) : null}
 
           {isAdmin ? (
             <ReportCard
