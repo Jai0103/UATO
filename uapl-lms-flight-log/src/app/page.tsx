@@ -25,7 +25,9 @@ import {
 import { LoadingScreen } from "@/components/loading-overlay";
 import { preferredHome } from "@/lib/app-preferences";
 
-const LOGO_PATH = "/UATO/AGA_Logo_fullcolor_Horizontal%20(1).png";
+const APP_BASE = process.env.NODE_ENV === "production" ? "/UATO" : "";
+const LOGO_PATH = `${APP_BASE}/AGA_Logo_fullcolor_Horizontal%20(1).png`;
+const LOGIN_VISUAL_PATH = `${APP_BASE}/uato-login-visual.png`;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -56,7 +58,7 @@ export default function LoginPage() {
     // The stored session already contains a signed token and an expiry time.
     // AppShell performs the periodic server-side account-status check, so the
     // login page can route immediately without adding another Apps Script call.
-    router.replace(preferredHome(existingSession.role));
+    router.replace(preferredHome(existingSession.role, existingSession.permissions));
   }, [router]);
 
   function clearError() {
@@ -91,7 +93,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.replace(preferredHome(session.role));
+      router.replace(preferredHome(session.role, session.permissions));
     } catch (error) {
       if (error instanceof AuthApiError) {
         setLoginError(error.message);
@@ -113,29 +115,42 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#eef3f8] px-4 py-6 sm:px-6 sm:py-10">
-      <div className="absolute inset-x-0 top-0 grid h-1 grid-cols-[1fr_72px]">
-        <span className="bg-[#075f8f]" />
-        <span className="bg-[#c7353d]" />
-      </div>
+    <main className="min-h-[100dvh] bg-[#f4f8fc] lg:grid lg:grid-cols-[minmax(0,1.7fr)_minmax(430px,0.82fr)]">
+      <section className="relative hidden min-h-[100dvh] overflow-hidden bg-white lg:block" aria-label="UATO training operations">
+        <img
+          src={LOGIN_VISUAL_PATH}
+          alt="Apollo Global Academy UATO training operations"
+          className="absolute left-0 top-0 h-[112%] w-auto max-w-none object-cover object-left-top"
+        />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#f4f8fc] to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-[#f4f8fc] to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#f4f8fc] to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-gradient-to-r from-transparent to-[#f4f8fc]" />
+      </section>
 
-      <section className="app-panel-enter w-full max-w-[470px] overflow-hidden rounded-lg border border-[#d4dee8] bg-white shadow-[0_2px_4px_rgba(16,42,67,0.06),0_24px_60px_rgba(16,42,67,0.14)]">
-        <header className="relative border-b border-[#e1e8ef] px-5 py-7 text-center sm:px-9 sm:py-8">
-          <img
-            src={LOGO_PATH}
-            alt="Apollo Global Academy"
-            className="mx-auto h-auto max-h-20 w-auto max-w-[238px] object-contain sm:max-w-[268px]"
-          />
-          <h1 className="mt-6 text-2xl font-bold text-[#16263c]">
-            UATO Management System
-          </h1>
-          <p className="mt-1.5 text-sm leading-6 text-[#6b7d92]">
-            Sign in with the account issued by your administrator.
-          </p>
-        </header>
+      <section className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden px-4 py-7 sm:px-8 sm:py-10 lg:px-10 xl:px-14">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0b2e68] via-[#1467b0] to-[#ef2b33] lg:hidden" />
 
-        <div className="px-5 py-6 sm:px-9 sm:py-8">
-          <form onSubmit={handleLogin} className="space-y-5" noValidate>
+        <div className="app-panel-enter w-full max-w-[490px]">
+          <header className="mb-7 text-center lg:text-left">
+            <img
+              src={LOGO_PATH}
+              alt="Apollo Global Academy"
+              className="mx-auto h-auto max-h-16 w-auto max-w-[220px] object-contain lg:hidden"
+            />
+            <p className="mt-7 text-xs font-bold uppercase text-[#1467b0] lg:mt-0">
+              Secure staff access
+            </p>
+            <h1 className="mt-2 text-[28px] font-bold leading-[1.15] text-[#0b234f] sm:text-[34px]">
+              Sign in to your<br className="hidden sm:block" /> UATO Management System
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-[#6b7d92]">
+              Use the account issued by your administrator.
+            </p>
+          </header>
+
+          <div className="rounded-lg border border-[#dfe8f1] bg-white p-5 shadow-[0_12px_36px_rgba(35,69,105,0.08),0_2px_8px_rgba(35,69,105,0.05)] sm:p-8">
+            <form onSubmit={handleLogin} className="space-y-5" noValidate>
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-[#405168]">
                 Email address
@@ -148,8 +163,8 @@ export default function LoginPage() {
                     setIdentifier(event.target.value);
                     clearError();
                   }}
-                  className="app-input mt-0 pl-10"
-                  placeholder="name@example.com"
+                  className="app-input mt-0 h-[52px] pl-10"
+                  placeholder="Email or staff account"
                   type="email"
                   autoComplete="email"
                   autoCapitalize="none"
@@ -176,7 +191,7 @@ export default function LoginPage() {
                   onKeyDown={updateCapsLock}
                   onKeyUp={updateCapsLock}
                   onBlur={() => setCapsLockOn(false)}
-                  className="app-input mt-0 pl-10 pr-12"
+                  className="app-input mt-0 h-[52px] pl-10 pr-12"
                   placeholder="Enter your password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
@@ -204,12 +219,12 @@ export default function LoginPage() {
               ) : null}
             </label>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-0.5">
               <button
                 type="button"
                 onClick={() => router.push("/forgot-password")}
                 disabled={loggingIn}
-                className="min-h-10 px-1 text-sm font-semibold text-[#075f8f] transition hover:text-[#064d75] hover:underline disabled:opacity-50"
+                className="min-h-10 px-1 text-sm font-semibold text-[#0965c1] transition hover:text-[#064d75] hover:underline disabled:opacity-50"
               >
                 Forgot password?
               </button>
@@ -240,7 +255,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loggingIn}
-              className="app-button-primary h-12 w-full justify-center"
+              className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#0b2e68] to-[#0d4c97] px-5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(11,46,104,0.22)] transition hover:brightness-110 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loggingIn ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -249,13 +264,14 @@ export default function LoginPage() {
               )}
               {loggingIn ? "Signing in securely..." : "Sign in"}
             </button>
-          </form>
-        </div>
+            </form>
+          </div>
 
-        <footer className="flex items-center justify-center gap-2 border-t border-[#e1e8ef] bg-[#f7f9fb] px-5 py-3 text-center text-xs text-[#718096]">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#075f8f]" />
-          Powered by: JO
-        </footer>
+          <footer className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-[#718096] lg:justify-start">
+            <ShieldCheck className="h-3.5 w-3.5 text-[#075f8f]" />
+            Secure access · Powered by: JO
+          </footer>
+        </div>
       </section>
     </main>
   );
