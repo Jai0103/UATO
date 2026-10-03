@@ -6,9 +6,9 @@
   --app-background: #f0f2f5;
   --app-surface: #ffffff;
   --app-surface-subtle: #f7f8fa;
-  --app-foreground: #3a3b3c;
-  --app-heading: #1c1e21;
-  --app-muted: #65676b;
+  --app-foreground: #2b3d52;
+  --app-heading: #14253d;
+  --app-muted: #5d6f84;
   --app-border: #d8dadf;
   --app-border-strong: #bec3c9;
   --app-primary: #0866ff;
@@ -72,11 +72,13 @@ body {
   overflow-x: hidden;
   background: var(--app-background);
   color: var(--app-foreground);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: "Segoe UI Variable Text", "Segoe UI", Inter, ui-sans-serif,
+    system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: grayscale;
 }
 
@@ -92,6 +94,9 @@ h4,
 h5,
 h6 {
   color: var(--app-heading);
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
 }
 
 button,
@@ -128,7 +133,7 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: #95a4b7;
+  color: #7f91a6;
   opacity: 1;
 }
 
@@ -142,6 +147,13 @@ select {
 
 table {
   border-spacing: 0;
+  color: #334a62;
+  font-variant-numeric: tabular-nums;
+}
+
+th {
+  color: #52667d;
+  font-weight: 700;
 }
 
 img,
@@ -353,6 +365,7 @@ html.reduce-motion *::after {
 @layer components {
   .app-page {
     @apply w-full min-w-0 max-w-none space-y-5 text-slate-700;
+    color: var(--app-foreground);
     animation: app-enter 240ms ease-out both;
   }
 
@@ -610,7 +623,7 @@ html.reduce-motion *::after {
   }
 
   .app-nav-item-active svg {
-    color: #0866ff !important;
+    color: inherit;
   }
 
   .app-nav-item-active > span:first-child {
@@ -620,6 +633,22 @@ html.reduce-motion *::after {
   .app-nav-item-idle:hover {
     background: #f0f2f5 !important;
     color: var(--app-heading) !important;
+  }
+
+  .app-nav-icon {
+    box-shadow: 0 1px 2px rgba(28, 30, 33, 0.04);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .app-nav-item:hover .app-nav-icon,
+  .app-nav-item-active .app-nav-icon {
+    box-shadow: 0 2px 7px rgba(28, 30, 33, 0.09);
+    transform: translateY(-1px);
+  }
+
+  .app-nav-icon svg {
+    color: inherit !important;
+    stroke-width: 2.2;
   }
 
   .app-nav-child-active {
@@ -738,6 +767,36 @@ a[class*="bg-[#075f8f]"]:not(.app-nav-item-active):hover {
   background-color: #e7f3ff !important;
 }
 
+/* Improve readability across legacy and newer screens without changing hierarchy. */
+.app-shell .text-slate-400 {
+  color: #71849a !important;
+}
+
+.app-shell .text-slate-500 {
+  color: #5d7188 !important;
+}
+
+.app-shell .text-slate-600 {
+  color: #455b73 !important;
+}
+
+.app-shell .text-slate-700 {
+  color: #30475f !important;
+}
+
+.app-shell .text-\[\#718096\],
+.app-shell .text-\[\#6b7d92\] {
+  color: #5d7188 !important;
+}
+
+.app-shell :is(input, select, textarea) {
+  font-weight: 500;
+}
+
+.app-shell :is(.text-xs, .text-sm) {
+  text-rendering: geometricPrecision;
+}
+
 html.dark body,
 html.dark .app-shell,
 html.dark .app-main {
@@ -841,8 +900,28 @@ html.dark .app-nav-item-active {
   color: #5da3ff !important;
 }
 
-html.dark .app-nav-item-active svg {
+html.dark .app-nav-item-active > svg {
   color: #5da3ff !important;
+}
+
+html.dark .app-nav-icon {
+  background: rgba(255, 255, 255, 0.075) !important;
+  box-shadow: none;
+}
+
+html.dark .app-shell .text-slate-400 {
+  color: #9caabd !important;
+}
+
+html.dark .app-shell .text-slate-500 {
+  color: #aeb9c8 !important;
+}
+
+html.dark .app-shell .text-slate-600,
+html.dark .app-shell .text-slate-700,
+html.dark .app-shell .text-\[\#718096\],
+html.dark .app-shell .text-\[\#6b7d92\] {
+  color: #c2cad5 !important;
 }
 
 html.dark .app-nav-child-active {
