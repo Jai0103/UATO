@@ -53,6 +53,7 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: typeof BarChart3;
+  tone?: "blue" | "emerald" | "violet" | "cyan" | "amber" | "indigo" | "rose" | "slate";
   exact?: boolean;
   children?: NavigationChild[];
 };
@@ -101,17 +102,20 @@ const adminLinks: NavigationItem[] = [
   {
     href: "/admin",
     label: "Dashboard",
-    icon: BarChart3
+    icon: BarChart3,
+    tone: "blue"
   },
   {
     href: "/approvals",
     label: "AGA Approvals",
-    icon: Shield
+    icon: Shield,
+    tone: "emerald"
   },
   {
     href: "/operations",
     label: "Operations",
     icon: ClipboardList,
+    tone: "violet",
     children: [
       { href: "/flight-logs", label: "Flight Logs", exact: true },
       { href: "/staff-training", label: "Staff Training", exact: true },
@@ -130,6 +134,7 @@ const adminLinks: NavigationItem[] = [
     href: "/records",
     label: "Records",
     icon: Archive,
+    tone: "cyan",
     children: [
       { href: "/records", label: "Flight Log Records", exact: true },
       {
@@ -168,6 +173,7 @@ const adminLinks: NavigationItem[] = [
     href: "/master-data",
     label: "Master Data",
     icon: Database,
+    tone: "amber",
     children: [
       { href: "/master-data", label: "Flight Log Data", exact: true },
       { href: "/training-catalogue", label: "Training Catalogue", exact: true },
@@ -196,32 +202,50 @@ const adminLinks: NavigationItem[] = [
   {
     href: "/reports",
     label: "Reports",
-    icon: FileText
+    icon: FileText,
+    tone: "indigo"
   },
   {
     href: "/users",
     label: "Users",
-    icon: UserCog
+    icon: UserCog,
+    tone: "rose"
   },
   {
     href: "/audit-history",
     label: "Audit History",
-    icon: History
+    icon: History,
+    tone: "slate"
   }
 ];
 
 function trainerLinksFor(permissions: AccessPermission[]): NavigationItem[] {
   const subject = { role: "trainer" as const, permissions };
-  return [
-    hasAccess(subject, "flightLogs") ? { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList } : null,
-    hasAccess(subject, "flightLogs") ? { href: "/records", label: "Flight Log Records", icon: Archive } : null,
-    hasAccess(subject, "attendance") ? { href: "/attendance/trainer", label: "QR Attendance", icon: ClipboardList } : null,
-    hasAccess(subject, "evaluations") ? { href: "/evaluations/trainer", label: "Student Evaluations", icon: ClipboardList } : null,
-    hasAccess(subject, "staffTraining") ? { href: "/staff-training", label: "Staff Training", icon: ClipboardList } : null,
-    hasAccess(subject, "uaMaintenance") ? { href: "/ua-maintenance", label: "UA Maintenance", icon: ClipboardList } : null,
-    hasAccess(subject, "fatigueRisk") ? { href: "/fatigue-risk", label: "Fatigue Risk", icon: ClipboardList } : null,
-    hasAccess(subject, "reports") ? { href: "/reports", label: "Reports", icon: FileText } : null
-  ].filter((item): item is NavigationItem => item !== null);
+  const links: Array<NavigationItem | null> = [
+    hasAccess(subject, "flightLogs") ? { href: "/flight-logs", label: "Flight Logs", icon: ClipboardList, tone: "blue" } : null,
+    hasAccess(subject, "flightLogs") ? { href: "/records", label: "Flight Log Records", icon: Archive, tone: "cyan" } : null,
+    hasAccess(subject, "attendance") ? { href: "/attendance/trainer", label: "QR Attendance", icon: ClipboardList, tone: "emerald" } : null,
+    hasAccess(subject, "evaluations") ? { href: "/evaluations/trainer", label: "Student Evaluations", icon: ClipboardList, tone: "violet" } : null,
+    hasAccess(subject, "staffTraining") ? { href: "/staff-training", label: "Staff Training", icon: ClipboardList, tone: "indigo" } : null,
+    hasAccess(subject, "uaMaintenance") ? { href: "/ua-maintenance", label: "UA Maintenance", icon: ClipboardList, tone: "amber" } : null,
+    hasAccess(subject, "fatigueRisk") ? { href: "/fatigue-risk", label: "Fatigue Risk", icon: ClipboardList, tone: "rose" } : null,
+    hasAccess(subject, "reports") ? { href: "/reports", label: "Reports", icon: FileText, tone: "slate" } : null
+  ];
+  return links.filter((item): item is NavigationItem => item !== null);
+}
+
+function navigationIconTone(tone: NavigationItem["tone"] = "blue") {
+  const tones = {
+    blue: "bg-blue-50 text-blue-600 ring-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    violet: "bg-violet-50 text-violet-600 ring-violet-100",
+    cyan: "bg-cyan-50 text-cyan-700 ring-cyan-100",
+    amber: "bg-amber-50 text-amber-700 ring-amber-100",
+    indigo: "bg-indigo-50 text-indigo-600 ring-indigo-100",
+    rose: "bg-rose-50 text-rose-600 ring-rose-100",
+    slate: "bg-slate-100 text-slate-600 ring-slate-200"
+  } satisfies Record<NonNullable<NavigationItem["tone"]>, string>;
+  return tones[tone];
 }
 
 function pathMatches(pathname: string, href: string, exact = false) {
@@ -623,8 +647,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
         <div className={`absolute right-0 top-full z-[80] mt-2 w-[280px] origin-top-right rounded-lg border border-[#d7e0ea] bg-white p-2 shadow-[0_18px_45px_rgba(16,42,67,0.18)] transition ${profileMenuOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0"}`}>
           <div className="border-b border-[#e6ecf2] px-3 py-3"><p className="truncate text-sm font-bold text-[#16263c]">{displayName}</p><p className="mt-1 truncate text-xs text-[#718096]">{activeSession.email}</p></div>
-          <Link href="/profile" className="app-account-menu-item group mt-1 flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition"><UserRound size={17} className="transition-transform group-hover:scale-110" /> My Profile</Link>
-          <Link href="/settings" className="app-account-menu-item group flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition"><Settings size={17} className="transition-transform group-hover:rotate-12" /> Settings</Link>
+          <Link href="/profile" className="app-account-menu-item group mt-1 flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition"><UserRound size={17} className="text-blue-600 transition-transform group-hover:scale-110" /> My Profile</Link>
+          <Link href="/settings" className="app-account-menu-item group flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#405168] transition"><Settings size={17} className="text-violet-600 transition-transform group-hover:rotate-12" /> Settings</Link>
           <div className="my-1 border-t border-[#e6ecf2]" />
           <button type="button" onClick={() => void logout()} disabled={signingOut} className="app-account-logout group flex h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-rose-700 transition disabled:opacity-60">{signingOut ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} className="transition-transform group-hover:translate-x-0.5" />} {signingOut ? "Signing out..." : "Log out"}</button>
         </div>
@@ -681,11 +705,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {active ? (
                     <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#6bc4e8]" />
                   ) : null}
-                  <Icon
-                    className={`h-[18px] w-[18px] shrink-0 ${
-                      active ? "text-[#6bc4e8]" : "text-[#708399]"
-                    }`}
-                  />
+                  <span className={`app-nav-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${navigationIconTone(item.tone)}`}>
+                    <Icon className="h-[17px] w-[17px]" />
+                  </span>
                   {!compact ? (
                     <>
                       <span className="min-w-0 flex-1 truncate text-left">
@@ -777,11 +799,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {active ? (
                 <span className="absolute left-0 top-2 h-7 w-1 rounded-r-full bg-[#6bc4e8]" />
               ) : null}
-              <Icon
-                className={`h-[18px] w-[18px] shrink-0 ${
-                  active ? "text-[#6bc4e8]" : "text-[#708399]"
-                }`}
-              />
+              <span className={`app-nav-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${navigationIconTone(item.tone)}`}>
+                <Icon className="h-[17px] w-[17px]" />
+              </span>
               {!compact ? <span className="truncate">{item.label}</span> : null}
             </Link>
           );
