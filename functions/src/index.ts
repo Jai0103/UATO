@@ -471,6 +471,234 @@ function attendanceWindows(courseDate: string) {
   };
 }
 
+type AttendancePeriod = "am" | "pm";
+
+const attendanceRateWindowMs = 10 * 60 * 1000;
+const attendanceRateLimit = 250;
+
+function attendancePeriod(value: unknown): AttendancePeriod {
+  if (value !== "am" && value !== "pm") {
+    throw new HttpsError("invalid-argument", "Select a valid attendance period.");
+  }
+  return value;
+}
+
+function normalizedLearnerName(value: unknown) {
+  const name = text(value)
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ");
+  if (name.length < 2 || name.length > 100) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter your full name as shown on your NRIC or passport."
+    );
+  }
+  return name;
+}
+
+function attendanceLastFour(value: unknown) {
+  const lastFour = text(value).toUpperCase();
+  if (!/^[A-Z0-9]{4}$/.test(lastFour)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter exactly the last four NRIC/FIN or travel document characters."
+    );
+  }
+  return lastFour;
+}
+
+function validatedSignatureDataUrl(value: unknown) {
+  const signatureDataUrl = text(value);
+  if (signatureDataUrl.length > 350000) {
+    throw new HttpsError("invalid-argument", "The signature image is too large.");
+  }
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(signatureDataUrl);
+  if (!match) {
+    throw new HttpsError("invalid-argument", "Please provide a valid signature.");
+  }
+  const image = Buffer.from(match[1], "base64");
+  const pngHeader = "89504e470d0a1a0a";
+  if (
+    image.length < 100 ||
+    image.length > 250000 ||
+    image.subarray(0, 8).toString("hex") !== pngHeader ||
+    image.subarray(12, 16).toString("ascii") !== "IHDR"
+  ) {
+    throw new HttpsError("invalid-argument", "Please provide a valid PNG signature.");
+  }
+  const width = image.readUInt32BE(16);
+  const height = image.readUInt32BE(20);
+  if (
+    width < 200 ||
+    height < 80 ||
+    width > 2400 ||
+    height > 1200 ||
+    width * height > 2500000
+  ) {
+    throw new HttpsError("invalid-argument", "The signature dimensions are invalid.");
+  }
+  return signatureDataUrl;
+}
+
+export const submitPublicAttendance = callable(async (request) => {
+  const token = text(request.data?.token);
+  const period = attendancePeriod(request.data?.period);
+  const learnerName = normalizedLearnerName(request.data?.learnerName);
+  const lastFour = attendanceLastFour(request.data?.lastFour);
+  const signatureDataUrl = validatedSignatureDataUrl(request.data?.signatureDataUrl);
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(token)) {
+    throw new HttpsError("invalid-argument", "This attendance link is incomplete.");
+  }
+
+  const publicReference = db.collection("attendancePublicSessions").doc(token);
+  const initialPublicSnapshot = await publicReference.get();
+  const initialPublicData = initialPublicSnapshot.data() || {};
+  const sessionId = text(initialPublicData.sessionId);
+  if (!initialPublicSnapshot.exists || !sessionId) {
+    throw new HttpsError("not-found", "This attendance session was not found.");
+  }
+
+  const identityHash = createHash("sha256")
+    .update(`${learnerName.toLowerCase()}|${lastFour}`)
+    .digest("hex");
+  const submissionId = `${sessionId}_${period}_${identityHash.slice(0, 36)}`;
+  const attendanceReference = db.collection("attendanceSubmissions").doc(submissionId);
+  const sessionReference = db.collection("attendanceSessions").doc(sessionId);
+  const rateReference = db.collection("attendanceSubmissionRateLimits").doc(`${sessionId}_${period}`);
+  const auditId = `${submissionId}_checkin`;
+
+  const submittedAt = await db.runTransaction(async (transaction) => {
+    const [publicSnapshot, sessionSnapshot, attendanceSnapshot, rateSnapshot] =
+      await Promise.all([
+        transaction.get(publicReference),
+        transaction.get(sessionReference),
+        transaction.get(attendanceReference),
+        transaction.get(rateReference)
+      ]);
+    const publicData = publicSnapshot.data() || {};
+    const sessionData = sessionSnapshot.data() || {};
+    if (
+      !publicSnapshot.exists ||
+      !sessionSnapshot.exists ||
+      text(publicData.sessionId) !== sessionId ||
+      text(sessionData.token) !== token
+    ) {
+      throw new HttpsError("not-found", "This attendance session was not found.");
+    }
+    if (sessionData.status !== "open" || publicData.status !== "open") {
+      throw new HttpsError("failed-precondition", "This attendance session is closed.");
+    }
+
+    const courseDate = text(sessionData.courseDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(courseDate)) {
+      throw new HttpsError("failed-precondition", "The attendance session date is invalid.");
+    }
+    const schedule = ["am", "pm"].includes(text(sessionData.schedule))
+      ? text(sessionData.schedule)
+      : "full_day";
+    const periodEnabled =
+      period === "am"
+        ? schedule !== "pm" && sessionData.amOpen === true
+        : schedule !== "am" && sessionData.pmOpen === true;
+    if (!periodEnabled) {
+      throw new HttpsError("failed-precondition", `The ${period.toUpperCase()} attendance is closed.`);
+    }
+
+    const windows = attendanceWindows(courseDate);
+    const opensAt = period === "am" ? windows.amOpensAt : windows.pmOpensAt;
+    const closesAt = period === "am" ? windows.amClosesAt : windows.pmClosesAt;
+    const now = Date.now();
+    if (now < opensAt.getTime()) {
+      throw new HttpsError("failed-precondition", `The ${period.toUpperCase()} attendance is not open yet.`);
+    }
+    if (now > closesAt.getTime()) {
+      throw new HttpsError("failed-precondition", `The ${period.toUpperCase()} attendance window has closed.`);
+    }
+    if (attendanceSnapshot.exists) {
+      throw new HttpsError(
+        "already-exists",
+        `Your ${period.toUpperCase()} attendance has already been submitted.`
+      );
+    }
+
+    const rateData = rateSnapshot.data() || {};
+    const rateStartedAt = rateData.windowStartedAt instanceof Timestamp
+      ? rateData.windowStartedAt.toMillis()
+      : 0;
+    const sameRateWindow = now - rateStartedAt < attendanceRateWindowMs;
+    const rateCount = sameRateWindow ? Number(rateData.count) || 0 : 0;
+    if (rateCount >= attendanceRateLimit) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Attendance is temporarily busy. Please wait a few minutes and try again."
+      );
+    }
+
+    const timestamp = new Date(now).toISOString();
+    transaction.create(attendanceReference, {
+      id: submissionId,
+      sessionId,
+      publicToken: token,
+      period,
+      learnerName,
+      learnerNameLower: learnerName.toLowerCase(),
+      lastFour,
+      identityHash,
+      signatureDataUrl,
+      submittedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    transaction.set(rateReference, {
+      sessionId,
+      period,
+      count: rateCount + 1,
+      windowStartedAt: Timestamp.fromMillis(sameRateWindow ? rateStartedAt : now),
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(now + attendanceRateWindowMs * 2)
+    });
+    transaction.create(db.collection("auditEvents").doc(auditId), {
+      id: auditId,
+      timestamp,
+      actorUserId: identityHash,
+      actorName: learnerName,
+      actorNameLower: learnerName.toLowerCase(),
+      actorEmail: "",
+      actorRole: "learner",
+      action: "ATTENDANCE_CHECKED_IN",
+      entityType: "attendance",
+      entityId: submissionId,
+      entityName: learnerName,
+      entityNameLower: learnerName.toLowerCase(),
+      detailsAvailable: true,
+      source: "firebase-live",
+      schemaVersion: 2
+    });
+    transaction.create(db.collection("auditEventDetails").doc(auditId), {
+      auditId,
+      entityId: submissionId,
+      previousValue: null,
+      updatedValue: { sessionId, period, learnerName, lastFour },
+      details: {
+        courseName: text(sessionData.courseName),
+        courseDate,
+        instructorName: text(sessionData.instructorName),
+        period
+      },
+      source: "firebase-live",
+      schemaVersion: 2
+    });
+    return timestamp;
+  });
+
+  return {
+    submission: {
+      id: submissionId,
+      submittedAt,
+      message: `${period.toUpperCase()} attendance recorded successfully.`
+    }
+  };
+});
+
 function firestoreIso(value: unknown) {
   if (value instanceof Timestamp) return value.toDate().toISOString();
   return text(value);
