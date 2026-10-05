@@ -459,12 +459,6 @@ export async function fetchTrainerAttendanceSubmissions(sessionId: string) {
   return (await callable({ sessionId })).data.submissions;
 }
 
-async function sha256(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 export async function submitPublicAttendance(input: {
   session: PublicAttendanceSession;
   period: AttendancePeriod;
@@ -480,62 +474,32 @@ export async function submitPublicAttendance(input: {
     throw new Error("Please provide a valid signature.");
   }
 
-  const identityHash = await sha256(`${learnerName.toLowerCase()}|${lastFour}`);
-  const submissionId = `${input.session.id}_${input.period}_${identityHash.slice(0, 36)}`;
-  const submissionReference = doc(firestore, "attendanceSubmissions", submissionId);
-
   try {
-    // The deterministic document ID makes a second set an update. Public
-    // users may create but cannot update, so duplicates remain protected
-    // without allowing access to read another learner's signature.
-    const batch = writeBatch(firestore);
-    batch.set(submissionReference, {
-      id: submissionId,
-      sessionId: input.session.id,
-      publicToken: input.session.token,
+    const callable = httpsCallable<
+      {
+        token: string;
+        period: AttendancePeriod;
+        learnerName: string;
+        lastFour: string;
+        signatureDataUrl: string;
+      },
+      { submission: { id: string; submittedAt: string; message: string } }
+    >(firebaseFunctions, "submitPublicAttendance");
+    const result = await callable({
+      token: input.session.token,
       period: input.period,
       learnerName,
-      learnerNameLower: learnerName.toLowerCase(),
       lastFour,
-      identityHash,
-      signatureDataUrl: input.signatureDataUrl,
-      submittedAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      signatureDataUrl: input.signatureDataUrl
     });
-    addFirebaseAuditToBatch(batch, {
-      id: `${submissionId}_checkin`,
-      actorUserId: identityHash,
-      actorName: learnerName,
-      actorEmail: "",
-      actorRole: "learner",
-      action: "ATTENDANCE_CHECKED_IN",
-      entityType: "attendance",
-      entityId: submissionId,
-      entityName: learnerName,
-      previousValue: null,
-      updatedValue: {
-        sessionId: input.session.id,
-        period: input.period,
-        learnerName,
-        lastFour
-      },
-      details: {
-        courseName: input.session.courseName,
-        courseDate: input.session.courseDate,
-        instructorName: input.session.instructorName,
-        period: input.period
-      }
-    });
-    await batch.commit();
+    return result.data.submission.id;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message.toLowerCase() : "";
-    if (errorMessage.includes("permission") || errorMessage.includes("insufficient")) {
-      throw new Error(
-        `Your ${input.period.toUpperCase()} attendance may already be submitted, or this signing window has closed.`
-      );
-    }
-    throw error;
+    const message = error instanceof Error
+      ? error.message
+          .replace(/^Firebase:\s*/i, "")
+          .replace(/\s*\(functions\/[^)]+\)\.?$/i, "")
+          .trim()
+      : "";
+    throw new Error(message || "Attendance could not be submitted. Please try again.");
   }
-
-  return submissionId;
 }
