@@ -1,86 +1,97 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
     }
-    function currentUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    match /inventoryMaintenance/{maintenanceId} {
+      allow read, create, update, delete: if isAdmin();
     }
-    function isActiveUser() {
-      return signedIn()
-        && currentUser().data.status == "active";
+    match /inventoryMediaReferences/{referenceId} {
+      allow read, create, update, delete: if isAdmin();
     }
-    function isAdmin() {
-      return isActiveUser()
-        && currentUser().data.role == "admin";
+    match /approvalRecords/{approvalId} {
+      allow read, create, update, delete: if isAdmin();
     }
-    function hasModule(permission) {
-      return isAdmin() || (
-        isActiveUser()
-        && currentUser().data.role == "trainer"
-        && (
-          (
-            currentUser().data.keys().hasAny(["permissions"])
-            && currentUser().data.permissions is list
-            && currentUser().data.permissions.hasAny([permission])
-          )
-          || (
-            !currentUser().data.keys().hasAny(["permissions"])
-            && permission in ["flightLogs", "attendance", "evaluations", "reports"]
-          )
-        )
-      );
+    match /approvalLocations/{locationId} {
+      allow read, create, update, delete: if isAdmin();
     }
-    function isOperationalAuditAction(action) {
-      return (hasModule("staffTraining") && action in ["STAFF_TRAINING_CREATED", "STAFF_TRAINING_UPDATED", "STAFF_TRAINING_DELETED"])
-        || (hasModule("uaMaintenance") && action in ["UA_MAINTENANCE_CREATED", "UA_MAINTENANCE_UPDATED", "UA_MAINTENANCE_DELETED"])
-        || (hasModule("fatigueRisk") && action in ["FATIGUE_RISK_CREATED", "FATIGUE_RISK_UPDATED", "FATIGUE_RISK_DELETED"]);
+    match /approvalDocuments/{documentId} {
+      allow read, create, update, delete: if isAdmin();
     }
-    function isValidOperationalAuditEvent(auditId) {
-      return isActiveUser()
-        && request.resource.data.keys().hasOnly([
-          "id", "timestamp", "actorUserId", "actorName", "actorNameLower",
-          "actorEmail", "actorRole", "action", "entityType", "entityId",
-          "entityName", "entityNameLower", "detailsAvailable", "source", "schemaVersion"
-        ])
-        && request.resource.data.id == auditId
-        && request.resource.data.actorUserId == request.auth.uid
-        && request.resource.data.actorName == currentUser().data.name
-        && request.resource.data.actorEmail == currentUser().data.email
-        && request.resource.data.actorRole == currentUser().data.role
-        && isOperationalAuditAction(request.resource.data.action)
-        && request.resource.data.entityId is string
-        && request.resource.data.entityId.size() > 0
-        && request.resource.data.entityName is string
-        && request.resource.data.detailsAvailable == true
-        && request.resource.data.source == "firebase-live"
-        && request.resource.data.schemaVersion == 2;
+    match /fatigueRiskQuestions/{questionId} {
+      allow read: if hasModule("fatigueRisk");
+      allow create, update, delete: if isAdmin();
     }
-    function isValidOperationalAuditDetail(auditId) {
-      return isActiveUser()
-        && request.resource.data.keys().hasOnly([
-          "auditId", "entityId", "previousValue", "updatedValue", "details", "source", "schemaVersion"
-        ])
-        && request.resource.data.auditId == auditId
-        && request.resource.data.source == "firebase-live"
-        && request.resource.data.schemaVersion == 2
-        && existsAfter(/databases/$(database)/documents/auditEvents/$(auditId))
-        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.actorUserId == request.auth.uid
-        && isOperationalAuditAction(getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.action)
-        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.entityId == request.resource.data.entityId;
+    match /fatigueRiskRecords/{recordId} {
+      allow read, create, update, delete: if hasModule("fatigueRisk");
     }
-    function isFlightLogAuditAction(action) {
-      return action in [
-        "FLIGHT_CREATED",
-        "FLIGHT_UPDATED",
-        "FLIGHT_DELETED"
-      ];
+    match /fatigueRiskResponses/{responseId} {
+      allow read, create, update, delete: if hasModule("fatigueRisk");
     }
-    function isValidFlightLogAuditEvent(auditId) {
-      return isActiveUser()
-        && request.resource.data.keys().hasOnly([
-          "id",
-          "timestamp",
-          "actorUserId",
-          "actorName",
+    match /fatigueRiskSignatures/{recordId} {
+      allow read, create, update, delete: if hasModule("fatigueRisk");
+    }
+    match /auditEvents/{auditId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin() || isValidFlightLogAuditEvent(auditId) || isValidOperationalAuditEvent(auditId);
+    }
+    match /auditEventDetails/{auditId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin() || isValidFlightLogAuditDetail(auditId) || isValidOperationalAuditDetail(auditId);
+    }
+    match /staffTrainingDescriptions/{itemId} {
+      allow read: if hasModule("staffTraining");
+      allow create, update, delete: if isAdmin();
+    }
+    match /staffTrainingRecords/{recordId} {
+      allow read, create, update, delete: if hasModule("staffTraining");
+    }
+    match /staffTrainingEntries/{entryId} {
+      allow read, create, update, delete: if hasModule("staffTraining");
+    }
+    match /staffTrainingSignatures/{recordId} {
+      allow read, create, update, delete: if hasModule("staffTraining");
+    }
+    match /staffTrainingTombstones/{recordId} {
+      allow read, create, update, delete: if hasModule("staffTraining");
+    }
+    match /attendanceSessions/{sessionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /attendancePublicSessions/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+    match /attendanceSubmissions/{submissionId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+    match /evaluationTemplates/{templateId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationQuestions/{questionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationSessions/{sessionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationPublicSessions/{token} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationResponseKeys/{keyId} {
+      allow read, write: if false;
+    }
+    match /evaluationSessionQuestions/{questionId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationResponses/{responseId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /evaluationAnswers/{answerId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /migrationRuns/{runId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
