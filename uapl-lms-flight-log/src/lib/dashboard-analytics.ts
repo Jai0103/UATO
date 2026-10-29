@@ -224,6 +224,8 @@ export async function fetchDashboardAnalytics(
   const theoryPartialLearners = new Set<string>();
   const practicalAssessmentLearners = new Set<string>();
   const proficiencyCheckLearners = new Set<string>();
+  const practicalAssessmentEvents = new Map<string, { monthKey: string; results: Set<"passed" | "failed"> }>();
+  const proficiencyCheckEvents = new Map<string, { monthKey: string; results: Set<"passed" | "failed"> }>();
   let practicalAssessmentPassed = 0;
   let practicalAssessmentFailed = 0;
   let proficiencyCheckPassed = 0;
@@ -271,13 +273,14 @@ export async function fetchDashboardAnalytics(
         practicalAssessmentLearners.add(learnerKey);
         if (month) monthlyLearners.get(month.key)?.assessments.add(learnerKey);
       }
-      if (activity.activityResult === "passed") {
-        practicalAssessmentPassed += 1;
-        if (month) month.practicalAssessmentPassed += 1;
-      }
-      if (activity.activityResult === "failed") {
-        practicalAssessmentFailed += 1;
-        if (month) month.practicalAssessmentFailed += 1;
+      if (activity.activityResult === "passed" || activity.activityResult === "failed") {
+        const eventKey = `${learnerKey}|${date}`;
+        const event = practicalAssessmentEvents.get(eventKey) || {
+          monthKey: monthKey(date),
+          results: new Set<"passed" | "failed">()
+        };
+        event.results.add(activity.activityResult);
+        practicalAssessmentEvents.set(eventKey, event);
       }
     }
     if (activity.activityType === "proficiency_check") {
@@ -285,14 +288,47 @@ export async function fetchDashboardAnalytics(
         proficiencyCheckLearners.add(learnerKey);
         if (month) monthlyLearners.get(month.key)?.proficiencyChecks.add(learnerKey);
       }
-      if (activity.activityResult === "passed") {
-        proficiencyCheckPassed += 1;
-        if (month) month.proficiencyCheckPassed += 1;
+      if (activity.activityResult === "passed" || activity.activityResult === "failed") {
+        const eventKey = `${learnerKey}|${date}`;
+        const event = proficiencyCheckEvents.get(eventKey) || {
+          monthKey: monthKey(date),
+          results: new Set<"passed" | "failed">()
+        };
+        event.results.add(activity.activityResult);
+        proficiencyCheckEvents.set(eventKey, event);
       }
-      if (activity.activityResult === "failed") {
-        proficiencyCheckFailed += 1;
-        if (month) month.proficiencyCheckFailed += 1;
-      }
+    }
+  });
+
+  practicalAssessmentEvents.forEach((event) => {
+    const month = monthMap.get(event.monthKey);
+    if (event.results.size !== 1) {
+      activityNeedsReview += 1;
+      if (month) month.activityNeedsReview += 1;
+      return;
+    }
+    if (event.results.has("passed")) {
+      practicalAssessmentPassed += 1;
+      if (month) month.practicalAssessmentPassed += 1;
+    } else {
+      practicalAssessmentFailed += 1;
+      if (month) month.practicalAssessmentFailed += 1;
+    }
+  });
+
+  proficiencyCheckEvents.forEach((event) => {
+    const month = monthMap.get(event.monthKey);
+    if (event.results.size !== 1) {
+      activityNeedsReview += 1;
+      if (month) month.activityNeedsReview += 1;
+      return;
+    }
+    if (event.results.has("passed")) {
+      proficiencyCheckPassed += 1;
+      if (month) month.proficiencyCheckPassed += 1;
+    } else {
+      proficiencyCheckFailed += 1;
+      if (month) month.proficiencyCheckFailed += 1;
     }
   });
 

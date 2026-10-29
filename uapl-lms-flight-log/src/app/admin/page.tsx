@@ -118,7 +118,7 @@ export default function AdminPage() {
     { label: "UAPL Theory", value: analytics.totals.theoryLearners, detail: `${analytics.totals.theoryPartialLearners} partial attendance record${analytics.totals.theoryPartialLearners === 1 ? "" : "s"}`, icon: BookOpenCheck, tone: "bg-violet-50 text-violet-700", href: `/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Practical learners", value: analytics.totals.practicalLearners, detail: `${analytics.totals.flights} flight entries`, icon: Plane, tone: "bg-cyan-50 text-cyan-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Flight time", value: formatMinutes(analytics.totals.flightMinutes), detail: `Across ${analytics.totals.trainers} trainer${analytics.totals.trainers === 1 ? "" : "s"}`, icon: Timer, tone: "bg-sky-50 text-sky-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
-    { label: "Assessment learners", value: analytics.totals.practicalAssessmentLearners, detail: `${analytics.totals.practicalAssessmentPassed + analytics.totals.practicalAssessmentFailed} attempts · ${analytics.totals.practicalAssessmentPassed} passed · ${analytics.totals.practicalAssessmentFailed} failed`, icon: Award, tone: "bg-emerald-50 text-emerald-700", href: `/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Assessment learners", value: analytics.totals.practicalAssessmentLearners, detail: `${analytics.totals.practicalAssessmentPassed + analytics.totals.practicalAssessmentFailed} assessments · ${analytics.totals.practicalAssessmentPassed} passed · ${analytics.totals.practicalAssessmentFailed} failed`, icon: Award, tone: "bg-emerald-50 text-emerald-700", href: `/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Proficiency learners", value: analytics.totals.proficiencyCheckLearners, detail: `${analytics.totals.proficiencyCheckPassed + analytics.totals.proficiencyCheckFailed} checks · ${analytics.totals.proficiencyCheckPassed} passed · ${analytics.totals.proficiencyCheckFailed} failed`, icon: ShieldCheck, tone: "bg-indigo-50 text-indigo-700", href: `/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Maintenance compliance", value: formatPercent(analytics.totals.maintenanceCompliance), detail: `${analytics.totals.maintenanceChecks} checklist decisions`, icon: Wrench, tone: "bg-emerald-50 text-emerald-700", href: `/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Course satisfaction", value: analytics.totals.courseSatisfaction ? `${analytics.totals.courseSatisfaction.toFixed(2)} / 5` : "No responses", detail: `${analytics.totals.recommendationRate.toFixed(0)}% would recommend · ${analytics.totals.evaluationResponses} responses`, icon: Star, tone: "bg-amber-50 text-amber-700", href: `/evaluations/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` }
@@ -158,7 +158,7 @@ export default function AdminPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <ChartPanel eyebrow="Practical assessment" title="Assessment attempts by month" icon={Award} href={`/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.practicalAssessmentLearners} unique learner${analytics.totals.practicalAssessmentLearners === 1 ? "" : "s"} · ${analytics.totals.practicalAssessmentPassed + analytics.totals.practicalAssessmentFailed} completed attempts`}><OutcomeMonthChart data={analytics.months} kind="assessment" /></ChartPanel>
+        <ChartPanel eyebrow="Practical assessment" title="Assessment outcomes by month" icon={Award} href={`/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.practicalAssessmentLearners} unique learner${analytics.totals.practicalAssessmentLearners === 1 ? "" : "s"} · ${analytics.totals.practicalAssessmentPassed + analytics.totals.practicalAssessmentFailed} completed assessments`}><OutcomeMonthChart data={analytics.months} kind="assessment" /></ChartPanel>
         <ChartPanel eyebrow="Proficiency assurance" title="Proficiency check attempts by month" icon={ShieldCheck} href={`/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.proficiencyCheckLearners} unique learner${analytics.totals.proficiencyCheckLearners === 1 ? "" : "s"} · ${analytics.totals.proficiencyCheckPassed + analytics.totals.proficiencyCheckFailed} completed checks`}><OutcomeMonthChart data={analytics.months} kind="proficiency" /></ChartPanel>
       </section>
 
@@ -270,7 +270,7 @@ function OutcomeMonthChart({ data, kind }: { data: DashboardMonthPoint[]; kind: 
               <p className="mt-1 text-sm font-extrabold text-[#075f8f]">{active.label}</p>
             </div>
             <HoverMetric label="Unique learners" value={active.learners} color="#2563eb" />
-            <HoverMetric label={kind === "assessment" ? "Attempts" : "Checks"} value={active.total} color="#16263c" />
+            <HoverMetric label={kind === "assessment" ? "Assessments" : "Checks"} value={active.total} color="#16263c" />
             <HoverMetric label="Passed" value={active.passed} color="#059669" />
             <HoverMetric label="Failed" value={active.failed} color="#e11d48" />
             <HoverMetric label="Pass rate" value={`${passRate}%`} color="#7c3aed" />
@@ -290,7 +290,7 @@ function OutcomeMonthChart({ data, kind }: { data: DashboardMonthPoint[]; kind: 
               href={`${monthHref("/records", item.key)}&activityType=${activityType}`}
               onMouseEnter={() => setActiveKey(item.key)}
               onFocus={() => setActiveKey(item.key)}
-              aria-label={`${item.label}: ${item.learners} unique learners, ${item.total} ${kind === "assessment" ? "attempts" : "checks"}, ${item.passed} passed, ${item.failed} failed`}
+              aria-label={`${item.label}: ${item.learners} unique learners, ${item.total} ${kind === "assessment" ? "assessments" : "checks"}, ${item.passed} passed, ${item.failed} failed`}
               className={`group relative h-full min-w-0 flex-1 rounded-md transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40 ${selected ? "bg-[#f4f8fc]" : "hover:-translate-y-1 hover:bg-[#f8fafc]"}`}
             >
               {item.total ? (
@@ -299,7 +299,7 @@ function OutcomeMonthChart({ data, kind }: { data: DashboardMonthPoint[]; kind: 
                     className={`absolute left-1/2 z-10 -translate-x-1/2 rounded-md bg-[#16263c] px-2 py-1 text-[9px] font-extrabold text-white shadow-md transition-all duration-200 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}
                     style={{ bottom: `calc(${barHeight}% + 8px)` }}
                   >
-                    {item.total} {kind === "assessment" ? "attempts" : "checks"}
+                    {item.total} {kind === "assessment" ? "assessments" : "checks"}
                   </span>
                   <span
                     className="absolute bottom-0 left-[18%] right-[18%] flex flex-col-reverse overflow-hidden rounded-t-md shadow-sm transition-all duration-300 group-hover:left-[14%] group-hover:right-[14%]"
