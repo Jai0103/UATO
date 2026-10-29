@@ -15,6 +15,7 @@ export type DashboardMonthPoint = {
   flightCount: number;
   practicalLearners: number;
   theoryLearners: number;
+  theoryPartialLearners: number;
   totalLearners: number;
   practicalAssessmentPassed: number;
   practicalAssessmentFailed: number;
@@ -143,6 +144,7 @@ function monthSeries(range: DashboardDateRange) {
       flightCount: 0,
       practicalLearners: 0,
       theoryLearners: 0,
+      theoryPartialLearners: 0,
       totalLearners: 0,
       practicalAssessmentPassed: 0,
       practicalAssessmentFailed: 0,
@@ -437,6 +439,7 @@ export async function fetchDashboardAnalytics(
     const learnerSets = monthlyLearners.get(month.key);
     month.practicalLearners = learnerSets?.practical.size || 0;
     month.theoryLearners = learnerSets?.theory.size || 0;
+    month.theoryPartialLearners = learnerSets?.theoryPartial.size || 0;
     month.totalLearners = learnerSets?.total.size || 0;
     const maintenanceTotal = month.maintenancePass + month.maintenanceFail;
     month.maintenanceCompliance = maintenanceTotal

@@ -188,9 +188,52 @@ function MonthBarChart({ data, value, format, color, route, maximum, emptyWhen }
 }
 
 function LearnerMonthChart({ data }: { data: DashboardMonthPoint[] }) {
-  const max = Math.max(1, ...data.map((item) => Math.max(item.totalLearners, item.theoryLearners, item.practicalLearners)));
+  const latestWithData = [...data].reverse().find((item) => item.totalLearners || item.theoryPartialLearners);
+  const [activeKey, setActiveKey] = useState(latestWithData?.key || data.at(-1)?.key || "");
+  const max = Math.max(
+    1,
+    ...data.map((item) => Math.max(item.totalLearners, item.theoryLearners, item.practicalLearners))
+  );
   if (!data.length) return <EmptyChart />;
-  return <div className="mt-5"><div className="mb-4 flex flex-wrap gap-4 text-xs font-semibold text-[#60748a]"><Legend color="#16263c" label="Total unique" /><Legend color="#7c3aed" label="UAPL Theory" /><Legend color="#0891b2" label="Practical" /></div><div className="flex h-56 items-end gap-1.5 sm:gap-2">{data.map((item) => <div key={item.key} className="group relative flex h-full min-w-0 flex-1 items-end justify-center gap-[2px] rounded-md px-[1px] hover:bg-[#f4f8fb]" title={`${item.label}: ${item.totalLearners} total unique, ${item.theoryLearners} theory, ${item.practicalLearners} practical`}><Link href={monthHref("/reports", item.key)} aria-label={`${item.label}: ${item.totalLearners} total unique learners`} className="relative h-full min-w-0 flex-1"><span className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-[#16263c] transition group-hover:bg-[#24364d]" style={{ height: `${Math.max(item.totalLearners ? 5 : 2, item.totalLearners / max * 100)}%` }} /></Link><Link href={monthHref("/attendance/records", item.key)} aria-label={`${item.label}: ${item.theoryLearners} UAPL Theory learners`} className="relative h-full min-w-0 flex-1"><span className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-[#7c3aed] transition group-hover:bg-[#6d28d9]" style={{ height: `${Math.max(item.theoryLearners ? 5 : 2, item.theoryLearners / max * 100)}%` }} /></Link><Link href={monthHref("/records", item.key)} aria-label={`${item.label}: ${item.practicalLearners} practical learners`} className="relative h-full min-w-0 flex-1"><span className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-[#0891b2] transition group-hover:bg-[#0e7490]" style={{ height: `${Math.max(item.practicalLearners ? 5 : 2, item.practicalLearners / max * 100)}%` }} /></Link><span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#16263c] px-2 py-1 text-[10px] font-bold text-white shadow-lg group-hover:block">{item.totalLearners} unique</span></div>)}</div><div className="mt-3 flex gap-1.5 sm:gap-2">{data.map((item, index) => <span key={item.key} className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold text-[#718096]">{data.length <= 6 || index % 2 === 0 ? item.label : ""}</span>)}</div></div>;
+  const active = data.find((item) => item.key === activeKey) || data[data.length - 1];
+  const height = (value: number) => value ? Math.max(10, value / max * 100) : 0;
+
+  return <div className="mt-5">
+    <div className="flex flex-wrap gap-4 text-xs font-semibold text-[#60748a]"><Legend color="#16263c" label="Total unique" /><Legend color="#7c3aed" label="UAPL Theory" /><Legend color="#0891b2" label="Practical" /></div>
+    <div className="mt-4 min-h-[72px] rounded-lg border border-[#dfe7f0] bg-[#f8fafc] px-4 py-3 shadow-sm transition-all duration-200">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-[11px] font-bold uppercase text-[#718096]">Selected month</p><p className="mt-0.5 text-sm font-bold text-[#16263c]">{active.label}</p></div>
+        <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:flex sm:items-center sm:gap-6">
+          <HoverMetric label="Total unique" value={active.totalLearners} color="#16263c" />
+          <HoverMetric label="Theory complete" value={active.theoryLearners} color="#7c3aed" />
+          <HoverMetric label="Practical" value={active.practicalLearners} color="#0891b2" />
+          <HoverMetric label="Theory partial" value={active.theoryPartialLearners} color="#d97706" />
+        </div>
+      </div>
+    </div>
+    <div className="mt-5 flex h-52 items-end gap-1.5 sm:gap-2">{data.map((item) => {
+      const bars = [
+        { key: "total", value: item.totalLearners, color: "#16263c", hover: "#24364d", href: monthHref("/reports", item.key), label: "total unique learners" },
+        { key: "theory", value: item.theoryLearners, color: "#7c3aed", hover: "#6d28d9", href: monthHref("/attendance/records", item.key), label: "completed UAPL Theory learners" },
+        { key: "practical", value: item.practicalLearners, color: "#0891b2", hover: "#0e7490", href: monthHref("/records", item.key), label: "practical learners" }
+      ];
+      const selected = activeKey === item.key;
+      return <div key={item.key} onMouseEnter={() => setActiveKey(item.key)} onFocus={() => setActiveKey(item.key)} className={`relative flex h-full min-w-0 flex-1 items-end justify-center gap-[3px] rounded-md px-1 transition-all duration-200 ${selected ? "bg-[#f1f5f9] shadow-inner" : "hover:bg-[#f8fafc]"}`}>
+        {bars.map((bar) => {
+          const barHeight = height(bar.value);
+          return <Link key={bar.key} href={bar.href} aria-label={`${item.label}: ${bar.value} ${bar.label}`} className="group relative h-full min-w-0 flex-1 rounded-t-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40">
+            {bar.value ? <span className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 rounded bg-white px-1.5 py-0.5 text-[10px] font-extrabold shadow-md ring-1 ring-slate-200 transition-all duration-200 ${selected ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100"}`} style={{ bottom: `calc(${barHeight}% + 6px)`, color: bar.color }}>{bar.value}</span> : null}
+            <span className="absolute bottom-0 left-0 right-0 rounded-t-sm shadow-sm transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-lg" style={{ height: `${barHeight}%`, backgroundColor: selected ? bar.hover : bar.color }} />
+          </Link>;
+        })}
+      </div>;
+    })}</div>
+    <div className="mt-3 flex gap-1.5 sm:gap-2">{data.map((item, index) => <button type="button" key={item.key} onMouseEnter={() => setActiveKey(item.key)} onFocus={() => setActiveKey(item.key)} onClick={() => setActiveKey(item.key)} className={`min-w-0 flex-1 truncate rounded px-0.5 py-1 text-center text-[10px] font-semibold transition ${activeKey === item.key ? "bg-[#eaf2fb] text-[#075f8f]" : "text-[#718096] hover:bg-[#f1f5f9]"}`}>{data.length <= 6 || index % 2 === 0 ? item.label : ""}</button>)}</div>
+  </div>;
+}
+
+function HoverMetric({ label, value, color }: { label: string; value: number; color: string }) {
+  return <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: color }} /><div><p className="text-base font-extrabold leading-none text-[#16263c]">{value}</p><p className="mt-1 whitespace-nowrap text-[10px] font-semibold text-[#718096]">{label}</p></div></div>;
 }
 
 function OutcomeMonthChart({ data, kind }: { data: DashboardMonthPoint[]; kind: "assessment" | "proficiency" }) {
