@@ -51,7 +51,7 @@ function normalizedRemarks(value: unknown) {
 
 export function classifyHistoricalFlightRemarks(remarks: unknown): FlightActivityClassification {
   const value = normalizedRemarks(remarks);
-  const practicalAssessment = /\bpractical\s+assessment\b/.test(value);
+  const practicalAssessment = /\b(?:practical\s+)?assess?ment\b/.test(value);
   const proficiencyCheck = /\bproficiency\s+check\b/.test(value);
 
   if (!practicalAssessment && !proficiencyCheck) {
