@@ -12,7 +12,7 @@ import {
   type DashboardMonthPoint
 } from "@/lib/dashboard-analytics";
 import {
-  Activity, CalendarDays, ChevronRight, ClipboardCheck, Gauge, Plane,
+  Activity, Award, BookOpenCheck, CalendarDays, ChevronRight, Gauge, Plane,
   ShieldCheck, Star, Timer, UsersRound, Wrench
 } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +21,12 @@ import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } 
 const emptyAnalytics: DashboardAnalytics = {
   totals: {
     flights: 0, flightMinutes: 0, trainers: 0, maintenanceChecks: 0,
+    uniqueLearners: 0, practicalLearners: 0, theoryLearners: 0,
+    theoryPartialLearners: 0, practicalAssessmentLearners: 0,
+    practicalAssessmentPassed: 0, practicalAssessmentFailed: 0,
+    practicalAssessmentPassRate: 0, proficiencyCheckLearners: 0,
+    proficiencyCheckPassed: 0, proficiencyCheckFailed: 0,
+    proficiencyCheckPassRate: 0, activityNeedsReview: 0,
     maintenanceCompliance: 0, attendanceSessions: 0, attendanceCheckIns: 0,
     attendanceRate: 0, evaluationResponses: 0, evaluationAverage: 0,
     trainerEffectiveness: 0, courseSatisfaction: 0, recommendationRate: 0
@@ -108,9 +114,13 @@ export default function AdminPage() {
   }
 
   const stats = [
-    { label: "Flight time", value: formatMinutes(analytics.totals.flightMinutes), detail: `${analytics.totals.flights} flights across ${analytics.totals.trainers} trainers`, icon: Timer, tone: "bg-sky-50 text-sky-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Unique learners", value: analytics.totals.uniqueLearners, detail: `${analytics.totals.theoryLearners} theory · ${analytics.totals.practicalLearners} practical`, icon: UsersRound, tone: "bg-blue-50 text-blue-700", href: `/reports?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "UAPL Theory", value: analytics.totals.theoryLearners, detail: `${analytics.totals.theoryPartialLearners} partial attendance record${analytics.totals.theoryPartialLearners === 1 ? "" : "s"}`, icon: BookOpenCheck, tone: "bg-violet-50 text-violet-700", href: `/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Practical learners", value: analytics.totals.practicalLearners, detail: `${analytics.totals.flights} flight entries`, icon: Plane, tone: "bg-cyan-50 text-cyan-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Flight time", value: formatMinutes(analytics.totals.flightMinutes), detail: `Across ${analytics.totals.trainers} trainer${analytics.totals.trainers === 1 ? "" : "s"}`, icon: Timer, tone: "bg-sky-50 text-sky-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Practical assessments", value: analytics.totals.practicalAssessmentLearners, detail: `${analytics.totals.practicalAssessmentPassed} passed · ${analytics.totals.practicalAssessmentFailed} failed · ${formatPercent(analytics.totals.practicalAssessmentPassRate)}`, icon: Award, tone: "bg-emerald-50 text-emerald-700", href: `/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Proficiency checks", value: analytics.totals.proficiencyCheckLearners, detail: `${analytics.totals.proficiencyCheckPassed} passed · ${analytics.totals.proficiencyCheckFailed} failed · ${formatPercent(analytics.totals.proficiencyCheckPassRate)}`, icon: ShieldCheck, tone: "bg-indigo-50 text-indigo-700", href: `/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Maintenance compliance", value: formatPercent(analytics.totals.maintenanceCompliance), detail: `${analytics.totals.maintenanceChecks} checklist decisions`, icon: Wrench, tone: "bg-emerald-50 text-emerald-700", href: `/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
-    { label: "Attendance rate", value: formatPercent(analytics.totals.attendanceRate), detail: `${analytics.totals.attendanceCheckIns} check-ins in ${analytics.totals.attendanceSessions} sessions`, icon: ClipboardCheck, tone: "bg-violet-50 text-violet-700", href: `/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Course satisfaction", value: analytics.totals.courseSatisfaction ? `${analytics.totals.courseSatisfaction.toFixed(2)} / 5` : "No responses", detail: `${analytics.totals.recommendationRate.toFixed(0)}% would recommend · ${analytics.totals.evaluationResponses} responses`, icon: Star, tone: "bg-amber-50 text-amber-700", href: `/evaluations/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` }
   ];
 
@@ -140,14 +150,21 @@ export default function AdminPage() {
         {stats.map((stat) => { const Icon = stat.icon; return <Link key={stat.label} href={stat.href} className="dashboard-stat-card group rounded-lg border border-[#d7e0ea] bg-white p-5 transition hover:-translate-y-0.5 hover:border-[#b9c9dc] hover:shadow-lg"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-[#6b7d92]">{stat.label}</p><p className="mt-2 text-2xl font-bold text-[#16263c]">{stat.value}</p></div><div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.tone}`}><Icon className="h-5 w-5" /></div></div><div className="mt-3 flex items-center justify-between gap-2 text-xs text-[#718096]"><span>{stat.detail}</span><ChevronRight className="h-4 w-4 shrink-0 transition group-hover:translate-x-0.5" /></div></Link>; })}
       </section>
 
+      {analytics.totals.activityNeedsReview ? <Link href={`/records?activityReview=required&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} className="group flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm transition hover:border-amber-300 hover:shadow-sm"><span className="font-semibold text-amber-900"><strong>{analytics.totals.activityNeedsReview}</strong> historical assessment or proficiency remark{analytics.totals.activityNeedsReview === 1 ? " needs" : "s need"} classification review.</span><ChevronRight className="h-4 w-4 shrink-0 text-amber-700 transition group-hover:translate-x-0.5" /></Link> : null}
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
-        <ChartPanel eyebrow="Flight operations" title="Flight hours by month" icon={Plane} href={`/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.flightMinutes / 60} format={(value) => `${value.toFixed(1)}h`} color="#0866ff" route="/records" /></ChartPanel>
+        <ChartPanel eyebrow="Training volume" title="Unique learners by month" icon={UsersRound} href={`/reports?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note="Deduplicated across completed UAPL Theory attendance and practical flight activity."><LearnerMonthChart data={analytics.months} /></ChartPanel>
         <ChartPanel eyebrow="Trainer activity" title="Flight hours by trainer" icon={UsersRound} href={`/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><TrainerBars analytics={analytics} range={range} /></ChartPanel>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <ChartPanel eyebrow="Practical assessment" title="Assessment outcomes by month" icon={Award} href={`/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.practicalAssessmentLearners} unique learner${analytics.totals.practicalAssessmentLearners === 1 ? "" : "s"} assessed`}><OutcomeMonthChart data={analytics.months} kind="assessment" /></ChartPanel>
+        <ChartPanel eyebrow="Proficiency assurance" title="Proficiency check outcomes by month" icon={ShieldCheck} href={`/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.proficiencyCheckLearners} unique learner${analytics.totals.proficiencyCheckLearners === 1 ? "" : "s"} checked`}><OutcomeMonthChart data={analytics.months} kind="proficiency" /></ChartPanel>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
         <ChartPanel eyebrow="Fleet readiness" title="Maintenance compliance" icon={ShieldCheck} href={`/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.maintenanceCompliance} format={formatPercent} color="#059669" route="/ua-maintenance/records" emptyWhen={(item) => item.maintenancePass + item.maintenanceFail === 0} /></ChartPanel>
-        <ChartPanel eyebrow="Training attendance" title="Attendance capture rate" icon={Gauge} href={`/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note="Sessions with at least one check-in."><MonthBarChart data={analytics.months} value={(item) => item.attendanceRate} format={formatPercent} color="#7c3aed" route="/attendance/records" emptyWhen={(item) => item.attendanceSessions === 0} /></ChartPanel>
+        <ChartPanel eyebrow="UAPL Theory attendance" title="Required attendance completion" icon={Gauge} href={`/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note="Learners who completed every required AM/PM period."><MonthBarChart data={analytics.months} value={(item) => item.attendanceRate} format={formatPercent} color="#7c3aed" route="/attendance/records" emptyWhen={(item) => item.theoryLearners === 0 && item.attendanceRate === 0} /></ChartPanel>
         <ChartPanel eyebrow="Learner feedback" title="Evaluation average" icon={Activity} href={`/evaluations?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`}><MonthBarChart data={analytics.months} value={(item) => item.evaluationAverage} format={(value) => `${value.toFixed(2)} / 5`} color="#d97706" route="/evaluations" maximum={5} emptyWhen={(item) => item.evaluationResponses === 0} /></ChartPanel>
       </section>
 
@@ -168,6 +185,28 @@ function MonthBarChart({ data, value, format, color, route, maximum, emptyWhen }
   const max = maximum || Math.max(1, ...data.map(value));
   if (!data.length) return <EmptyChart />;
   return <div className="mt-5"><div className="flex h-52 items-end gap-1.5 sm:gap-2">{data.map((item) => { const amount = value(item); const empty = emptyWhen?.(item) ?? false; const height = empty ? 3 : Math.max(5, (amount / max) * 100); return <Link key={item.key} href={monthHref(route, item.key)} onMouseEnter={() => setActive(item.key)} onMouseLeave={() => setActive("")} onFocus={() => setActive(item.key)} onBlur={() => setActive("")} className="group relative flex h-full min-w-0 flex-1 items-end rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40" aria-label={`${item.label}: ${empty ? "No data" : format(amount)}. Open records.`}>{active === item.key ? <div className="absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#16263c] px-2.5 py-1.5 text-xs font-bold text-white shadow-lg" style={{ bottom: `calc(${height}% + 8px)` }}>{item.label}: {empty ? "No data" : format(amount)}</div> : null}<span className="w-full rounded-t-md opacity-85 transition group-hover:opacity-100 group-hover:shadow-md" style={{ height: `${height}%`, backgroundColor: empty ? "#dbe3ec" : color }} /></Link>; })}</div><div className="mt-3 flex gap-1.5 sm:gap-2">{data.map((item, index) => <span key={item.key} className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold text-[#718096]">{data.length <= 6 || index % 2 === 0 ? item.label : ""}</span>)}</div></div>;
+}
+
+function LearnerMonthChart({ data }: { data: DashboardMonthPoint[] }) {
+  const max = Math.max(1, ...data.map((item) => Math.max(item.totalLearners, item.theoryLearners, item.practicalLearners)));
+  if (!data.length) return <EmptyChart />;
+  return <div className="mt-5"><div className="mb-4 flex flex-wrap gap-4 text-xs font-semibold text-[#60748a]"><Legend color="#16263c" label="Total unique" /><Legend color="#7c3aed" label="UAPL Theory" /><Legend color="#0891b2" label="Practical" /></div><div className="flex h-56 items-end gap-1.5 sm:gap-2">{data.map((item) => <div key={item.key} className="group relative flex h-full min-w-0 flex-1 items-end justify-center gap-[2px] rounded-md px-[1px] hover:bg-[#f4f8fb]" title={`${item.label}: ${item.totalLearners} total unique, ${item.theoryLearners} theory, ${item.practicalLearners} practical`}><Link href={monthHref("/reports", item.key)} aria-label={`${item.label}: ${item.totalLearners} total unique learners`} className="relative h-full min-w-0 flex-1"><span className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-[#16263c] transition group-hover:bg-[#24364d]" style={{ height: `${Math.max(item.totalLearners ? 5 : 2, item.totalLearners / max * 100)}%` }} /></Link><Link href={monthHref("/attendance/records", item.key)} aria-label={`${item.label}: ${item.theoryLearners} UAPL Theory learners`} className="relative h-full min-w-0 flex-1"><span className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-[#7c3aed] transition group-hover:bg-[#6d28d9]" style={{ height: `${Math.max(item.theoryLearners ? 5 : 2, item.theoryLearners / max * 100)}%` }} /></Link><Link href={monthHref("/records", item.key)} aria-label={`${item.label}: ${item.practicalLearners} practical learners`} className="relative h-full min-w-0 flex-1"><span className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-[#0891b2] transition group-hover:bg-[#0e7490]" style={{ height: `${Math.max(item.practicalLearners ? 5 : 2, item.practicalLearners / max * 100)}%` }} /></Link><span className="pointer-events-none absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#16263c] px-2 py-1 text-[10px] font-bold text-white shadow-lg group-hover:block">{item.totalLearners} unique</span></div>)}</div><div className="mt-3 flex gap-1.5 sm:gap-2">{data.map((item, index) => <span key={item.key} className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold text-[#718096]">{data.length <= 6 || index % 2 === 0 ? item.label : ""}</span>)}</div></div>;
+}
+
+function OutcomeMonthChart({ data, kind }: { data: DashboardMonthPoint[]; kind: "assessment" | "proficiency" }) {
+  const values = data.map((item) => ({
+    ...item,
+    passed: kind === "assessment" ? item.practicalAssessmentPassed : item.proficiencyCheckPassed,
+    failed: kind === "assessment" ? item.practicalAssessmentFailed : item.proficiencyCheckFailed
+  }));
+  const max = Math.max(1, ...values.map((item) => item.passed + item.failed));
+  if (!data.length) return <EmptyChart />;
+  const activityType = kind === "assessment" ? "practical_assessment" : "proficiency_check";
+  return <div className="mt-5"><div className="mb-4 flex gap-4 text-xs font-semibold text-[#60748a]"><Legend color="#059669" label="Passed" /><Legend color="#e11d48" label="Failed" /></div><div className="flex h-48 items-end gap-1.5 sm:gap-2">{values.map((item) => { const total = item.passed + item.failed; return <Link key={item.key} href={`${monthHref("/records", item.key)}&activityType=${activityType}`} title={`${item.label}: ${item.passed} passed, ${item.failed} failed`} className="group relative flex h-full min-w-0 flex-1 flex-col justify-end overflow-hidden rounded-t-md bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40"><span className="w-full bg-[#059669] transition group-hover:bg-[#047857]" style={{ height: `${item.passed / max * 100}%`, minHeight: item.passed ? 4 : 0 }} /><span className="w-full bg-[#e11d48] transition group-hover:bg-[#be123c]" style={{ height: `${item.failed / max * 100}%`, minHeight: item.failed ? 4 : 0 }} />{total ? <span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] font-bold text-[#475569] opacity-0 transition group-hover:opacity-100">{total}</span> : null}</Link>; })}</div><div className="mt-3 flex gap-1.5 sm:gap-2">{values.map((item, index) => <span key={item.key} className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold text-[#718096]">{data.length <= 6 || index % 2 === 0 ? item.label : ""}</span>)}</div></div>;
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />{label}</span>;
 }
 
 function TrainerBars({ analytics, range }: { analytics: DashboardAnalytics; range: DashboardDateRange }) {

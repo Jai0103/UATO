@@ -288,6 +288,8 @@ export type RecordsPageRequest = {
   trainer?: string;
   dateFrom?: string;
   dateTo?: string;
+  activityType?: string;
+  activityReview?: boolean;
 };
 
 export type RecordsPageResponse = {

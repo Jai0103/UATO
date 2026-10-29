@@ -1,3 +1,5 @@
+import type { FlightActivityResult, FlightActivityType } from "@/lib/flight-activity";
+
 export type StudentDetails = {
   studentName: string;
   company: string;
@@ -15,6 +17,8 @@ export type FlightLogRow = {
   batterySn: string;
   pilotInCommand: string;
   instructorInCommand: string;
+  activityType?: FlightActivityType;
+  activityResult?: FlightActivityResult;
   remarks: string;
 };
 

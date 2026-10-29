@@ -5,12 +5,19 @@ import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import { addFirebaseAuditToBatch } from "@/lib/firebase-audit";
 
 export type CatalogueStatus = "active" | "inactive";
-export type TrainingProgramme = { id: string; name: string; code: string; status: CatalogueStatus; createdAt: string; updatedAt: string };
+export type ProgrammeReportingCategory = "uapl_theory" | "other";
+export type TrainingProgramme = { id: string; name: string; code: string; reportingCategory: ProgrammeReportingCategory; status: CatalogueStatus; createdAt: string; updatedAt: string };
 export type TrainingLocation = { id: string; name: string; status: CatalogueStatus; createdAt: string; updatedAt: string };
 export type TrainingCatalogue = { programmes: TrainingProgramme[]; locations: TrainingLocation[] };
 type AdminActor = { uid: string; name: string; email: string; role: "admin" };
 
 function text(value: unknown) { return String(value ?? "").trim(); }
+
+function reportingCategory(data: DocumentData): ProgrammeReportingCategory {
+  if (data.reportingCategory === "uapl_theory") return "uapl_theory";
+  const legacyLabel = `${text(data.name)} ${text(data.code)}`.toLowerCase();
+  return legacyLabel.includes("uapl") && legacyLabel.includes("theory") ? "uapl_theory" : "other";
+}
 
 async function requireAdmin(): Promise<AdminActor> {
   await firebaseAuth.authStateReady();
@@ -23,7 +30,7 @@ async function requireAdmin(): Promise<AdminActor> {
 }
 
 function programmeFromDoc(id: string, data: DocumentData): TrainingProgramme {
-  return { id, name: text(data.name), code: text(data.code).toUpperCase(), status: data.status === "inactive" ? "inactive" : "active", createdAt: text(data.createdAt), updatedAt: text(data.updatedAt) };
+  return { id, name: text(data.name), code: text(data.code).toUpperCase(), reportingCategory: reportingCategory(data), status: data.status === "inactive" ? "inactive" : "active", createdAt: text(data.createdAt), updatedAt: text(data.updatedAt) };
 }
 
 function locationFromDoc(id: string, data: DocumentData): TrainingLocation {
@@ -39,7 +46,7 @@ export async function fetchTrainingCatalogue(includeInactive = true): Promise<Tr
   };
 }
 
-export async function saveTrainingProgramme(input: Pick<TrainingProgramme, "id" | "name" | "code" | "status">) {
+export async function saveTrainingProgramme(input: Pick<TrainingProgramme, "id" | "name" | "code" | "reportingCategory" | "status">) {
   const actor = await requireAdmin();
   const id = input.id || crypto.randomUUID();
   const name = input.name.trim();
@@ -51,9 +58,9 @@ export async function saveTrainingProgramme(input: Pick<TrainingProgramme, "id" 
   const existing = await getDoc(reference);
   const previous = existing.exists() ? programmeFromDoc(existing.id, existing.data()) : null;
   const now = new Date().toISOString();
-  const programme: TrainingProgramme = { id, name, code, status: input.status, createdAt: previous?.createdAt || now, updatedAt: now };
+  const programme: TrainingProgramme = { id, name, code, reportingCategory: input.reportingCategory, status: input.status, createdAt: previous?.createdAt || now, updatedAt: now };
   const batch = writeBatch(firestore);
-  batch.set(reference, { ...programme, nameLower: name.toLowerCase(), codeLower: code.toLowerCase(), schemaVersion: 1 });
+  batch.set(reference, { ...programme, nameLower: name.toLowerCase(), codeLower: code.toLowerCase(), schemaVersion: 2 });
   addFirebaseAuditToBatch(batch, { actorUserId: actor.uid, actorName: actor.name, actorEmail: actor.email, actorRole: actor.role, action: previous ? "TRAINING_PROGRAMME_UPDATED" : "TRAINING_PROGRAMME_CREATED", entityType: "trainingCatalogue", entityId: id, entityName: `${name} (${code})`, previousValue: previous, updatedValue: programme });
   await batch.commit();
   return programme;

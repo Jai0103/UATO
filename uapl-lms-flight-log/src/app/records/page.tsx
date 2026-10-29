@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { LoadingOverlay } from "@/components/loading-overlay";
 import { useAppMessage } from "@/components/message-provider";
 import { flightLogDraftKey, type FlightLogRecord } from "@/lib/flight-log-storage";
+import { flightActivityLabel, flightActivityOptions, flightResultLabel } from "@/lib/flight-activity";
 import type { FlightLogRecordSummary } from "@/lib/google-api";
 import {
   deleteFirebaseFlightLogRecord,
@@ -73,6 +74,8 @@ export default function RecordsPage() {
   const [trainerFilter, setTrainerFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [activityType, setActivityType] = useState("");
+  const [activityReview, setActivityReview] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -95,6 +98,8 @@ export default function RecordsPage() {
     setTrainerFilter(trainer);
     setDateFrom(parameters.get("dateFrom") || "");
     setDateTo(parameters.get("dateTo") || "");
+    setActivityType(parameters.get("activityType") || "");
+    setActivityReview(parameters.get("activityReview") === "required");
   }, []);
 
   const yearOptions = useMemo(() => {
@@ -138,6 +143,8 @@ export default function RecordsPage() {
         trainer: trainerFilter,
         dateFrom,
         dateTo,
+        activityType,
+        activityReview,
       };
       const result = await fetchFirebaseFlightLogRecordsPage(request);
 
@@ -165,7 +172,7 @@ export default function RecordsPage() {
         setLoading(false);
       }
     }
-  }, [dateFrom, dateTo, debouncedQuery, notify, page, refreshKey, selectedMonth, selectedYear, trainerFilter]);
+  }, [activityReview, activityType, dateFrom, dateTo, debouncedQuery, notify, page, refreshKey, selectedMonth, selectedYear, trainerFilter]);
 
   useEffect(() => {
     void loadRecords();
@@ -326,6 +333,8 @@ export default function RecordsPage() {
     setTrainerFilter("");
     setDateFrom("");
     setDateTo("");
+    setActivityType("");
+    setActivityReview(false);
     setPage(1);
   }
 
@@ -363,9 +372,9 @@ export default function RecordsPage() {
           <div className="mb-4">
             <p className="app-section-label">Find records</p>
             <p className="mt-1 text-sm text-slate-500">Search by student identity or narrow the list by month and year.</p>
-            {trainerFilter || dateFrom || dateTo ? <div className="mt-3 flex flex-wrap gap-2">{trainerFilter ? <span className="rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">Trainer: {trainerFilter}</span> : null}{dateFrom || dateTo ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">Dashboard range: {dateFrom || "start"} to {dateTo || "today"}</span> : null}</div> : null}
+            {trainerFilter || dateFrom || dateTo || activityType || activityReview ? <div className="mt-3 flex flex-wrap gap-2">{trainerFilter ? <span className="rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">Trainer: {trainerFilter}</span> : null}{dateFrom || dateTo ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">Dashboard range: {dateFrom || "start"} to {dateTo || "today"}</span> : null}{activityType ? <span className="rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">Activity: {flightActivityLabel(activityType as Parameters<typeof flightActivityLabel>[0])}</span> : null}{activityReview ? <span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">Classification review required</span> : null}</div> : null}
           </div>
-          <div className="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_180px_160px_auto] lg:items-end">
+          <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_170px_150px_210px_auto] lg:items-end">
             <label className="min-w-0">
               <span className="text-sm font-semibold text-slate-600">Search records</span>
               <div className="mt-2 flex h-12 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 shadow-sm transition focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-100">
@@ -377,6 +386,15 @@ export default function RecordsPage() {
                   placeholder="Student, company, or last 4"
                 />
               </div>
+            </label>
+
+            <label>
+              <span className="text-sm font-semibold text-slate-600">Activity</span>
+              <select value={activityReview ? "review" : activityType} onChange={(event) => { const value = event.target.value; setActivityReview(value === "review"); setActivityType(value === "review" ? "" : value); setPage(1); }} className="app-input mt-2">
+                <option value="">All activities</option>
+                {flightActivityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                <option value="review">Needs classification review</option>
+              </select>
             </label>
 
             <label>
@@ -627,6 +645,8 @@ function RecordDetailModal({
                   <MobileDetail label="Battery" value={row.batterySn} />
                   <MobileDetail label="Pilot" value={row.pilotInCommand} />
                   <div className="col-span-2"><MobileDetail label="AFE / Instructor" value={row.instructorInCommand} /></div>
+                  <MobileDetail label="Activity" value={flightActivityLabel(row.activityType || "practical_training")} />
+                  <MobileDetail label="Result" value={flightResultLabel(row.activityResult || "not_applicable")} />
                   {row.remarks ? <div className="col-span-2"><MobileDetail label="Remarks" value={row.remarks} /></div> : null}
                 </div>
               </article>
@@ -634,10 +654,10 @@ function RecordDetailModal({
           </div>
 
           <div className="mt-5 hidden overflow-x-auto rounded-lg border border-slate-200 lg:block">
-            <table className="w-full min-w-[1120px] text-left text-sm">
+            <table className="w-full min-w-[1360px] text-left text-sm">
               <thead className="bg-sky-50 text-xs uppercase text-sky-800">
                 <tr>
-                  {['Date','Location','Start','Minutes','UA Model','Category','Battery','Pilot in Command','AFE / Instructor','Remarks'].map((label) => (
+                  {['Date','Location','Start','Minutes','UA Model','Category','Battery','Pilot in Command','AFE / Instructor','Activity','Result','Remarks'].map((label) => (
                     <th key={label} className="px-4 py-3 font-semibold">{label}</th>
                   ))}
                 </tr>
@@ -645,7 +665,7 @@ function RecordDetailModal({
               <tbody>
                 {record.rows.map((row, index) => (
                   <tr key={`${record.id}-${index}`} className="border-t border-slate-100 text-slate-700 hover:bg-slate-50">
-                    <td className="px-4 py-3">{row.date || "-"}</td><td className="px-4 py-3">{row.location || "-"}</td><td className="px-4 py-3">{row.startTime || "-"}</td><td className="px-4 py-3">{row.duration || "-"}</td><td className="px-4 py-3">{row.uaModel || "-"}</td><td className="px-4 py-3">{row.uaCategory || "-"}</td><td className="px-4 py-3">{row.batterySn || "-"}</td><td className="px-4 py-3">{row.pilotInCommand || "-"}</td><td className="px-4 py-3">{row.instructorInCommand || "-"}</td><td className="px-4 py-3">{row.remarks || "-"}</td>
+                    <td className="px-4 py-3">{row.date || "-"}</td><td className="px-4 py-3">{row.location || "-"}</td><td className="px-4 py-3">{row.startTime || "-"}</td><td className="px-4 py-3">{row.duration || "-"}</td><td className="px-4 py-3">{row.uaModel || "-"}</td><td className="px-4 py-3">{row.uaCategory || "-"}</td><td className="px-4 py-3">{row.batterySn || "-"}</td><td className="px-4 py-3">{row.pilotInCommand || "-"}</td><td className="px-4 py-3">{row.instructorInCommand || "-"}</td><td className="px-4 py-3 font-semibold text-slate-800">{flightActivityLabel(row.activityType || "practical_training")}</td><td className="px-4 py-3">{flightResultLabel(row.activityResult || "not_applicable")}</td><td className="px-4 py-3">{row.remarks || "-"}</td>
                   </tr>
                 ))}
               </tbody>

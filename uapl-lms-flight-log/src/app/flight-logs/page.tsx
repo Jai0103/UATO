@@ -24,6 +24,12 @@ import {
   type StudentDetails,
 } from "@/lib/flight-log-storage";
 import {
+  flightActivityOptions,
+  flightResultOptions,
+  type FlightActivityResult,
+  type FlightActivityType,
+} from "@/lib/flight-activity";
+import {
   getMasterData,
   saveMasterData,
   type MasterData,
@@ -106,6 +112,8 @@ const fields: {
   { key: "batterySn", label: "Battery S/N" },
   { key: "pilotInCommand", label: "Pilot in Command" },
   { key: "instructorInCommand", label: "AFE / Instructor in Command" },
+  { key: "activityType", label: "Activity Type", type: "select" },
+  { key: "activityResult", label: "Result", type: "select" },
   { key: "remarks", label: "Remarks" },
 ];
 
@@ -1178,6 +1186,59 @@ export default function FlightLogsPage() {
       );
     }
 
+    if (field.key === "activityType") {
+      return (
+        <select
+          className={inputClass}
+          value={flightForm.activityType || ""}
+          onChange={(event) => {
+            const activityType = event.target.value as FlightActivityType;
+            const requiresResult =
+              activityType === "practical_assessment" || activityType === "proficiency_check";
+            setFlightForm((current) => ({
+              ...current,
+              activityType,
+              activityResult: requiresResult
+                ? current.activityResult === "passed" || current.activityResult === "failed"
+                  ? current.activityResult
+                  : "incomplete"
+                : "not_applicable",
+            }));
+          }}
+        >
+          <option value="">Select activity type</option>
+          {flightActivityOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (field.key === "activityResult") {
+      const requiresResult =
+        flightForm.activityType === "practical_assessment" ||
+        flightForm.activityType === "proficiency_check";
+      return (
+        <select
+          className={`${inputClass} disabled:bg-slate-100 disabled:text-slate-500`}
+          value={requiresResult ? flightForm.activityResult || "incomplete" : "not_applicable"}
+          disabled={!requiresResult}
+          onChange={(event) =>
+            setFlightForm((current) => ({
+              ...current,
+              activityResult: event.target.value as FlightActivityResult,
+            }))
+          }
+        >
+          {flightResultOptions
+            .filter((option) => requiresResult ? option.value !== "not_applicable" : option.value === "not_applicable")
+            .map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+        </select>
+      );
+    }
+
     if (field.key === "remarks") {
       return (
         <div className="mt-2 space-y-2">
@@ -1966,6 +2027,13 @@ function validateFlightEntry(
   if (!row.pilotInCommand.trim()) errors.push("Pilot in Command is required.");
   if (!row.instructorInCommand.trim()) {
     errors.push("AFE / Instructor is required.");
+  }
+  if (!row.activityType) errors.push("Activity Type is required.");
+  if (
+    (row.activityType === "practical_assessment" || row.activityType === "proficiency_check") &&
+    (!row.activityResult || row.activityResult === "not_applicable")
+  ) {
+    errors.push("Select the assessment or proficiency check result.");
   }
 
   const activeModels = (masterData?.uaModels || []).map(normalizeEntryValue);

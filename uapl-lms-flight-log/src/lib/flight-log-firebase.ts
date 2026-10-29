@@ -17,6 +17,7 @@ import type {
   FlightLogRecord,
   FlightLogRow
 } from "@/lib/flight-log-storage";
+import { resolveFlightActivity } from "@/lib/flight-activity";
 import type {
   FlightLogRecordSummary,
   RecordsPageRequest,
@@ -169,6 +170,7 @@ function summaryFromDocument(id: string, data: DocumentData): FlightLogRecordSum
 }
 
 function rowFromDocument(data: DocumentData): FlightLogRow {
+  const activity = resolveFlightActivity(data);
   return {
     date: String(data.date || ""),
     location: String(data.location || ""),
@@ -179,6 +181,8 @@ function rowFromDocument(data: DocumentData): FlightLogRow {
     batterySn: String(data.batterySn || ""),
     pilotInCommand: String(data.pilotInCommand || ""),
     instructorInCommand: String(data.instructorInCommand || ""),
+    activityType: activity.activityType,
+    activityResult: activity.activityResult,
     remarks: String(data.remarks || "")
   };
 }
@@ -207,9 +211,11 @@ export async function fetchFirebaseFlightLogRecordsPage(
   const trainer = String(request.trainer || "").trim().toLowerCase();
   const dateFrom = String(request.dateFrom || "").slice(0, 10);
   const dateTo = String(request.dateTo || "").slice(0, 10);
+  const activityType = String(request.activityType || "");
+  const activityReview = request.activityReview === true;
   let allowedRecordIds: Set<string> | null = null;
 
-  if (request.month || request.year || trainer || dateFrom || dateTo) {
+  if (request.month || request.year || trainer || dateFrom || dateTo || activityType || activityReview) {
     const entrySnapshot = request.year
       ? await getDocs(
           query(
@@ -234,6 +240,9 @@ export async function fetchFirebaseFlightLogRecordsPage(
           if (trainer && String(data.instructorInCommand || "").trim().toLowerCase() !== trainer) {
             return false;
           }
+          const activity = resolveFlightActivity(data);
+          if (activityType && activity.activityType !== activityType) return false;
+          if (activityReview && !activity.needsReview) return false;
           return true;
         })
         .map((entry) => String(entry.data().recordId || ""))
@@ -1006,6 +1015,7 @@ export async function saveFirebaseFlightLogRecord(record: FlightLogRecord) {
 
     record.rows.forEach((row, index) => {
       const entryId = deterministicEntryId(record.id, index);
+      const activity = resolveFlightActivity(row);
       transaction.set(doc(firestore, "flightEntries", entryId), {
         id: entryId,
         recordId: record.id,
@@ -1024,6 +1034,10 @@ export async function saveFirebaseFlightLogRecord(record: FlightLogRecord) {
         batterySn: row.batterySn,
         pilotInCommand: row.pilotInCommand,
         instructorInCommand: row.instructorInCommand,
+        activityType: activity.activityType,
+        activityResult: activity.activityResult,
+        activityClassificationSource: activity.source,
+        activityNeedsReview: activity.needsReview,
         remarks: row.remarks,
         sourceRowIndex: index,
         updatedAt: Timestamp.fromDate(now),
@@ -1202,6 +1216,7 @@ export async function mirrorFlightLogRecordToFirebase(record: FlightLogRecord) {
 
   record.rows.forEach((row, index) => {
     const entryId = deterministicEntryId(record.id, index);
+    const activity = resolveFlightActivity(row);
     operations.push({
       type: "set",
       reference: doc(firestore, "flightEntries", entryId),
@@ -1223,6 +1238,10 @@ export async function mirrorFlightLogRecordToFirebase(record: FlightLogRecord) {
         batterySn: row.batterySn,
         pilotInCommand: row.pilotInCommand,
         instructorInCommand: row.instructorInCommand,
+        activityType: activity.activityType,
+        activityResult: activity.activityResult,
+        activityClassificationSource: activity.source,
+        activityNeedsReview: activity.needsReview,
         remarks: row.remarks,
         sourceRowIndex: index,
         schemaVersion: 1

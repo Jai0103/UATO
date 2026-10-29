@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, Timestamp } from "firebase/firestore";
 import { firebaseAuth, firestore } from "@/lib/firebase-client";
 import { evaluationRatingFields } from "@/lib/evaluations";
+import { resolveFlightActivity } from "@/lib/flight-activity";
 
 export type DashboardDateRange = {
   dateFrom: string;
@@ -12,6 +13,14 @@ export type DashboardMonthPoint = {
   label: string;
   flightMinutes: number;
   flightCount: number;
+  practicalLearners: number;
+  theoryLearners: number;
+  totalLearners: number;
+  practicalAssessmentPassed: number;
+  practicalAssessmentFailed: number;
+  proficiencyCheckPassed: number;
+  proficiencyCheckFailed: number;
+  activityNeedsReview: number;
   maintenancePass: number;
   maintenanceFail: number;
   maintenanceCompliance: number;
@@ -40,6 +49,19 @@ export type DashboardAnalytics = {
     flights: number;
     flightMinutes: number;
     trainers: number;
+    uniqueLearners: number;
+    practicalLearners: number;
+    theoryLearners: number;
+    theoryPartialLearners: number;
+    practicalAssessmentLearners: number;
+    practicalAssessmentPassed: number;
+    practicalAssessmentFailed: number;
+    practicalAssessmentPassRate: number;
+    proficiencyCheckLearners: number;
+    proficiencyCheckPassed: number;
+    proficiencyCheckFailed: number;
+    proficiencyCheckPassRate: number;
+    activityNeedsReview: number;
     maintenanceChecks: number;
     maintenanceCompliance: number;
     attendanceSessions: number;
@@ -83,6 +105,25 @@ function monthKey(value: string) {
   return value.slice(0, 7);
 }
 
+function normalizedLearnerKey(name: unknown, lastFour: unknown, fallback = "") {
+  const normalizedName = text(name)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const normalizedLastFour = text(lastFour).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return normalizedName && normalizedLastFour
+    ? `${normalizedName}|${normalizedLastFour}`
+    : fallback;
+}
+
+type MonthLearnerSets = {
+  practical: Set<string>;
+  theory: Set<string>;
+  theoryPartial: Set<string>;
+  total: Set<string>;
+};
+
 function monthSeries(range: DashboardDateRange) {
   const start = new Date(`${range.dateFrom}T00:00:00`);
   const end = new Date(`${range.dateTo}T00:00:00`);
@@ -100,6 +141,14 @@ function monthSeries(range: DashboardDateRange) {
       }).format(cursor),
       flightMinutes: 0,
       flightCount: 0,
+      practicalLearners: 0,
+      theoryLearners: 0,
+      totalLearners: 0,
+      practicalAssessmentPassed: 0,
+      practicalAssessmentFailed: 0,
+      proficiencyCheckPassed: 0,
+      proficiencyCheckFailed: 0,
+      activityNeedsReview: 0,
       maintenancePass: 0,
       maintenanceFail: 0,
       maintenanceCompliance: 0,
@@ -133,6 +182,7 @@ export async function fetchDashboardAnalytics(
     maintenanceSnapshot,
     attendanceSessionSnapshot,
     attendanceSubmissionSnapshot,
+    trainingProgrammeSnapshot,
     evaluationResponseSnapshot,
     evaluationAnswerSnapshot,
     evaluationSessionSnapshot
@@ -141,6 +191,7 @@ export async function fetchDashboardAnalytics(
     getDocs(collection(firestore, "uaMaintenanceRecords")),
     getDocs(collection(firestore, "attendanceSessions")),
     getDocs(collection(firestore, "attendanceSubmissions")),
+    getDocs(collection(firestore, "trainingProgrammes")),
     getDocs(collection(firestore, "evaluationResponses")),
     getDocs(collection(firestore, "evaluationAnswers")),
     getDocs(collection(firestore, "evaluationSessions"))
@@ -149,11 +200,35 @@ export async function fetchDashboardAnalytics(
   const months = monthSeries(range);
   const monthMap = new Map(months.map((item) => [item.key, item]));
   const trainers = new Map<string, TrainerFlightHours>();
+  const monthlyLearners = new Map<string, MonthLearnerSets>(
+    months.map((month) => [month.key, {
+      practical: new Set<string>(),
+      theory: new Set<string>(),
+      theoryPartial: new Set<string>(),
+      total: new Set<string>()
+    }])
+  );
+  const uniqueLearners = new Set<string>();
+  const practicalLearners = new Set<string>();
+  const theoryLearners = new Set<string>();
+  const theoryPartialLearners = new Set<string>();
+  const practicalAssessmentLearners = new Set<string>();
+  const proficiencyCheckLearners = new Set<string>();
+  let practicalAssessmentPassed = 0;
+  let practicalAssessmentFailed = 0;
+  let proficiencyCheckPassed = 0;
+  let proficiencyCheckFailed = 0;
+  let activityNeedsReview = 0;
 
   flightSnapshot.docs.forEach((item) => {
     const data = item.data();
     const date = isoDate(data.date);
     if (!inRange(date, range)) return;
+    const learnerKey = normalizedLearnerKey(
+      data.studentName,
+      data.lastFourCharacters,
+      `flight:${text(data.recordId) || item.id}`
+    );
     const minutes = Math.max(0, number(data.durationMinutes));
     const trainer = text(data.instructorInCommand) || "Unassigned trainer";
     const trainerKey = trainer.toLowerCase();
@@ -165,6 +240,43 @@ export async function fetchDashboardAnalytics(
     if (month) {
       month.flightMinutes += minutes;
       month.flightCount += 1;
+      if (learnerKey) {
+        const sets = monthlyLearners.get(month.key);
+        sets?.practical.add(learnerKey);
+        sets?.total.add(learnerKey);
+      }
+    }
+    if (learnerKey) {
+      practicalLearners.add(learnerKey);
+      uniqueLearners.add(learnerKey);
+    }
+    const activity = resolveFlightActivity(data);
+    if (activity.needsReview) {
+      activityNeedsReview += 1;
+      if (month) month.activityNeedsReview += 1;
+      return;
+    }
+    if (activity.activityType === "practical_assessment") {
+      if (learnerKey) practicalAssessmentLearners.add(learnerKey);
+      if (activity.activityResult === "passed") {
+        practicalAssessmentPassed += 1;
+        if (month) month.practicalAssessmentPassed += 1;
+      }
+      if (activity.activityResult === "failed") {
+        practicalAssessmentFailed += 1;
+        if (month) month.practicalAssessmentFailed += 1;
+      }
+    }
+    if (activity.activityType === "proficiency_check") {
+      if (learnerKey) proficiencyCheckLearners.add(learnerKey);
+      if (activity.activityResult === "passed") {
+        proficiencyCheckPassed += 1;
+        if (month) month.proficiencyCheckPassed += 1;
+      }
+      if (activity.activityResult === "failed") {
+        proficiencyCheckFailed += 1;
+        if (month) month.proficiencyCheckFailed += 1;
+      }
     }
   });
 
@@ -178,21 +290,77 @@ export async function fetchDashboardAnalytics(
     month.maintenanceFail += Math.max(0, number(data.failCount));
   });
 
+  const uaplTheoryProgrammeIds = new Set(
+    trainingProgrammeSnapshot.docs
+      .filter((item) => {
+        const data = item.data();
+        if (data.reportingCategory === "uapl_theory") return true;
+        const legacy = `${text(data.name)} ${text(data.code)}`.toLowerCase();
+        return legacy.includes("uapl") && legacy.includes("theory");
+      })
+      .map((item) => item.id)
+  );
   const attendanceSessions = attendanceSessionSnapshot.docs
-    .map((item) => ({ id: item.id, courseDate: text(item.data().courseDate) }))
+    .map((item) => {
+      const data = item.data();
+      const courseName = text(data.courseName);
+      const legacyTheory = courseName.toLowerCase().includes("uapl") && courseName.toLowerCase().includes("theory");
+      return {
+        id: item.id,
+        courseDate: text(data.courseDate),
+        schedule: data.schedule === "am" || data.schedule === "pm" ? data.schedule : "full_day",
+        isUaplTheory: uaplTheoryProgrammeIds.has(text(data.programmeId)) || legacyTheory
+      };
+    })
     .filter((item) => inRange(isoDate(item.courseDate), range));
   const includedAttendanceIds = new Set(attendanceSessions.map((item) => item.id));
   const attendanceCounts = new Map<string, number>();
+  const attendanceLearners = new Map<string, Map<string, Set<string>>>();
   attendanceSubmissionSnapshot.docs.forEach((item) => {
-    const sessionId = text(item.data().sessionId);
+    const data = item.data();
+    const sessionId = text(data.sessionId);
     if (!includedAttendanceIds.has(sessionId)) return;
     attendanceCounts.set(sessionId, (attendanceCounts.get(sessionId) || 0) + 1);
+    const learnerKey = normalizedLearnerKey(
+      data.learnerName,
+      data.lastFour,
+      text(data.identityHash) ? `attendance:${text(data.identityHash)}` : `attendance:${item.id}`
+    );
+    if (!learnerKey) return;
+    const sessionLearners = attendanceLearners.get(sessionId) || new Map<string, Set<string>>();
+    const periods = sessionLearners.get(learnerKey) || new Set<string>();
+    periods.add(data.period === "pm" ? "pm" : "am");
+    sessionLearners.set(learnerKey, periods);
+    attendanceLearners.set(sessionId, sessionLearners);
   });
   attendanceSessions.forEach((session) => {
     const month = monthMap.get(monthKey(isoDate(session.courseDate)));
     if (!month) return;
     month.attendanceSessions += 1;
     if ((attendanceCounts.get(session.id) || 0) > 0) month.attendanceCoveredSessions += 1;
+    if (!session.isUaplTheory) return;
+    const learners = attendanceLearners.get(session.id) || new Map<string, Set<string>>();
+    learners.forEach((periods, learnerKey) => {
+      const complete = session.schedule === "am"
+        ? periods.has("am")
+        : session.schedule === "pm"
+          ? periods.has("pm")
+          : periods.has("am") && periods.has("pm");
+      if (!complete) {
+        theoryPartialLearners.add(learnerKey);
+        monthlyLearners.get(month.key)?.theoryPartial.add(learnerKey);
+        return;
+      }
+      theoryLearners.add(learnerKey);
+      uniqueLearners.add(learnerKey);
+      const sets = monthlyLearners.get(month.key);
+      sets?.theory.add(learnerKey);
+      sets?.total.add(learnerKey);
+    });
+  });
+  theoryLearners.forEach((learnerKey) => theoryPartialLearners.delete(learnerKey));
+  monthlyLearners.forEach((sets) => {
+    sets.theory.forEach((learnerKey) => sets.theoryPartial.delete(learnerKey));
   });
 
   const answersByResponse = new Map<string, Array<{ rating: number; section: string }>>();
@@ -266,12 +434,18 @@ export async function fetchDashboardAnalytics(
   });
 
   months.forEach((month) => {
+    const learnerSets = monthlyLearners.get(month.key);
+    month.practicalLearners = learnerSets?.practical.size || 0;
+    month.theoryLearners = learnerSets?.theory.size || 0;
+    month.totalLearners = learnerSets?.total.size || 0;
     const maintenanceTotal = month.maintenancePass + month.maintenanceFail;
     month.maintenanceCompliance = maintenanceTotal
       ? (month.maintenancePass / maintenanceTotal) * 100
       : 0;
-    month.attendanceRate = month.attendanceSessions
-      ? (month.attendanceCoveredSessions / month.attendanceSessions) * 100
+    const capturedTheoryLearners =
+      (learnerSets?.theory.size || 0) + (learnerSets?.theoryPartial.size || 0);
+    month.attendanceRate = capturedTheoryLearners
+      ? ((learnerSets?.theory.size || 0) / capturedTheoryLearners) * 100
       : 0;
     const evaluation = evaluationTotals.get(month.key);
     month.evaluationAverage = evaluation?.count ? evaluation.sum / evaluation.count : 0;
@@ -280,10 +454,6 @@ export async function fetchDashboardAnalytics(
   const totalMaintenancePass = months.reduce((total, item) => total + item.maintenancePass, 0);
   const totalMaintenanceFail = months.reduce((total, item) => total + item.maintenanceFail, 0);
   const totalAttendanceSessions = months.reduce((total, item) => total + item.attendanceSessions, 0);
-  const totalAttendanceCovered = months.reduce(
-    (total, item) => total + item.attendanceCoveredSessions,
-    0
-  );
   const totalEvaluationResponses = months.reduce(
     (total, item) => total + item.evaluationResponses,
     0
@@ -298,6 +468,23 @@ export async function fetchDashboardAnalytics(
       flights: months.reduce((total, item) => total + item.flightCount, 0),
       flightMinutes: months.reduce((total, item) => total + item.flightMinutes, 0),
       trainers: trainers.size,
+      uniqueLearners: uniqueLearners.size,
+      practicalLearners: practicalLearners.size,
+      theoryLearners: theoryLearners.size,
+      theoryPartialLearners: theoryPartialLearners.size,
+      practicalAssessmentLearners: practicalAssessmentLearners.size,
+      practicalAssessmentPassed,
+      practicalAssessmentFailed,
+      practicalAssessmentPassRate: practicalAssessmentPassed + practicalAssessmentFailed
+        ? practicalAssessmentPassed * 100 / (practicalAssessmentPassed + practicalAssessmentFailed)
+        : 0,
+      proficiencyCheckLearners: proficiencyCheckLearners.size,
+      proficiencyCheckPassed,
+      proficiencyCheckFailed,
+      proficiencyCheckPassRate: proficiencyCheckPassed + proficiencyCheckFailed
+        ? proficiencyCheckPassed * 100 / (proficiencyCheckPassed + proficiencyCheckFailed)
+        : 0,
+      activityNeedsReview,
       maintenanceChecks: totalMaintenancePass + totalMaintenanceFail,
       maintenanceCompliance:
         totalMaintenancePass + totalMaintenanceFail
@@ -308,8 +495,8 @@ export async function fetchDashboardAnalytics(
         (total, value) => total + value,
         0
       ),
-      attendanceRate: totalAttendanceSessions
-        ? (totalAttendanceCovered / totalAttendanceSessions) * 100
+      attendanceRate: theoryLearners.size + theoryPartialLearners.size
+        ? theoryLearners.size * 100 / (theoryLearners.size + theoryPartialLearners.size)
         : 0,
       evaluationResponses: totalEvaluationResponses,
       evaluationAverage: totalEvaluationResponses
