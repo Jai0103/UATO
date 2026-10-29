@@ -118,8 +118,8 @@ export default function AdminPage() {
     { label: "UAPL Theory", value: analytics.totals.theoryLearners, detail: `${analytics.totals.theoryPartialLearners} partial attendance record${analytics.totals.theoryPartialLearners === 1 ? "" : "s"}`, icon: BookOpenCheck, tone: "bg-violet-50 text-violet-700", href: `/attendance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Practical learners", value: analytics.totals.practicalLearners, detail: `${analytics.totals.flights} flight entries`, icon: Plane, tone: "bg-cyan-50 text-cyan-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Flight time", value: formatMinutes(analytics.totals.flightMinutes), detail: `Across ${analytics.totals.trainers} trainer${analytics.totals.trainers === 1 ? "" : "s"}`, icon: Timer, tone: "bg-sky-50 text-sky-700", href: `/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
-    { label: "Practical assessments", value: analytics.totals.practicalAssessmentLearners, detail: `${analytics.totals.practicalAssessmentPassed} passed · ${analytics.totals.practicalAssessmentFailed} failed · ${formatPercent(analytics.totals.practicalAssessmentPassRate)}`, icon: Award, tone: "bg-emerald-50 text-emerald-700", href: `/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
-    { label: "Proficiency checks", value: analytics.totals.proficiencyCheckLearners, detail: `${analytics.totals.proficiencyCheckPassed} passed · ${analytics.totals.proficiencyCheckFailed} failed · ${formatPercent(analytics.totals.proficiencyCheckPassRate)}`, icon: ShieldCheck, tone: "bg-indigo-50 text-indigo-700", href: `/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Assessment learners", value: analytics.totals.practicalAssessmentLearners, detail: `${analytics.totals.practicalAssessmentPassed + analytics.totals.practicalAssessmentFailed} attempts · ${analytics.totals.practicalAssessmentPassed} passed · ${analytics.totals.practicalAssessmentFailed} failed`, icon: Award, tone: "bg-emerald-50 text-emerald-700", href: `/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
+    { label: "Proficiency learners", value: analytics.totals.proficiencyCheckLearners, detail: `${analytics.totals.proficiencyCheckPassed + analytics.totals.proficiencyCheckFailed} checks · ${analytics.totals.proficiencyCheckPassed} passed · ${analytics.totals.proficiencyCheckFailed} failed`, icon: ShieldCheck, tone: "bg-indigo-50 text-indigo-700", href: `/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Maintenance compliance", value: formatPercent(analytics.totals.maintenanceCompliance), detail: `${analytics.totals.maintenanceChecks} checklist decisions`, icon: Wrench, tone: "bg-emerald-50 text-emerald-700", href: `/ua-maintenance/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` },
     { label: "Course satisfaction", value: analytics.totals.courseSatisfaction ? `${analytics.totals.courseSatisfaction.toFixed(2)} / 5` : "No responses", detail: `${analytics.totals.recommendationRate.toFixed(0)}% would recommend · ${analytics.totals.evaluationResponses} responses`, icon: Star, tone: "bg-amber-50 text-amber-700", href: `/evaluations/records?dateFrom=${range.dateFrom}&dateTo=${range.dateTo}` }
   ];
@@ -158,8 +158,8 @@ export default function AdminPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <ChartPanel eyebrow="Practical assessment" title="Assessment outcomes by month" icon={Award} href={`/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.practicalAssessmentLearners} unique learner${analytics.totals.practicalAssessmentLearners === 1 ? "" : "s"} assessed`}><OutcomeMonthChart data={analytics.months} kind="assessment" /></ChartPanel>
-        <ChartPanel eyebrow="Proficiency assurance" title="Proficiency check outcomes by month" icon={ShieldCheck} href={`/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.proficiencyCheckLearners} unique learner${analytics.totals.proficiencyCheckLearners === 1 ? "" : "s"} checked`}><OutcomeMonthChart data={analytics.months} kind="proficiency" /></ChartPanel>
+        <ChartPanel eyebrow="Practical assessment" title="Assessment attempts by month" icon={Award} href={`/records?activityType=practical_assessment&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.practicalAssessmentLearners} unique learner${analytics.totals.practicalAssessmentLearners === 1 ? "" : "s"} · ${analytics.totals.practicalAssessmentPassed + analytics.totals.practicalAssessmentFailed} completed attempts`}><OutcomeMonthChart data={analytics.months} kind="assessment" /></ChartPanel>
+        <ChartPanel eyebrow="Proficiency assurance" title="Proficiency check attempts by month" icon={ShieldCheck} href={`/records?activityType=proficiency_check&dateFrom=${range.dateFrom}&dateTo=${range.dateTo}`} note={`${analytics.totals.proficiencyCheckLearners} unique learner${analytics.totals.proficiencyCheckLearners === 1 ? "" : "s"} · ${analytics.totals.proficiencyCheckPassed + analytics.totals.proficiencyCheckFailed} completed checks`}><OutcomeMonthChart data={analytics.months} kind="proficiency" /></ChartPanel>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
@@ -232,20 +232,104 @@ function LearnerMonthChart({ data }: { data: DashboardMonthPoint[] }) {
   </div>;
 }
 
-function HoverMetric({ label, value, color }: { label: string; value: number; color: string }) {
+function HoverMetric({ label, value, color }: { label: string; value: number | string; color: string }) {
   return <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: color }} /><div><p className="text-base font-extrabold leading-none text-[#16263c]">{value}</p><p className="mt-1 whitespace-nowrap text-[10px] font-semibold text-[#718096]">{label}</p></div></div>;
 }
 
 function OutcomeMonthChart({ data, kind }: { data: DashboardMonthPoint[]; kind: "assessment" | "proficiency" }) {
   const values = data.map((item) => ({
     ...item,
+    learners: kind === "assessment" ? item.practicalAssessmentLearners : item.proficiencyCheckLearners,
     passed: kind === "assessment" ? item.practicalAssessmentPassed : item.proficiencyCheckPassed,
-    failed: kind === "assessment" ? item.practicalAssessmentFailed : item.proficiencyCheckFailed
+    failed: kind === "assessment" ? item.practicalAssessmentFailed : item.proficiencyCheckFailed,
+    total:
+      kind === "assessment"
+        ? item.practicalAssessmentPassed + item.practicalAssessmentFailed
+        : item.proficiencyCheckPassed + item.proficiencyCheckFailed
   }));
-  const max = Math.max(1, ...values.map((item) => item.passed + item.failed));
+  const latestWithData = [...values].reverse().find((item) => item.total || item.learners);
+  const [activeKey, setActiveKey] = useState(latestWithData?.key || values.at(-1)?.key || "");
   if (!data.length) return <EmptyChart />;
+
+  const active = values.find((item) => item.key === activeKey) || latestWithData || values.at(-1);
+  const max = Math.max(1, ...values.map((item) => item.total));
   const activityType = kind === "assessment" ? "practical_assessment" : "proficiency_check";
-  return <div className="mt-5"><div className="mb-4 flex gap-4 text-xs font-semibold text-[#60748a]"><Legend color="#059669" label="Passed" /><Legend color="#e11d48" label="Failed" /></div><div className="flex h-48 items-end gap-1.5 sm:gap-2">{values.map((item) => { const total = item.passed + item.failed; return <Link key={item.key} href={`${monthHref("/records", item.key)}&activityType=${activityType}`} title={`${item.label}: ${item.passed} passed, ${item.failed} failed`} className="group relative flex h-full min-w-0 flex-1 flex-col justify-end overflow-hidden rounded-t-md bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40"><span className="w-full bg-[#059669] transition group-hover:bg-[#047857]" style={{ height: `${item.passed / max * 100}%`, minHeight: item.passed ? 4 : 0 }} /><span className="w-full bg-[#e11d48] transition group-hover:bg-[#be123c]" style={{ height: `${item.failed / max * 100}%`, minHeight: item.failed ? 4 : 0 }} />{total ? <span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] font-bold text-[#475569] opacity-0 transition group-hover:opacity-100">{total}</span> : null}</Link>; })}</div><div className="mt-3 flex gap-1.5 sm:gap-2">{values.map((item, index) => <span key={item.key} className="min-w-0 flex-1 truncate text-center text-[10px] font-semibold text-[#718096]">{data.length <= 6 || index % 2 === 0 ? item.label : ""}</span>)}</div></div>;
+  const passRate = active?.total ? Math.round((active.passed / active.total) * 100) : 0;
+
+  return (
+    <div className="mt-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-4 text-xs font-semibold text-[#60748a]">
+          <Legend color="#059669" label="Passed" />
+          <Legend color="#e11d48" label="Failed" />
+        </div>
+        {active ? (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg border border-[#dce6f0] bg-[#f8fbfe] px-4 py-3 shadow-sm transition-all duration-200">
+            <div className="min-w-[72px] border-r border-[#dce6f0] pr-4">
+              <p className="text-[10px] font-bold uppercase text-[#718096]">Selected month</p>
+              <p className="mt-1 text-sm font-extrabold text-[#075f8f]">{active.label}</p>
+            </div>
+            <HoverMetric label="Unique learners" value={active.learners} color="#2563eb" />
+            <HoverMetric label={kind === "assessment" ? "Attempts" : "Checks"} value={active.total} color="#16263c" />
+            <HoverMetric label="Passed" value={active.passed} color="#059669" />
+            <HoverMetric label="Failed" value={active.failed} color="#e11d48" />
+            <HoverMetric label="Pass rate" value={`${passRate}%`} color="#7c3aed" />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex h-48 items-end gap-1.5 sm:gap-2">
+        {values.map((item) => {
+          const selected = item.key === active?.key;
+          const barHeight = item.total ? Math.max(10, (item.total / max) * 100) : 0;
+          const passedShare = item.total ? (item.passed / item.total) * 100 : 0;
+          const failedShare = item.total ? (item.failed / item.total) * 100 : 0;
+          return (
+            <Link
+              key={item.key}
+              href={`${monthHref("/records", item.key)}&activityType=${activityType}`}
+              onMouseEnter={() => setActiveKey(item.key)}
+              onFocus={() => setActiveKey(item.key)}
+              aria-label={`${item.label}: ${item.learners} unique learners, ${item.total} ${kind === "assessment" ? "attempts" : "checks"}, ${item.passed} passed, ${item.failed} failed`}
+              className={`group relative h-full min-w-0 flex-1 rounded-md transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0866ff]/40 ${selected ? "bg-[#f4f8fc]" : "hover:-translate-y-1 hover:bg-[#f8fafc]"}`}
+            >
+              {item.total ? (
+                <>
+                  <span
+                    className={`absolute left-1/2 z-10 -translate-x-1/2 rounded-md bg-[#16263c] px-2 py-1 text-[9px] font-extrabold text-white shadow-md transition-all duration-200 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"}`}
+                    style={{ bottom: `calc(${barHeight}% + 8px)` }}
+                  >
+                    {item.total} {kind === "assessment" ? "attempts" : "checks"}
+                  </span>
+                  <span
+                    className="absolute bottom-0 left-[18%] right-[18%] flex flex-col-reverse overflow-hidden rounded-t-md shadow-sm transition-all duration-300 group-hover:left-[14%] group-hover:right-[14%]"
+                    style={{ height: `${barHeight}%` }}
+                  >
+                    <span className="w-full bg-[#059669] transition-colors group-hover:bg-[#047857]" style={{ height: `${passedShare}%` }} />
+                    <span className="w-full bg-[#e11d48] transition-colors group-hover:bg-[#be123c]" style={{ height: `${failedShare}%` }} />
+                  </span>
+                </>
+              ) : (
+                <span className="absolute bottom-0 left-[24%] right-[24%] h-px bg-[#dfe7ef]" />
+              )}
+            </Link>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex gap-1.5 sm:gap-2">
+        {values.map((item, index) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setActiveKey(item.key)}
+            className={`min-w-0 flex-1 truncate rounded px-1 py-1 text-center text-[10px] font-semibold transition-colors ${item.key === active?.key ? "bg-[#eaf3fb] text-[#075f8f]" : "text-[#718096] hover:bg-[#f4f8fb] hover:text-[#075f8f]"}`}
+          >
+            {data.length <= 6 || index % 2 === 0 ? item.label : ""}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Legend({ color, label }: { color: string; label: string }) {

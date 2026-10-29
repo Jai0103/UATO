@@ -19,8 +19,10 @@ export type DashboardMonthPoint = {
   totalLearners: number;
   practicalAssessmentPassed: number;
   practicalAssessmentFailed: number;
+  practicalAssessmentLearners: number;
   proficiencyCheckPassed: number;
   proficiencyCheckFailed: number;
+  proficiencyCheckLearners: number;
   activityNeedsReview: number;
   maintenancePass: number;
   maintenanceFail: number;
@@ -122,6 +124,8 @@ type MonthLearnerSets = {
   practical: Set<string>;
   theory: Set<string>;
   theoryPartial: Set<string>;
+  assessments: Set<string>;
+  proficiencyChecks: Set<string>;
   total: Set<string>;
 };
 
@@ -148,8 +152,10 @@ function monthSeries(range: DashboardDateRange) {
       totalLearners: 0,
       practicalAssessmentPassed: 0,
       practicalAssessmentFailed: 0,
+      practicalAssessmentLearners: 0,
       proficiencyCheckPassed: 0,
       proficiencyCheckFailed: 0,
+      proficiencyCheckLearners: 0,
       activityNeedsReview: 0,
       maintenancePass: 0,
       maintenanceFail: 0,
@@ -207,6 +213,8 @@ export async function fetchDashboardAnalytics(
       practical: new Set<string>(),
       theory: new Set<string>(),
       theoryPartial: new Set<string>(),
+      assessments: new Set<string>(),
+      proficiencyChecks: new Set<string>(),
       total: new Set<string>()
     }])
   );
@@ -259,7 +267,10 @@ export async function fetchDashboardAnalytics(
       return;
     }
     if (activity.activityType === "practical_assessment") {
-      if (learnerKey) practicalAssessmentLearners.add(learnerKey);
+      if (learnerKey) {
+        practicalAssessmentLearners.add(learnerKey);
+        if (month) monthlyLearners.get(month.key)?.assessments.add(learnerKey);
+      }
       if (activity.activityResult === "passed") {
         practicalAssessmentPassed += 1;
         if (month) month.practicalAssessmentPassed += 1;
@@ -270,7 +281,10 @@ export async function fetchDashboardAnalytics(
       }
     }
     if (activity.activityType === "proficiency_check") {
-      if (learnerKey) proficiencyCheckLearners.add(learnerKey);
+      if (learnerKey) {
+        proficiencyCheckLearners.add(learnerKey);
+        if (month) monthlyLearners.get(month.key)?.proficiencyChecks.add(learnerKey);
+      }
       if (activity.activityResult === "passed") {
         proficiencyCheckPassed += 1;
         if (month) month.proficiencyCheckPassed += 1;
@@ -440,6 +454,8 @@ export async function fetchDashboardAnalytics(
     month.practicalLearners = learnerSets?.practical.size || 0;
     month.theoryLearners = learnerSets?.theory.size || 0;
     month.theoryPartialLearners = learnerSets?.theoryPartial.size || 0;
+    month.practicalAssessmentLearners = learnerSets?.assessments.size || 0;
+    month.proficiencyCheckLearners = learnerSets?.proficiencyChecks.size || 0;
     month.totalLearners = learnerSets?.total.size || 0;
     const maintenanceTotal = month.maintenancePass + month.maintenanceFail;
     month.maintenanceCompliance = maintenanceTotal
