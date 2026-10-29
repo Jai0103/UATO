@@ -748,6 +748,27 @@ export default function FlightLogsPage() {
     setActiveSuggestField(null);
   }
 
+  async function requestCloseFlightModal() {
+    const hasEntryData = fields.some(
+      (field) =>
+        String(flightForm[field.key] ?? "").trim() !==
+        String(emptyRow[field.key] ?? "").trim()
+    );
+
+    if (hasEntryData) {
+      const shouldDiscard = await confirm({
+        title: "Discard this flight entry?",
+        message: "The information entered in this flight form has not been added to the record.",
+        confirmLabel: "Discard entry",
+        cancelLabel: "Keep editing",
+        variant: "danger",
+      });
+      if (!shouldDiscard) return;
+    }
+
+    closeFlightModal();
+  }
+
   async function saveFlightEntry() {
     const entryToSave: FlightLogRow =
       editingIndex === null
@@ -1092,7 +1113,7 @@ export default function FlightLogsPage() {
         />
 
         {showSuggestions ? (
-          <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-[80] max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+          <div className="relative z-[80] mt-2 max-h-56 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 shadow-lg md:absolute md:left-0 md:right-0 md:top-[calc(100%+6px)] md:mt-0 md:shadow-xl">
             {filteredOptions.map((option) => (
               <button
                 key={option}
@@ -1102,7 +1123,7 @@ export default function FlightLogsPage() {
                   updateFlightForm(fieldKey, option);
                   setActiveSuggestField(null);
                 }}
-                className="block w-full rounded-lg px-3 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+                className="block min-h-12 w-full touch-manipulation rounded-lg px-3 py-3 text-left text-base font-semibold text-slate-700 transition hover:bg-slate-100 active:bg-sky-50 md:text-sm"
               >
                 {option}
               </button>
@@ -1786,28 +1807,29 @@ export default function FlightLogsPage() {
 
       {modalOpen ? (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-          <div className="max-h-[94dvh] w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white shadow-2xl sm:max-w-3xl sm:rounded-lg">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-sky-100 bg-sky-50 px-4 py-4 sm:px-5">
+          <div role="dialog" aria-modal="true" aria-labelledby="flight-entry-title" className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[94dvh] sm:max-w-3xl sm:rounded-lg sm:border sm:border-slate-200">
+            <div className="z-20 flex shrink-0 items-center justify-between border-b border-sky-100 bg-sky-50 px-4 py-3.5 sm:px-5 sm:py-4">
               <div>
                 <p className="text-xs font-bold uppercase text-sky-700">Flight entry</p>
-                <h2 className="mt-0.5 text-lg font-bold text-slate-800">
+                <h2 id="flight-entry-title" className="mt-0.5 text-lg font-bold text-slate-800">
                   {editingIndex === null ? "Add Flight" : "Edit Flight"}
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="hidden text-sm text-slate-500 min-[390px]:block">
                   Enter the flight details for this student.
                 </p>
               </div>
 
               <button
-                onClick={closeFlightModal}
-                className="app-icon-button"
+                type="button"
+                onClick={() => void requestCloseFlightModal()}
+                className="app-icon-button shrink-0 touch-manipulation"
                 aria-label="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="grid gap-5 p-4 sm:grid-cols-2 sm:p-5">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 pb-8 sm:grid-cols-2 sm:gap-5 sm:p-5">
               {fields.map((field) => (
                 <label
                   key={field.key}
@@ -1821,12 +1843,12 @@ export default function FlightLogsPage() {
               ))}
             </div>
 
-            <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-slate-200 bg-slate-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:p-5">
-              <button onClick={closeFlightModal} className="app-button-secondary">
+            <div className="z-20 shrink-0 border-t border-slate-200 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_25px_rgba(15,23,42,0.08)] sm:flex sm:justify-end sm:gap-2 sm:bg-slate-50 sm:p-5 sm:shadow-none">
+              <button type="button" onClick={() => void requestCloseFlightModal()} className="app-button-secondary hidden sm:inline-flex">
                 Cancel
               </button>
 
-              <button onClick={saveFlightEntry} className="app-button-primary">
+              <button type="button" onClick={saveFlightEntry} className="app-button-primary h-14 w-full touch-manipulation text-base sm:h-auto sm:w-auto sm:text-sm">
                 <Save size={16} />
                 {editingIndex === null ? "Add Flight" : "Save Changes"}
               </button>
